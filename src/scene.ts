@@ -22,7 +22,14 @@ type Anchor =
   /** Centred across, sitting on z = 0: right for anything standing on the floor. */
   | 'base'
   /** Centred across, hanging below z = 0: right for the floor itself. */
-  | 'top';
+  | 'top'
+  /**
+   * Left where it was modelled across, sitting on z = 0. Right for anything
+   * that turns about a centre the shape itself defines — a triangle's
+   * bounding box is not centred on the circle it was drawn in, so centring it
+   * would make the ship pivot about a point off its own nose-to-tail axis.
+   */
+  | 'pivot';
 
 /**
  * One part, as a mesh with its origin moved to where the game wants it.
@@ -45,9 +52,9 @@ export function part(source: string, anchor: Anchor = 'centre'): Mesh {
     if (p[i + 1] < minY) minY = p[i + 1]; if (p[i + 1] > maxY) maxY = p[i + 1];
     if (p[i + 2] < minZ) minZ = p[i + 2]; if (p[i + 2] > maxZ) maxZ = p[i + 2];
   }
-  const dx = (minX + maxX) / 2;
-  const dy = (minY + maxY) / 2;
-  const dz = anchor === 'centre' ? (minZ + maxZ) / 2 : anchor === 'base' ? minZ : maxZ;
+  const dx = anchor === 'pivot' ? 0 : (minX + maxX) / 2;
+  const dy = anchor === 'pivot' ? 0 : (minY + maxY) / 2;
+  const dz = anchor === 'centre' ? (minZ + maxZ) / 2 : anchor === 'top' ? maxZ : minZ;
   const moved = new Float32Array(p.length);
   for (let i = 0; i < p.length; i += 3) {
     moved[i] = p[i] - dx; moved[i + 1] = p[i + 1] - dy; moved[i + 2] = p[i + 2] - dz;
@@ -68,10 +75,16 @@ export const MESHES = {
   block: () => part('plate(card(width: 150, height: 54, corner: 10), thickness: 74, bevel: 9)', 'base'),
   /** An eight-sided column, for the corners to reflect things in. */
   column: () => part('disc(radius: 46, thickness: 210, sides: 8, bevel: 10)', 'base'),
-  /** The player: a stone, table up, spinning. */
-  hull: () => part('gem(cut: brilliant, width: 132, depth: 92, facets: 16)'),
-  /** The ring that counter-spins around it. */
-  halo: () => part('band(radius: 88, width: 14, thickness: 6, segments: 48)'),
+  /**
+   * The player's hull: a triangle, nose along its own +x, so turning the
+   * matrix turns the ship and you can see which way it is pointing. That is
+   * the whole requirement of an Asteroids ship and a round one fails it.
+   */
+  hull: () => part('plate(polygon(sides: 3, radius: 112, rotate: 0), thickness: 26, bevel: 8)', 'pivot'),
+  /** A stone riding on top of it, spinning: the shiny thing to look at. */
+  core: () => part('gem(cut: brilliant, width: 62, depth: 46, facets: 16)'),
+  /** The ring around the ship, counter-spinning. */
+  ring: () => part('band(radius: 98, width: 13, thickness: 5, segments: 48)'),
   /**
    * An enemy: a spiked star, lying flat and spinning. A round bead read as a
    * traffic cone from a camera this high up — the silhouette is all the

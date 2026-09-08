@@ -1,8 +1,8 @@
 # Arena
 
-A twin-stick arena on the game path of
-[artshape-render](https://github.com/onion2k/artshape-render): move with the
-keys, aim with the mouse, and shoot the things coming at you.
+An Asteroids-handling arena on the game path of
+[artshape-render](https://github.com/onion2k/artshape-render): turn, thrust,
+and shoot the things coming at you before they reach you.
 
 It exists to lean on the two things that path was built for — a great many
 moving point lights, and materials shiny enough to show them — and to be the
@@ -17,8 +17,32 @@ before this.
 npm install && npm run dev
 ```
 
-Needs a browser with WebGPU. Move with **WASD** or the arrows, aim with the
-mouse, hold **F** or space to fire (it auto-fires anyway), **R** to restart.
+Needs a browser with WebGPU.
+
+| | |
+| --- | --- |
+| **A** **D** or ← → | turn |
+| **W** or ↑ | thrust, along wherever the nose points |
+| **S** or ↓ | brake |
+| **space** or **F** | fire (it auto-fires as well) |
+| **X** | auto-fire on and off |
+| **R** | restart |
+| drag | swing the camera round |
+| wheel | in and out |
+| shift-drag | slide it |
+| **C** | put the camera back |
+
+The ship flies the way Asteroids' does. It carries momentum, drag pulls it
+down over about a second, and its own velocity carries into the shots it
+fires, so running away while shooting backwards gives slow bullets. The walls
+are solid rather than a wrap — it keeps about half its speed off one.
+
+The camera is free but starts framed. It solves for a distance that fits the
+whole arena in whatever shape the window is, and stays there until you move
+it; after that a resize adjusts how far the wheel may go but leaves the view
+alone. **C** re-frames. That fit is not a nicety: a hardcoded distance
+cropped the near corners on a narrow window, and in a game where enemies come
+in from the edges that means dying to something that was never on screen.
 
 ## What it is doing
 
@@ -79,7 +103,7 @@ and quality ladder exist for exactly that and this demo does not use them yet.
 | file | |
 | --- | --- |
 | `src/main.ts` | wiring: device, meshes, pools, the frame loop |
-| `src/game.ts` | state and rules. Knows nothing about the GPU |
+| `src/game.ts` | state, flight and rules. Knows nothing about the GPU |
 | `src/scene.ts` | the parametric parts and where the static half stands |
 | `src/lighting.ts` | the light list and the glow list, rebuilt every frame |
 | `src/matrix.ts` | placements, and projecting a point to the screen |

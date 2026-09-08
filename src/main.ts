@@ -9,17 +9,18 @@
  * the arena and the two are alternatives.
  */
 import { createContext } from 'artshape-render/gpu/context';
+import { Orbit } from 'artshape-render/gpu/camera';
 import { bakeEnvironment } from 'artshape-render/render/env';
 import { GameRenderer, EFFECT_STRIDE, type GameGroup } from 'artshape-render/game/renderer';
 import { LightPool } from 'artshape-render/game/lights';
-import { Arena, MAX_BOLTS, MAX_ENEMIES } from './game';
+import { Arena, MAX_BOLTS, MAX_ENEMIES, type Input } from './game';
 import { ARENA_X, ARENA_Y, MESHES, arenaMatrices } from './scene';
 import { hide, placeTipped, project } from './matrix';
 import { EFFECT_CAPACITY, LIGHT_CAPACITY, effectsFor, lightsFor, setProjectionScale } from './lighting';
 
 const FOV = 40;
 /** Where the dynamic groups sit, in the order they are handed over. */
-const HULL = 0, HALO = 1, DRONES = 2, BOLTS = 3;
+const HULL = 0, CORE = 1, RING = 2, DRONES = 3, BOLTS = 4;
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
@@ -56,7 +57,8 @@ async function main() {
 
   const mesh = {
     floor: MESHES.floor(), tile: MESHES.tile(), block: MESHES.block(), column: MESHES.column(),
-    hull: MESHES.hull(), halo: MESHES.halo(), drone: MESHES.drone(), bolt: MESHES.bolt(),
+    hull: MESHES.hull(), core: MESHES.core(), ring: MESHES.ring(),
+    drone: MESHES.drone(), bolt: MESHES.bolt(),
   };
   const at = arenaMatrices();
 
@@ -70,7 +72,8 @@ async function main() {
   // The pools. Their size is fixed here and never changes again: what moves
   // each frame is the live count, and the matrices written into the prefix.
   const hullM = new Float32Array(16);
-  const haloM = new Float32Array(16);
+  const coreM = new Float32Array(16);
+  const ringM = new Float32Array(16);
   const droneM = new Float32Array(MAX_ENEMIES * 16);
   const boltM = new Float32Array(MAX_BOLTS * 16);
   const droneMat = new Float32Array(MAX_ENEMIES * 4);
@@ -79,7 +82,8 @@ async function main() {
     // reflect and reads as a dark shape. A little roughness gives the point
     // lights a highlight wide enough to see the colour in.
     { mesh: mesh.hull, matrices: hullM, albedo: [1.0, 0.79, 0.36], roughness: 0.22 },
-    { mesh: mesh.halo, matrices: haloM, albedo: [0.96, 0.97, 1.0], roughness: 0.16 },
+    { mesh: mesh.core, matrices: coreM, albedo: [0.85, 0.93, 1.0], roughness: 0.12 },
+    { mesh: mesh.ring, matrices: ringM, albedo: [0.96, 0.97, 1.0], roughness: 0.16 },
     { mesh: mesh.drone, matrices: droneM, count: 0, albedo: [0.86, 0.17, 0.12], roughness: 0.27 },
     { mesh: mesh.bolt, matrices: boltM, count: 0, albedo: [0.38, 0.95, 1.0], roughness: 0.05 },
   ];
@@ -95,7 +99,21 @@ async function main() {
   const arena = new Arena();
   const lights = new LightPool(LIGHT_CAPACITY);
   const quads = new Float32Array(EFFECT_CAPACITY * EFFECT_STRIDE);
-  const input = watchInput(canvas, arena);
+  const input = watchInput(arena);
+  // Drag to swing the camera round, wheel to come in and out, shift-drag to
+  // slide it. The floor is opaque from below and the arena is meant to be
+  // looked into, so the polar range stops short of the horizon and of
+  // straight down.
+  const orbit = new Orbit(renderer.camera, {
+    element: canvas,
+    minPolar: 0.18,
+    maxPolar: 1.36,
+    rotateSpeed: 0.42,
+    zoomSpeed: 0.8,
+    // less carry than the still-life viewer's: a camera that keeps drifting
+    // after the hand comes off is a camera you fight while trying to fly
+    inertia: 0.45,
+  });
   // for poking at from the console while tuning
   /**
    * Draw the same frame `n` times and fence on the queue, for measuring what
@@ -110,7 +128,6 @@ async function main() {
     // driver's overhead — which is how an earlier calibration in this family
     // of projects came back with seven hundred thousand ms a megapixel.
     renderer.resize(w, h);
-    fitCamera(renderer.camera, w / h);
     const off = ctx.device.createTexture({
       size: [w, h], format: ctx.format, usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
@@ -124,7 +141,6 @@ async function main() {
     const ms = (performance.now() - t0) / n;
     off.destroy();
     renderer.resize(width, height);
-    fitCamera(renderer.camera, width / height);
     return {
       ms: +ms.toFixed(3), mpx: +((w * h) / 1e6).toFixed(2),
       msPerMpx: +(ms / ((w * h) / 1e6)).toFixed(2),
@@ -139,7 +155,7 @@ async function main() {
   const shoot = async (w = 1600, h = 900) => {
     canvas.width = w; canvas.height = h;
     renderer.resize(w, h);
-    fitCamera(renderer.camera, w / h);
+    if (!touched) reframe(true, w / h);
     upload();
     renderer.frame(ctx.context.getCurrentTexture().createView(), 'redraw');
     await ctx.queue.onSubmittedWorkDone();
@@ -147,16 +163,43 @@ async function main() {
     await fetch('/__shot', { method: 'POST', body: png });
     return png.length;
   };
-  Object.assign(globalThis as Record<string, unknown>, { arena, renderer, measure, shoot });
+  Object.assign(globalThis as Record<string, unknown>, { arena, renderer, orbit, measure, shoot });
+
+  /**
+   * Frame the arena, and set how far in and out the wheel may go from there.
+   * `touched` latches the moment the camera is moved by hand, after which a
+   * resize adjusts the limits but leaves the view where it was put.
+   */
+  let touched = false;
+  const reframe = (move: boolean, aspect = canvas.width / Math.max(1, canvas.height)) => {
+    const before = renderer.camera.position.slice() as [number, number, number];
+    const target = renderer.camera.target.slice() as [number, number, number];
+    const fitted = fitCamera(renderer.camera, aspect);
+    orbit.minDistance = fitted * 0.3;
+    orbit.maxDistance = fitted * 1.9;
+    if (move) { orbit.forcePosition(); return; }
+    renderer.camera.position = before;
+    renderer.camera.target = target;
+    renderer.camera.update();
+  };
+  canvas.addEventListener('pointerdown', () => { touched = true; });
+  canvas.addEventListener('wheel', () => { touched = true; }, { passive: true });
 
   let width = 0, height = 0;
   const resize = () => {
     const dpr = Math.min(devicePixelRatio || 1, 2);
-    width = Math.max(1, Math.round(canvas.clientWidth * dpr));
-    height = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    // A canvas in a document that is not being laid out measures zero, and
+    // fitting a camera to a one-pixel frame pulls it back until the arena is
+    // a speck. Fall back to a plain 16:9 rather than believing it.
+    const laidOut = canvas.clientWidth > 4 && canvas.clientHeight > 4;
+    width = laidOut ? Math.round(canvas.clientWidth * dpr) : 1280;
+    height = laidOut ? Math.round(canvas.clientHeight * dpr) : 720;
     canvas.width = width; canvas.height = height;
     renderer.resize(width, height);
-    fitCamera(renderer.camera, width / height);
+    // Re-frame only while the camera is where the arena put it. Once it has
+    // been moved, a resize must not yank it back — but the distance that
+    // fits does change with the shape of the window, so the limits move.
+    reframe(!touched);
   };
   addEventListener('resize', resize);
   resize();
@@ -174,15 +217,18 @@ async function main() {
    * an empty arena lit by a full set of lights.
    */
   const upload = (): number => {
-    // the player: the hull turns to face where it is aiming and spins on top
-    // of that, the halo goes the other way
-    // tipped over so the crown facets face the camera rather than the sky,
-    // which is the difference between a gold stone and a dark disc
-    placeTipped(hullM, 0, arena.px, arena.py, 104 + Math.sin(t * 2.2) * 7,
-      arena.pAngle + arena.pSpin, 0.38, 1);
+    // The hull lies flat and points where the nose points, banking a little
+    // into a turn. The stone on top of it spins on its own, and the ring the
+    // other way — those two are decoration and must not be mistaken for the
+    // heading, so only the hull carries `pAngle` alone.
+    const hover = 86 + Math.sin(t * 2.2) * 5;
+    const bank = -arena.lastTurn * 0.32;
+    placeTipped(hullM, 0, arena.px, arena.py, hover, arena.pAngle, bank, 1);
     renderer.move(HULL, hullM, 1);
-    placeTipped(haloM, 0, arena.px, arena.py, 104 + Math.sin(t * 2.2) * 7, -arena.pSpin * 0.7, 0.34, 1);
-    renderer.move(HALO, haloM, 1);
+    placeTipped(coreM, 0, arena.px, arena.py, hover + 34, arena.pAngle + arena.pSpin, 0.42, 1);
+    renderer.move(CORE, coreM, 1);
+    placeTipped(ringM, 0, arena.px, arena.py, hover + 12, -arena.pSpin * 0.7, 0.2, 1);
+    renderer.move(RING, ringM, 1);
 
     for (let i = 0; i < arena.enemies; i++) {
       placeTipped(droneM, i, arena.ex[i], arena.ey[i], 44 + Math.sin(arena.ephase[i] * 0.8) * 10,
@@ -226,7 +272,9 @@ async function main() {
     const dt = Math.min((now - last) / 1000, 1 / 20);
     last = now; t += dt;
 
-    arena.step(dt, input.read(renderer));
+    if (input.takeRecentre()) reframe(true);
+    orbit.update();
+    arena.step(dt, input.read());
 
     const effects = upload();
 
@@ -246,6 +294,7 @@ async function main() {
         `<span>${smoothed.toFixed(1)}</span> ms · <span>${Math.round(1000 / smoothed)}</span> fps<br>`
         + `<span>${lights.count}</span> lights · <span>${effects}</span> glows<br>`
         + `<span>${arena.enemies}</span> drones · <span>${arena.bolts}</span> shots · <span>${arena.blasts.length}</span> blasts<br>`
+        + `<span>${Math.round(arena.speed)}</span> speed · fire <span>${input.autofire ? 'auto' : 'held'}</span><br>`
         + `<span>${width}×${height}</span>`;
     }
   };
@@ -261,7 +310,7 @@ async function main() {
  * was never on screen. So the corners are projected and the distance is
  * solved for, on every resize.
  */
-function fitCamera(cam: GameRenderer['camera'], aspect: number) {
+function fitCamera(cam: GameRenderer['camera'], aspect: number): number {
   const target: [number, number, number] = [0, 20, 50];
   // back and up from the target, at the angle the arena reads best from
   const back = norm([0, -1.32, 0.915]);
@@ -286,6 +335,7 @@ function fitCamera(cam: GameRenderer['camera'], aspect: number) {
   }
   cam.position = [target[0] + back[0] * hi, target[1] + back[1] * hi, target[2] + back[2] * hi];
   cam.update();
+  return hi;
 }
 
 function identity(): Float32Array {
@@ -295,74 +345,45 @@ function identity(): Float32Array {
 }
 
 /**
- * Keys for movement, the mouse for aim. The aim is the mouse ray met with the
- * floor plane, built from the camera's own axes rather than by inverting the
- * projection: the camera never moves, and this is four lines.
+ * Asteroids: left and right turn, forward thrusts along the nose, back
+ * brakes. The mouse is not part of it — it belongs to the camera now.
  */
-function watchInput(el: HTMLCanvasElement, arena: Arena) {
+function watchInput(arena: Arena) {
   const held = new Set<string>();
-  let mx = 0.5, my = 0.35;
-  let firing = true;
+  let autofire = true;
+  let recentre = false;
 
   addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
     if (k === 'r') arena.restart();
+    if (k === 'x') autofire = !autofire;
+    if (k === 'c') recentre = true;
+    // the arrows and space scroll the page otherwise, which in a game that
+    // uses both is the page jumping about under the player
     if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
     held.add(k);
   });
   addEventListener('keyup', (e) => held.delete(e.key.toLowerCase()));
+  // a window that loses focus mid-turn would otherwise keep turning forever
   addEventListener('blur', () => held.clear());
-  el.addEventListener('pointermove', (e) => {
-    const r = el.getBoundingClientRect();
-    mx = (e.clientX - r.left) / r.width;
-    my = (e.clientY - r.top) / r.height;
-  });
-  el.addEventListener('pointerdown', () => { firing = true; });
 
+  const down = (...keys: string[]) => keys.some((k) => held.has(k));
   return {
-    read(renderer: GameRenderer) {
-      const cam = renderer.camera;
-      const down = (...keys: string[]) => keys.some((k) => held.has(k));
-      const x = (down('d', 'arrowright') ? 1 : 0) - (down('a', 'arrowleft') ? 1 : 0);
-      // the screen's up is +y in the world here, because the camera looks along +y
-      const y = (down('w', 'arrowup') ? 1 : 0) - (down('s', 'arrowdown') ? 1 : 0);
-      const len = Math.hypot(x, y) || 1;
-
-      const [ax, ay] = floorUnderCursor(cam, mx, my);
+    get autofire() { return autofire; },
+    /** True once, for the frame the camera should be framed again. */
+    takeRecentre() { const r = recentre; recentre = false; return r; },
+    read(): Input {
       return {
-        x: x / len, y: y / len,
-        aimX: ax, aimY: ay,
-        firing: firing || down('f', ' '),
+        turn: (down('a', 'arrowleft') ? 1 : 0) - (down('d', 'arrowright') ? 1 : 0),
+        thrust: down('w', 'arrowup') ? 1 : 0,
+        brake: down('s', 'arrowdown') ? 1 : 0,
+        firing: autofire || down('f', ' '),
       };
     },
   };
-}
-
-/** Where the cursor lands on the floor, in world millimetres. */
-function floorUnderCursor(cam: GameRenderer['camera'], mx: number, my: number): [number, number] {
-  const u = mx * 2 - 1;
-  const v = 1 - my * 2;
-  const tan = Math.tan((cam.fov * Math.PI) / 360);
-  const [px, py, pz] = cam.position;
-  const f = norm([cam.target[0] - px, cam.target[1] - py, cam.target[2] - pz]);
-  const r = cam.right;
-  const up = cam.up;
-  const dir = [
-    f[0] + r[0] * u * tan * cam.aspect + up[0] * v * tan,
-    f[1] + r[1] * u * tan * cam.aspect + up[1] * v * tan,
-    f[2] + r[2] * u * tan * cam.aspect + up[2] * v * tan,
-  ];
-  // the floor the game plays on is z = 0; behind the camera, aim at the middle
-  if (dir[2] >= -1e-4) return [0, 0];
-  const s = -pz / dir[2];
-  return [
-    clamp(px + dir[0] * s, -ARENA_X, ARENA_X),
-    clamp(py + dir[1] * s, -ARENA_Y, ARENA_Y),
-  ];
 }
 
 const norm = (v: number[]) => {
   const l = Math.hypot(v[0], v[1], v[2]) || 1;
   return [v[0] / l, v[1] / l, v[2] / l];
 };
-const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);

@@ -12,7 +12,19 @@ export const MAX_ENEMIES = 140;
 export const MAX_BOLTS = 220;
 export const MAX_BLASTS = 28;
 
-const PLAYER_SPEED = 620;      // mm a second
+/**
+ * The ship flies the way Asteroids' does: it turns, it thrusts along where it
+ * is pointing, and it keeps going. Nothing here steers toward a cursor.
+ */
+const TURN_RATE = 3.7;         // radians a second
+const THRUST = 1650;           // mm a second squared
+/** Drag as a rate: velocity is multiplied by exp(-rate · dt) each step, so it
+ *  is frame-rate independent in a way `v *= 0.98` is not. */
+const DRAG = 0.5;
+const BRAKE = 3.4;
+const MAX_SPEED = 820;
+/** How much of its speed the ship keeps when it meets a wall. */
+const BOUNCE = 0.45;
 const BOLT_SPEED = 1450;
 const BOLT_LIFE = 1.3;
 const FIRE_EVERY = 0.085;
@@ -21,9 +33,26 @@ const HIT_RADIUS = 42;
 
 export interface Blast { x: number; y: number; age: number; life: number; power: number }
 
+/** What the player is asking for this step. */
+export interface Input {
+  /** -1 to 1: which way to turn, and how hard. */
+  turn: number;
+  /** 0 to 1: thrust along where the nose points. */
+  thrust: number;
+  /** 0 to 1: brake, which is drag rather than reverse. */
+  brake: number;
+  firing: boolean;
+}
+
 export class Arena {
   // the player
-  px = 0; py = -220; pAngle = 0; pSpin = 0; aim = 0;
+  px = 0; py = -220; pAngle = Math.PI / 2; pSpin = 0; aim = Math.PI / 2;
+  /** Velocity. The ship carries it: nothing else in the arena does. */
+  pvx = 0; pvy = 0;
+  /** How hard it is thrusting, for the plume to be drawn from. */
+  thrusting = 0;
+  /** Which way it was last asked to turn, for the hull to bank by. */
+  lastTurn = 0;
   lives = 3; invuln = 0; score = 0; wave = 1;
   /** Counts down after a shot; drives the muzzle flash as well as the cadence. */
   cooldown = 0;
@@ -50,12 +79,9 @@ export class Arena {
   private spawnIn = 0.5;
   private waveLeft = 16;
 
-  step(dt: number, input: { x: number; y: number; aimX: number; aimY: number; firing: boolean }) {
-    this.px = clamp(this.px + input.x * PLAYER_SPEED * dt, -ARENA_X + 110, ARENA_X - 110);
-    this.py = clamp(this.py + input.y * PLAYER_SPEED * dt, -ARENA_Y + 110, ARENA_Y - 110);
+  step(dt: number, input: Input) {
+    this.flyShip(dt, input);
     this.pSpin += dt * 1.9;
-    this.aim = Math.atan2(input.aimY - this.py, input.aimX - this.px);
-    this.pAngle = this.aim;
     if (this.invuln > 0) this.invuln -= dt;
 
     this.cooldown -= dt;
@@ -73,6 +99,42 @@ export class Arena {
     this.blasts = this.blasts.filter((b) => b.age < b.life);
   }
 
+  private flyShip(dt: number, input: Input) {
+    // eased, so the bank the hull is drawn with does not snap on and off
+    this.lastTurn += (input.turn - this.lastTurn) * Math.min(1, dt * 9);
+    this.pAngle += input.turn * TURN_RATE * dt;
+    this.thrusting = Math.max(0, Math.min(1, input.thrust));
+    if (this.thrusting > 0) {
+      this.pvx += Math.cos(this.pAngle) * THRUST * this.thrusting * dt;
+      this.pvy += Math.sin(this.pAngle) * THRUST * this.thrusting * dt;
+    }
+    // exponential, so the same dt twice slows it by the same amount as one
+    // step of twice the dt — a fixed factor a frame would not
+    const drag = Math.exp(-(DRAG + BRAKE * Math.max(0, Math.min(1, input.brake))) * dt);
+    this.pvx *= drag; this.pvy *= drag;
+    const speed = Math.hypot(this.pvx, this.pvy);
+    if (speed > MAX_SPEED) {
+      this.pvx = (this.pvx / speed) * MAX_SPEED;
+      this.pvy = (this.pvy / speed) * MAX_SPEED;
+    }
+    this.px += this.pvx * dt;
+    this.py += this.pvy * dt;
+
+    // the walls are solid rather than a wrap: the arena has an inside
+    const limX = ARENA_X - 110;
+    const limY = ARENA_Y - 110;
+    if (this.px < -limX) { this.px = -limX; this.pvx = Math.abs(this.pvx) * BOUNCE; }
+    if (this.px > limX) { this.px = limX; this.pvx = -Math.abs(this.pvx) * BOUNCE; }
+    if (this.py < -limY) { this.py = -limY; this.pvy = Math.abs(this.pvy) * BOUNCE; }
+    if (this.py > limY) { this.py = limY; this.pvy = -Math.abs(this.pvy) * BOUNCE; }
+
+    // a shot goes where the nose points, not where a cursor is
+    this.aim = this.pAngle;
+  }
+
+  /** How fast it is going, for the panel and for the plume. */
+  get speed(): number { return Math.hypot(this.pvx, this.pvy); }
+
   private fire() {
     // a shot from either side of the hull, so the muzzle flash has width
     for (const side of [-1, 1]) {
@@ -82,8 +144,10 @@ export class Arena {
       const spread = (Math.random() - 0.5) * 0.05;
       this.bx[i] = this.px + Math.cos(off) * side * 26 + Math.cos(this.aim) * 40;
       this.by[i] = this.py + Math.sin(off) * side * 26 + Math.sin(this.aim) * 40;
-      this.bvx[i] = Math.cos(this.aim + spread) * BOLT_SPEED;
-      this.bvy[i] = Math.sin(this.aim + spread) * BOLT_SPEED;
+      // the ship's own velocity carries into the shot, as it should when the
+      // ship has momentum: firing backwards while running away is slower
+      this.bvx[i] = Math.cos(this.aim + spread) * BOLT_SPEED + this.pvx;
+      this.bvy[i] = Math.sin(this.aim + spread) * BOLT_SPEED + this.pvy;
       this.blife[i] = BOLT_LIFE;
     }
   }
@@ -206,6 +270,7 @@ export class Arena {
     this.lives = 3; this.score = 0; this.wave = 1;
     this.waveLeft = 16; this.spawnIn = 1.0;
     this.px = 0; this.py = -220; this.invuln = 2;
+    this.pvx = 0; this.pvy = 0; this.pAngle = Math.PI / 2; this.aim = this.pAngle;
   }
 }
 

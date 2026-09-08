@@ -58,6 +58,18 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
     intensity: 9,
   });
 
+  // the plume, behind the nose. A ship with momentum has to show which way
+  // it is pushing, or drifting sideways under thrust looks like a bug
+  if (arena.thrusting > 0) {
+    const back = arena.pAngle + Math.PI;
+    pool.add({
+      position: [arena.px + Math.cos(back) * 90, arena.py + Math.sin(back) * 90, 60],
+      radius: 400,
+      colour: [0.45, 0.72, 1],
+      intensity: 16 * arena.thrusting,
+    });
+  }
+
   // the muzzle: brief, bright, and the reason the floor flickers when firing
   if (arena.lastShot < 0.055) {
     const f = 1 - arena.lastShot / 0.055;
@@ -139,6 +151,14 @@ export function effectsFor(out: Float32Array, arena: Arena, vp: Float32Array): n
     n = glow(out, n, vp, b.x, b.y, 60, (30 + grow * 90) * b.power, 3.4 * k * k, [1, 0.95, 0.8], 3);
     n = glow(out, n, vp, b.x, b.y, 60, (55 + grow * 190) * b.power, 1.1 * k, [1, 0.55, 0.18], 1.7);
     n = glow(out, n, vp, b.x, b.y, 60, (95 + grow * 300) * b.power, 0.32 * k, [1, 0.28, 0.1], 1.1);
+  }
+  if (arena.thrusting > 0) {
+    const back = arena.pAngle + Math.PI;
+    // two blobs, one tight and one trailing, so the plume has a direction
+    n = glow(out, n, vp, arena.px + Math.cos(back) * 78, arena.py + Math.sin(back) * 78, 58,
+      44 * arena.thrusting, 2.6 * arena.thrusting, [0.55, 0.8, 1], 2.6);
+    n = glow(out, n, vp, arena.px + Math.cos(back) * 128, arena.py + Math.sin(back) * 128, 58,
+      76 * arena.thrusting, 0.9 * arena.thrusting, [0.35, 0.6, 1], 1.2);
   }
   if (arena.lastShot < 0.06) {
     const f = 1 - arena.lastShot / 0.06;
