@@ -1,9 +1,15 @@
 # Arena
 
-A technical in an arena, on the game path of
+A technical in a dark arena, on the game path of
 [artshape-render](https://github.com/onion2k/artshape-render): drive it with
-the keys, point the gun on the back with the mouse, and hold off the things
-coming at you.
+the keys, point the gun on the back with the mouse, and find the things
+coming at you before they reach you.
+
+The hall is nearly black and the drones carry no light of their own. What
+light there is comes from beams — a spotlight over every post, sweeping; the
+searchlight on the cannon; the truck's headlights — so looking is an act you
+have to perform, and aiming the gun and looking where you are aiming are the
+same act.
 
 It exists to lean on the two things that path was built for — a great many
 moving point lights, and materials shiny enough to show them — and to be the
@@ -25,7 +31,7 @@ Needs a browser with WebGPU.
 | **A** **D** or ← → | steer |
 | **W** or ↑ | throttle, along wherever the truck is pointing |
 | **S** or ↓ | brake |
-| mouse | point the gun, which swings independently of the truck |
+| mouse | point the gun and its searchlight, which swing independently of the truck |
 | **space** or **F** | fire (it auto-fires as well) |
 | **X** | auto-fire on and off |
 | **R** | restart |
@@ -81,18 +87,18 @@ error and nothing else wrong with the frame.
 
 ## What it is doing
 
-Every frame the light list is cleared and written again from scratch. A shot
-carries a light, an enemy carries a light, an explosion carries one that opens
-out and dies with the square of what is left, the muzzle carries one for about
-fifty milliseconds, and the truck carries headlights, an exhaust glow and
-brake lamps. A busy frame is around a hundred and fifty of them.
+Every frame the light list is cleared and written again from scratch. Twenty
+four spotlights sit on the posts, each turning at its own rate and starting at
+its own angle so the pattern never repeats; a narrow searchlight rides the
+cannon; two headlights point where the truck is going; and shots, explosions
+and the muzzle carry the rest. About thirty lights at rest, and the count
+barely moves with the size of the crowd, because **the drones carry nothing**.
 
-The hall itself is dark on purpose. The environment contributes 0.3 of what it
-would, and the slow coloured wash that keeps an empty arena from being black
-is barely a tint — everything you can see by is carried by something in the
-fight. Lights are wide rather than bright: a point light is half its strength
-900mm out rather than the renderer's default of 50, so a shot going past
-lights a bay of the hall instead of putting a coin of glare under itself.
+That is the game. The environment contributes 0.035 of what it would and the
+sun is nearly off, so a drone outside a beam is a shape you can only just make
+out, and finding them is the work. Lights are wide rather than bright: half
+strength 900mm out rather than the renderer's default of 50, so a beam lays a
+pool rather than a coin of glare.
 
 Nothing is kept between frames. The game renderer offers a `'keep'` mode that
 draws the static half once and copies it back, and this demo does not use it:
@@ -116,12 +122,12 @@ slower. `measure(width, height, frames)` is on the console for repeating it.
 
 | scene | lights | ms a frame |
 | --- | ---: | ---: |
-| empty arena | 20 | 2.00 |
-| 80 enemies | 102 | 5.79 |
-| 180 enemies | 149 | 7.97 |
-| 300 enemies (the pool full) | 148 | 8.19 |
-| 300 enemies, point lights off | — | 0.88 |
-| 300 enemies, radius cull off | 148 | 23.12 |
+| empty arena | 33 | 2.29 |
+| 80 enemies | 35 | 2.39 |
+| 180 enemies | 34 | 2.39 |
+| 300 enemies (the pool full) | 33 | 2.39 |
+| 300 enemies, point lights off | — | 0.89 |
+| 300 enemies, radius cull off | 33 | 3.40 |
 
 Medians of five runs of 120 frames each; one run in five came back high,
 which is why they are medians rather than firsts. The light count stops at
@@ -129,15 +135,16 @@ which is why they are medians rather than firsts. The light count stops at
 last two rows the same, and it is the first thing a quality ladder would take
 away.
 
-So the point-light loop is 7.3 ms of the 8.2, about **0.049 ms a light** at
-1080p. The additive effect stage still does not clear the noise. A frame at
-sixty is 16.7 ms, so a full arena at its worst is under half of one.
+The cost is now **flat in the number of enemies**, which it never was before:
+the crowd used to carry a light each and the frame ran to 8.2 ms with three
+hundred of them. Taking their lights away for the sake of the dark took two
+thirds of the frame with it. A frame at sixty is 16.7 ms.
 
-The last row is the one that matters for wide lights. Every light now reaches
-most of a metre, so far more of the screen is inside far more of them — and
-the exact radius cull, one distance test that skips a light faded to nothing
-anyway, is the difference between 8 ms and 23. It is not an approximation and
-there is no reason ever to turn it off outside a measurement.
+Most of what is left is the twenty-four sweeping spots, which are on whether
+anything is happening or not — 2.29 ms of the 2.39 is there before a single
+enemy exists. Narrow cones are cheap to *look* at and not cheap to evaluate:
+a pixel outside the cone still costs the distance test and the dot product
+that discovers it is outside.
 
 The CPU side is not the problem either: one `arena.step` with the pool of 300
 full is **0.16 ms**. It is 0.56 ms if the shots and the crowd scan every enemy

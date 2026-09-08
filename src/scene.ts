@@ -88,7 +88,7 @@ export const MESHES = {
   /** A perimeter block, laid along the wall it belongs to. */
   block: () => part('plate(card(width: 218, height: 74, corner: 12), thickness: 132, bevel: 12)', 'base'),
   /** An eight-sided column, for the corners to reflect things in. */
-  column: () => part('disc(radius: 54, thickness: 250, sides: 8, bevel: 11)', 'base'),
+  column: () => part(`disc(radius: 54, thickness: ${COLUMN_HEIGHT}, sides: 8, bevel: 11)`, 'base'),
   /**
    * The player is a technical: a flatbed with a gun on the back that aims
    * where it likes, not where the truck is pointing. It is five parts rather
@@ -126,6 +126,8 @@ export const MESHES = {
  * what you see and what you hit cannot drift apart.
  */
 export const COLUMN_RADIUS = 58;
+/** How tall an unscaled post is, so a spotlight can sit on top of one. */
+export const COLUMN_HEIGHT = 250;
 
 /**
  * The posts: a five-by-five grid with only the very middle left out, so

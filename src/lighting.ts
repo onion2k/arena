@@ -2,57 +2,63 @@
  * What the arena is lit by, and what glows over the top of it, rebuilt from
  * scratch every frame.
  *
+ * The hall is dark. Almost nothing in it lights itself: the drones carry no
+ * light of their own, so a drone away from a beam is a shape you cannot see
+ * until something falls on it. What light there is comes from beams — a
+ * spotlight over every post, sweeping; the searchlight on the cannon, which
+ * points where the gun points; the truck's headlights, which point where the
+ * truck is going. Finding things is the game, and the lights are how.
+ *
  * Nothing here is cached between frames on purpose. A spike measured a plain
  * forward loop carrying three to five hundred point lights before it wanted
- * tiles or clusters, and this scene asks for two or three hundred at its
- * busiest — so the cheapest thing to do with the light list is throw it away
- * and write it again.
+ * tiles or clusters, and this scene asks for fewer than a hundred now that
+ * the crowd is unlit — so the cheapest thing to do with the light list is
+ * throw it away and write it again.
  */
 import { LightPool } from 'artshape-render/game/lights';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
 import type { Arena } from './game';
-import { ARENA_X, ARENA_Y } from './scene';
+import { COLUMNS, COLUMN_HEIGHT } from './scene';
 import { project } from './matrix';
 
-export const LIGHT_CAPACITY = 512;
+export const LIGHT_CAPACITY = 256;
 export const EFFECT_CAPACITY = 512;
-/**
- * How many enemies carry their own light. Point lights are what this frame
- * actually spends its time on — measured on a Mac mini at 1080p, an arena of
- * 140 enemies and 146 lights is 3.1 ms and 2.8 of that is the light loop,
- * about 0.019 ms a light — so this is the first thing a ladder would take
- * away. At 128 a full frame is still under a fifth of a 60 fps budget.
- */
-const ENEMY_LIGHTS = 128;
 
 /**
- * The slow coloured wash that keeps the arena from being black when it is
- * empty — and no more than that. It used to light the place; now it barely
- * tints it, because a room that is already lit has nothing left for a shot
- * going past to add. Everything you can actually see by is carried by
- * something in the fight.
+ * The spots over the posts, one each, sweeping.
+ *
+ * They are what makes the arena a place rather than a void: a slow turning
+ * beam that catches a drone crossing it, and the only light that reaches
+ * anywhere the player is not pointing. Each turns at its own rate and starts
+ * at its own angle, so the pattern never repeats and there is no safe corner.
  */
-const AMBIENT = 12;
-function ambience(pool: LightPool, t: number) {
-  for (let i = 0; i < AMBIENT; i++) {
-    const a = t * 0.22 + (i / AMBIENT) * Math.PI * 2;
-    const hue = (i / AMBIENT + t * 0.03) % 1;
+function posts(pool: LightPool, t: number) {
+  for (let i = 0; i < COLUMNS.length; i++) {
+    const [x, y, scale] = COLUMNS[i];
+    // a rate that is not a multiple of any other, and alternating direction
+    const rate = 0.17 + (i % 5) * 0.043;
+    const spin = i % 2 === 0 ? 1 : -1;
+    const az = t * rate * spin + i * 1.37;
+    // tilted well off vertical, so the pool it throws sweeps a wide ring
+    const tilt = 0.62;
+    const hue = (i / COLUMNS.length + 0.12) % 1;
+    const c = hueToRgb(hue);
     pool.add({
-      position: [
-        Math.cos(a) * ARENA_X * 0.82,
-        Math.sin(a) * ARENA_Y * 0.82,
-        400 + Math.sin(t * 0.7 + i) * 90,
-      ],
-      radius: Math.max(ARENA_X, ARENA_Y) * 0.8,
-      colour: hueToRgb(hue),
-      intensity: 0.16,
+      position: [x, y, COLUMN_HEIGHT * scale - 24],
+      radius: 2400,
+      // barely tinted: a coloured beam is pretty and a white one shows you
+      // what colour the thing you have found is
+      colour: [0.55 + c[0] * 0.45, 0.55 + c[1] * 0.45, 0.6 + c[2] * 0.4],
+      intensity: 5.5,
+      direction: [Math.cos(az) * Math.sin(tilt), Math.sin(az) * Math.sin(tilt), -Math.cos(tilt)],
+      cone: [7, 17],
     });
   }
 }
 
 export function lightsFor(pool: LightPool, arena: Arena, t: number) {
   pool.clear();
-  ambience(pool, t);
+  posts(pool, t);
 
   const hurt = arena.invuln > 0 && Math.sin(arena.invuln * 40) > 0;
   const cy = Math.cos(arena.pAngle); const sy = Math.sin(arena.pAngle);
@@ -60,85 +66,82 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
   const at = (lx: number, ly: number, z: number): [number, number, number] =>
     [arena.px + lx * cy - ly * sy, arena.py + lx * sy + ly * cy, z];
 
-  // one over the truck, so the truck itself is lit and not only the floor
+  // The searchlight, on the gun. This is the player's eye: a long narrow beam
+  // that goes wherever the cannon is aimed, so looking and shooting are the
+  // same act and you cannot do one without committing to the other.
   pool.add({
-    position: at(-10, 0, 250),
-    radius: 900,
-    colour: hurt ? [1, 0.4, 0.35] : [1, 0.93, 0.78],
-    intensity: 1.5,
+    position: [arena.gunX, arena.gunY, 150],
+    radius: 4200,
+    colour: [1, 0.98, 0.92],
+    intensity: 30,
+    direction: [Math.cos(arena.aim), Math.sin(arena.aim), -0.20],
+    cone: [6, 16],
   });
 
-  // Headlights. A point light throws in every direction, so these are placed
-  // out ahead of the cab rather than at it: what reads as a beam is the pool
-  // they lay on the floor in front, and the tiles picking it up edge by edge.
+  // Headlights: shorter, wider, and pointed where the truck is going rather
+  // than where it is looking. They are what stops you driving into a post
+  // while watching something else.
   for (const side of [-1, 1]) {
     pool.add({
-      position: at(210, side * 46, 62),
-      radius: 1500,
-      colour: hurt ? [1, 0.45, 0.4] : [1, 0.95, 0.82],
-      intensity: 3.4,
+      position: at(120, side * 46, 74),
+      radius: 2200,
+      colour: hurt ? [1, 0.45, 0.4] : [1, 0.96, 0.86],
+      intensity: 11,
+      direction: [cy, sy, -0.30],
+      cone: [13, 30],
     });
   }
 
-  // exhaust under the tailgate when the throttle is down, and brake lights
+  // a small pool under the truck itself, so it is not a silhouette in its own
+  // headlights
+  pool.add({
+    position: at(-10, 0, 190),
+    radius: 620,
+    colour: hurt ? [1, 0.4, 0.35] : [0.9, 0.86, 0.8],
+    intensity: 1.1,
+  });
+
   if (arena.thrusting > 0) {
     pool.add({
-      position: at(-150, 0, 40),
-      radius: 700,
-      colour: [1, 0.62, 0.3],
-      intensity: 2.0 * arena.thrusting,
+      position: at(-150, 0, 40), radius: 700,
+      colour: [1, 0.62, 0.3], intensity: 1.6 * arena.thrusting,
     });
   }
   if (arena.braking > 0) {
     for (const side of [-1, 1]) {
       pool.add({
-        position: at(-140, side * 48, 58),
-        radius: 620,
-        colour: [1, 0.12, 0.07],
-        intensity: 1.8 * arena.braking,
+        position: at(-140, side * 48, 58), radius: 620,
+        colour: [1, 0.12, 0.07], intensity: 1.4 * arena.braking,
       });
     }
   }
 
-  // the muzzle: brief, bright, and the reason the floor flickers when firing
   if (arena.lastShot < 0.055) {
     const f = 1 - arena.lastShot / 0.055;
     pool.add({
-      position: [arena.muzzleX, arena.muzzleY, 104],
-      radius: 1400,
-      colour: [1, 0.92, 0.72],
-      intensity: 8.0 * f * f,
+      position: [arena.muzzleX, arena.muzzleY, 104], radius: 1400,
+      colour: [1, 0.92, 0.72], intensity: 9 * f * f,
     });
   }
 
-  // one a shot. Two hundred of these is where the light count actually goes.
+  // The tracers. These are the only thing besides the beams that lights the
+  // floor, and watching one fly is how you read the room between sweeps.
   for (let i = 0; i < arena.bolts; i++) {
-    pool.add({ position: [arena.bx[i], arena.by[i], 44], radius: 950, colour: [0.34, 0.92, 1], intensity: 0.9 });
-  }
-
-  // A drone's light rides above it rather than inside it. At the drone's own
-  // height every face of the star points away from the light — the normals
-  // all face outward — so it lit the floor beneath and never the thing
-  // carrying it, which left the drones darker than the pool they were
-  // standing in. From overhead it catches their top faces first.
-  for (let i = 0; i < Math.min(arena.enemies, ENEMY_LIGHTS); i++) {
-    const flash = arena.eflash[i] > 0;
     pool.add({
-      position: [arena.ex[i], arena.ey[i], 128],
-      radius: flash ? 1200 : 860,
-      colour: flash ? [1, 0.95, 0.9] : [1, 0.30, 0.16],
-      intensity: flash ? 3.4 : 0.55,
+      position: [arena.bx[i], arena.by[i], 44], radius: 950,
+      colour: [0.34, 0.92, 1], intensity: 1.1,
     });
   }
 
-  // explosions: a light that opens out and dies away with the square of what is left
+  // and an explosion, which lights everything around it for half a second —
+  // the one moment the room is bright, and worth using
   for (const b of arena.blasts) {
     const k = 1 - b.age / b.life;
     pool.add({
       position: [b.x, b.y, 50 + (1 - k) * 90],
       radius: (700 + (1 - k) * 1600) * b.power,
       colour: [1, 0.52 + k * 0.35, 0.16 + k * 0.2],
-      intensity: 9.0 * k * k * b.power,
+      intensity: 14 * k * k * b.power,
     });
   }
 }
@@ -175,11 +178,9 @@ export function setProjectionScale(fovDegrees: number) {
 
 export function effectsFor(out: Float32Array, arena: Arena, vp: Float32Array): number {
   let n = 0;
-  // a shot's own glow, small and hot
   for (let i = 0; i < arena.bolts; i++) {
     n = glow(out, n, vp, arena.bx[i], arena.by[i], 44, 20, 2.2, [0.4, 0.95, 1], 3.2);
   }
-  // an explosion is three layers: white core, orange body, red halo
   for (const b of arena.blasts) {
     const k = 1 - b.age / b.life;
     const grow = (1 - k) * b.power;
@@ -206,7 +207,7 @@ export function effectsFor(out: Float32Array, arena: Arena, vp: Float32Array): n
   return n;
 }
 
-/** A hue as full-saturation rgb, for the wash. */
+/** A hue as full-saturation rgb, for the beams to be tinted by. */
 function hueToRgb(h: number): [number, number, number] {
   const f = (n: number) => {
     const k = (n + h * 6) % 6;

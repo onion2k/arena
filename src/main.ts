@@ -41,7 +41,12 @@ async function main() {
     // low and warm, so the sun picks out the tops of things and leaves the
     // floor for the point lights to do
     sunDir: [0.34, 0.52, 0.78],
-    sunColour: [0.9, 0.86, 1.0],
+    // Nearly off. The sun is a directional light that reaches every surface
+    // in the arena and `ambient` does not touch it, so at any real strength
+    // it lays a sheet of highlight across the floor and there is no dark for
+    // a beam to cut. What is left is enough to keep the posts from being
+    // flat black cutouts.
+    sunColour: [0.05, 0.05, 0.07],
     exposure: 1.05,
     // Half brightness at 900mm rather than the library's 50. The arena is
     // 4800 across; at fifty a light was a coin of brightness under whatever
@@ -51,7 +56,10 @@ async function main() {
     // A dark hall. The environment lights everything everywhere before a
     // single point light exists, so leaving it at one meant the floor was
     // already lit and a shot going past had nothing to add.
-    ambient: 0.3,
+    // Very nearly nothing. The hall is meant to be dark enough that a drone
+    // outside a beam is invisible, and the environment lights everything
+    // everywhere: at 0.3 it was quietly showing the player the whole room.
+    ambient: 0.035,
     // the environment lights the metal but is never drawn, so this is the
     // whole sky: near black, to leave the point lights all the contrast
     background: [0.004, 0.004, 0.007],
@@ -187,7 +195,7 @@ async function main() {
     await fetch('/__shot', { method: 'POST', body: png });
     return png.length;
   };
-  Object.assign(globalThis as Record<string, unknown>, { arena, renderer, orbit, input, measure, shoot });
+  Object.assign(globalThis as Record<string, unknown>, { arena, renderer, orbit, input, lights, measure, shoot });
 
   /**
    * Frame the arena, and set how far in and out the wheel may go from there.
