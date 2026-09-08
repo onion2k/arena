@@ -116,13 +116,18 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
     pool.add({ position: [arena.bx[i], arena.by[i], 44], radius: 950, colour: [0.34, 0.92, 1], intensity: 0.9 });
   }
 
+  // A drone's light rides above it rather than inside it. At the drone's own
+  // height every face of the star points away from the light — the normals
+  // all face outward — so it lit the floor beneath and never the thing
+  // carrying it, which left the drones darker than the pool they were
+  // standing in. From overhead it catches their top faces first.
   for (let i = 0; i < Math.min(arena.enemies, ENEMY_LIGHTS); i++) {
     const flash = arena.eflash[i] > 0;
     pool.add({
-      position: [arena.ex[i], arena.ey[i], 42],
-      radius: flash ? 1200 : 820,
-      colour: flash ? [1, 0.95, 0.9] : [1, 0.24, 0.13],
-      intensity: flash ? 3.4 : 0.42,
+      position: [arena.ex[i], arena.ey[i], 128],
+      radius: flash ? 1200 : 860,
+      colour: flash ? [1, 0.95, 0.9] : [1, 0.30, 0.16],
+      intensity: flash ? 3.4 : 0.55,
     });
   }
 

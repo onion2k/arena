@@ -99,7 +99,9 @@ async function main() {
     { mesh: mesh.wheel, matrices: wheelM, count: 4, albedo: [0.07, 0.07, 0.08], roughness: 0.62 },
     { mesh: mesh.turret, matrices: turretM, albedo: [0.74, 0.76, 0.82], roughness: 0.2 },
     { mesh: mesh.barrel, matrices: barrelM, albedo: [0.90, 0.92, 0.97], roughness: 0.1 },
-    { mesh: mesh.drone, matrices: droneM, count: 0, albedo: [0.86, 0.17, 0.12], roughness: 0.27 },
+    // hotter and glossier than the floor it stands on, so it reads as a thing
+    // rather than as a patch of the ground
+    { mesh: mesh.drone, matrices: droneM, count: 0, albedo: [1.0, 0.32, 0.20], roughness: 0.19 },
     { mesh: mesh.bolt, matrices: boltM, count: 0, albedo: [0.38, 0.95, 1.0], roughness: 0.05 },
   ];
   renderer.setDynamic(dynamic);
