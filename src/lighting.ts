@@ -27,9 +27,10 @@ const ENEMY_LIGHTS = 128;
 
 /**
  * The slow coloured wash that keeps the arena from being black when it is
- * empty. Ten of them rather than seven, and their orbit and reach scale with
- * the arena: the same seven lights over nearly three times the floor left
- * most of it dark.
+ * empty — and no more than that. It used to light the place; now it barely
+ * tints it, because a room that is already lit has nothing left for a shot
+ * going past to add. Everything you can actually see by is carried by
+ * something in the fight.
  */
 const AMBIENT = 12;
 function ambience(pool: LightPool, t: number) {
@@ -44,7 +45,7 @@ function ambience(pool: LightPool, t: number) {
       ],
       radius: Math.max(ARENA_X, ARENA_Y) * 0.8,
       colour: hueToRgb(hue),
-      intensity: 3.0,
+      intensity: 0.16,
     });
   }
 }
@@ -62,9 +63,9 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
   // one over the truck, so the truck itself is lit and not only the floor
   pool.add({
     position: at(-10, 0, 250),
-    radius: 460,
+    radius: 900,
     colour: hurt ? [1, 0.4, 0.35] : [1, 0.93, 0.78],
-    intensity: 10,
+    intensity: 1.5,
   });
 
   // Headlights. A point light throws in every direction, so these are placed
@@ -73,9 +74,9 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
   for (const side of [-1, 1]) {
     pool.add({
       position: at(210, side * 46, 62),
-      radius: 720,
+      radius: 1500,
       colour: hurt ? [1, 0.45, 0.4] : [1, 0.95, 0.82],
-      intensity: 13,
+      intensity: 3.4,
     });
   }
 
@@ -83,18 +84,18 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
   if (arena.thrusting > 0) {
     pool.add({
       position: at(-150, 0, 40),
-      radius: 320,
+      radius: 700,
       colour: [1, 0.62, 0.3],
-      intensity: 12 * arena.thrusting,
+      intensity: 2.0 * arena.thrusting,
     });
   }
   if (arena.braking > 0) {
     for (const side of [-1, 1]) {
       pool.add({
         position: at(-140, side * 48, 58),
-        radius: 260,
+        radius: 620,
         colour: [1, 0.12, 0.07],
-        intensity: 11 * arena.braking,
+        intensity: 1.8 * arena.braking,
       });
     }
   }
@@ -104,24 +105,24 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
     const f = 1 - arena.lastShot / 0.055;
     pool.add({
       position: [arena.muzzleX, arena.muzzleY, 104],
-      radius: 520,
+      radius: 1400,
       colour: [1, 0.92, 0.72],
-      intensity: 38 * f * f,
+      intensity: 8.0 * f * f,
     });
   }
 
   // one a shot. Two hundred of these is where the light count actually goes.
   for (let i = 0; i < arena.bolts; i++) {
-    pool.add({ position: [arena.bx[i], arena.by[i], 44], radius: 230, colour: [0.34, 0.92, 1], intensity: 8 });
+    pool.add({ position: [arena.bx[i], arena.by[i], 44], radius: 950, colour: [0.34, 0.92, 1], intensity: 0.9 });
   }
 
   for (let i = 0; i < Math.min(arena.enemies, ENEMY_LIGHTS); i++) {
     const flash = arena.eflash[i] > 0;
     pool.add({
       position: [arena.ex[i], arena.ey[i], 42],
-      radius: flash ? 320 : 190,
+      radius: flash ? 1200 : 820,
       colour: flash ? [1, 0.95, 0.9] : [1, 0.24, 0.13],
-      intensity: flash ? 18 : 4.2,
+      intensity: flash ? 3.4 : 0.42,
     });
   }
 
@@ -130,9 +131,9 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
     const k = 1 - b.age / b.life;
     pool.add({
       position: [b.x, b.y, 50 + (1 - k) * 90],
-      radius: (150 + (1 - k) * 460) * b.power,
+      radius: (700 + (1 - k) * 1600) * b.power,
       colour: [1, 0.52 + k * 0.35, 0.16 + k * 0.2],
-      intensity: 60 * k * k * b.power,
+      intensity: 9.0 * k * k * b.power,
     });
   }
 }

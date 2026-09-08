@@ -43,6 +43,15 @@ async function main() {
     sunDir: [0.34, 0.52, 0.78],
     sunColour: [0.9, 0.86, 1.0],
     exposure: 1.05,
+    // Half brightness at 900mm rather than the library's 50. The arena is
+    // 4800 across; at fifty a light was a coin of brightness under whatever
+    // carried it and the floor a metre away never knew it existed. At nine
+    // hundred a passing shot lights a bay of the hall.
+    falloffHalf: 900,
+    // A dark hall. The environment lights everything everywhere before a
+    // single point light exists, so leaving it at one meant the floor was
+    // already lit and a shot going past had nothing to add.
+    ambient: 0.3,
     // the environment lights the metal but is never drawn, so this is the
     // whole sky: near black, to leave the point lights all the contrast
     background: [0.004, 0.004, 0.007],
@@ -64,10 +73,10 @@ async function main() {
   const at = arenaMatrices();
 
   renderer.setStatic([
-    { mesh: mesh.floor, matrices: identity(), albedo: [0.052, 0.056, 0.072], roughness: 0.14 },
-    { mesh: mesh.tile, matrices: at.tiles, albedo: [0.10, 0.11, 0.14], roughness: 0.24 },
-    { mesh: mesh.block, matrices: at.blocks, albedo: [0.60, 0.63, 0.70], roughness: 0.26 },
-    { mesh: mesh.column, matrices: at.columns, albedo: [0.78, 0.62, 0.35], roughness: 0.18 },
+    { mesh: mesh.floor, matrices: identity(), albedo: [0.055, 0.060, 0.078], roughness: 0.14 },
+    { mesh: mesh.tile, matrices: at.tiles, albedo: [0.105, 0.115, 0.145], roughness: 0.24 },
+    { mesh: mesh.block, matrices: at.blocks, albedo: [0.58, 0.61, 0.68], roughness: 0.26 },
+    { mesh: mesh.column, matrices: at.columns, albedo: [0.76, 0.60, 0.34], roughness: 0.18 },
   ]);
 
   // The pools. Their size is fixed here and never changes again: what moves

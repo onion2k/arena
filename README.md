@@ -83,8 +83,16 @@ error and nothing else wrong with the frame.
 
 Every frame the light list is cleared and written again from scratch. A shot
 carries a light, an enemy carries a light, an explosion carries one that opens
-out and dies with the square of what is left, and the muzzle carries one for
-about fifty milliseconds. A busy frame is around a hundred and thirty of them.
+out and dies with the square of what is left, the muzzle carries one for about
+fifty milliseconds, and the truck carries headlights, an exhaust glow and
+brake lamps. A busy frame is around a hundred and fifty of them.
+
+The hall itself is dark on purpose. The environment contributes 0.3 of what it
+would, and the slow coloured wash that keeps an empty arena from being black
+is barely a tint — everything you can see by is carried by something in the
+fight. Lights are wide rather than bright: a point light is half its strength
+900mm out rather than the renderer's default of 50, so a shot going past
+lights a bay of the hall instead of putting a coin of glare under itself.
 
 Nothing is kept between frames. The game renderer offers a `'keep'` mode that
 draws the static half once and copies it back, and this demo does not use it:
@@ -108,11 +116,12 @@ slower. `measure(width, height, frames)` is on the console for repeating it.
 
 | scene | lights | ms a frame |
 | --- | ---: | ---: |
-| empty arena | 27 | 2.17 |
-| 80 enemies | 105 | 5.33 |
-| 180 enemies | 152 | 7.42 |
-| 300 enemies (the pool full) | 155 | 7.69 |
-| 300 enemies, point lights off | — | 0.86 |
+| empty arena | 20 | 2.00 |
+| 80 enemies | 102 | 5.79 |
+| 180 enemies | 149 | 7.97 |
+| 300 enemies (the pool full) | 148 | 8.19 |
+| 300 enemies, point lights off | — | 0.88 |
+| 300 enemies, radius cull off | 148 | 23.12 |
 
 Medians of five runs of 120 frames each; one run in five came back high,
 which is why they are medians rather than firsts. The light count stops at
@@ -120,11 +129,15 @@ which is why they are medians rather than firsts. The light count stops at
 last two rows the same, and it is the first thing a quality ladder would take
 away.
 
-So the point-light loop is 6.8 ms of the 7.7, about **0.053 ms a light** at
-1080p — twice what it cost in the smaller arena, because a bigger floor puts
-more of every light's reach on screen at once. The additive effect stage still
-does not clear the noise. A frame at sixty is 16.7 ms, so a full arena at its
-worst is under half of one.
+So the point-light loop is 7.3 ms of the 8.2, about **0.049 ms a light** at
+1080p. The additive effect stage still does not clear the noise. A frame at
+sixty is 16.7 ms, so a full arena at its worst is under half of one.
+
+The last row is the one that matters for wide lights. Every light now reaches
+most of a metre, so far more of the screen is inside far more of them — and
+the exact radius cull, one distance test that skips a light faded to nothing
+anyway, is the difference between 8 ms and 23. It is not an approximation and
+there is no reason ever to turn it off outside a measurement.
 
 The CPU side is not the problem either: one `arena.step` with the pool of 300
 full is **0.16 ms**. It is 0.56 ms if the shots and the crowd scan every enemy
