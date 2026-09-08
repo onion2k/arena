@@ -110,6 +110,8 @@ async function main() {
     maxPolar: 1.36,
     rotateSpeed: 0.42,
     zoomSpeed: 0.8,
+    // the camera follows the ship, so its target is not the player's to move
+    panSpeed: 0,
     // less carry than the still-life viewer's: a camera that keeps drifting
     // after the hand comes off is a camera you fight while trying to fly
     inertia: 0.45,
@@ -156,6 +158,10 @@ async function main() {
     canvas.width = w; canvas.height = h;
     renderer.resize(w, h);
     if (!touched) reframe(true, w / h);
+    // the orbit eases toward where it was sent, and a capture does not have
+    // a hundred frames to get there
+    followShip(1);
+    orbit.update();
     upload();
     renderer.frame(ctx.context.getCurrentTexture().createView(), 'redraw');
     await ctx.queue.onSubmittedWorkDone();
@@ -171,16 +177,56 @@ async function main() {
    * resize adjusts the limits but leaves the view where it was put.
    */
   let touched = false;
+  /** The distance at which the whole arena is in frame. Set by every reframe. */
+  let fitted = 2000;
   const reframe = (move: boolean, aspect = canvas.width / Math.max(1, canvas.height)) => {
     const before = renderer.camera.position.slice() as [number, number, number];
     const target = renderer.camera.target.slice() as [number, number, number];
-    const fitted = fitCamera(renderer.camera, aspect);
-    orbit.minDistance = fitted * 0.3;
-    orbit.maxDistance = fitted * 1.9;
-    if (move) { orbit.forcePosition(); return; }
+    fitted = fitCamera(renderer.camera, aspect);
+    orbit.minDistance = fitted * 0.22;
+    orbit.maxDistance = fitted;
+    if (move) {
+      // In closer than the fitted distance, so the ship reads: the whole
+      // arena is what the wheel is for. Moved before the orbit adopts it,
+      // because `setSpherical` eases and a view that drifts into place over
+      // the first second of play looks like something is wrong.
+      const t = renderer.camera.target;
+      const pos = renderer.camera.position;
+      renderer.camera.position = [
+        t[0] + (pos[0] - t[0]) * START_ZOOM,
+        t[1] + (pos[1] - t[1]) * START_ZOOM,
+        t[2] + (pos[2] - t[2]) * START_ZOOM,
+      ];
+      renderer.camera.update();
+      orbit.forcePosition();
+      return;
+    }
     renderer.camera.position = before;
     renderer.camera.target = target;
     renderer.camera.update();
+  };
+
+  /**
+   * Where the camera looks: the ship, held inside the arena by however much
+   * of the arena is off screen.
+   *
+   * `fitted` is by construction the distance at which the whole arena is in
+   * frame, so at that distance the camera must stay dead centre and nothing
+   * can come in unseen; from there the leash lengthens as you zoom in, in
+   * proportion, until up close it simply follows. That is one behaviour
+   * rather than a follow mode and a whole-arena mode, and zooming all the way
+   * out is the whole-arena mode.
+   */
+  const aim: [number, number, number] = [0, 0, CAMERA_HEIGHT];
+  const followShip = (dt: number) => {
+    const slack = Math.max(0, 1 - orbit.distance / fitted);
+    const wantX = clamp(arena.px, -ARENA_X * slack, ARENA_X * slack);
+    const wantY = clamp(arena.py, -ARENA_Y * slack, ARENA_Y * slack);
+    // eased, so a bounce off a wall does not snap the whole scene sideways
+    const k = Math.min(1, dt * 3.4);
+    aim[0] += (wantX - aim[0]) * k;
+    aim[1] += (wantY - aim[1]) * k;
+    renderer.camera.target = [aim[0], aim[1], aim[2]];
   };
   canvas.addEventListener('pointerdown', () => { touched = true; });
   canvas.addEventListener('wheel', () => { touched = true; }, { passive: true });
@@ -272,7 +318,8 @@ async function main() {
     const dt = Math.min((now - last) / 1000, 1 / 20);
     last = now; t += dt;
 
-    if (input.takeRecentre()) reframe(true);
+    if (input.takeRecentre()) { aim[0] = 0; aim[1] = 0; reframe(true); }
+    followShip(dt);
     orbit.update();
     arena.step(dt, input.read());
 
@@ -311,7 +358,7 @@ async function main() {
  * solved for, on every resize.
  */
 function fitCamera(cam: GameRenderer['camera'], aspect: number): number {
-  const target: [number, number, number] = [0, 20, 50];
+  const target: [number, number, number] = [0, 0, CAMERA_HEIGHT];
   // back and up from the target, at the angle the arena reads best from
   const back = norm([0, -1.32, 0.915]);
   const corners: [number, number, number][] = [];
@@ -337,6 +384,14 @@ function fitCamera(cam: GameRenderer['camera'], aspect: number): number {
   cam.update();
   return hi;
 }
+
+/** Where the camera starts, as a fraction of the distance that fits the arena. */
+const START_ZOOM = 0.68;
+/** How high off the floor the camera looks. The fit solves for this exact
+ *  point, so at full zoom-out the guarantee that everything is in frame holds. */
+const CAMERA_HEIGHT = 55;
+
+const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 
 function identity(): Float32Array {
   const m = new Float32Array(16);

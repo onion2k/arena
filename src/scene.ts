@@ -62,19 +62,27 @@ export function part(source: string, anchor: Anchor = 'centre'): Mesh {
   return { ...mesh, positions: moved };
 }
 
-/** Half the arena, in the millimetres everything else is modelled in. */
-export const ARENA_X = 820;
-export const ARENA_Y = 560;
+/**
+ * Half the arena, in the millimetres everything else is modelled in.
+ *
+ * Nearly three times the area it started at. At the old size a ship at full
+ * speed crossed it in two seconds, which leaves nowhere to run and nothing to
+ * outmanoeuvre: the whole of Asteroids is the room to keep moving. Everything
+ * that stands in the arena is placed from these two numbers and the camera
+ * solves its distance from them, so this is the only place the size lives.
+ */
+export const ARENA_X = 1400;
+export const ARENA_Y = 940;
 
 export const MESHES = {
   /** The slab, its face at z = 0 so everything else can sit on zero. */
   floor: () => part(`plate(card(width: ${ARENA_X * 2}, height: ${ARENA_Y * 2}, corner: 90), thickness: 40, bevel: 10)`, 'top'),
   /** A raised tile. A hundred of them give the moving lights edges to catch. */
-  tile: () => part('plate(card(width: 120, height: 120, corner: 14), thickness: 5, bevel: 3)', 'base'),
+  tile: () => part('plate(card(width: 152, height: 152, corner: 16), thickness: 6, bevel: 3)', 'base'),
   /** A perimeter block, laid along the wall it belongs to. */
-  block: () => part('plate(card(width: 150, height: 54, corner: 10), thickness: 74, bevel: 9)', 'base'),
+  block: () => part('plate(card(width: 186, height: 62, corner: 11), thickness: 86, bevel: 10)', 'base'),
   /** An eight-sided column, for the corners to reflect things in. */
-  column: () => part('disc(radius: 46, thickness: 210, sides: 8, bevel: 10)', 'base'),
+  column: () => part('disc(radius: 54, thickness: 250, sides: 8, bevel: 11)', 'base'),
   /**
    * The player's hull: a triangle, nose along its own +x, so turning the
    * matrix turns the ship and you can see which way it is pointing. That is
@@ -95,30 +103,44 @@ export const MESHES = {
   bolt: () => part('egg(radius: 7, height: 38, taper: 0.7, segments: 12)'),
 };
 
+/**
+ * The columns, which are the only things in the arena you cannot fly through.
+ * Eight rather than the four the small arena had: the corners, a pair either
+ * side of the middle, and one at each end. An arena this size with an empty
+ * middle is a field, not an arena — there has to be something to break the
+ * line of a charge and something for a passing shot to light up.
+ *
+ * The game reads these for collision and the scene places posts on them, so
+ * what you see and what you hit cannot drift apart.
+ */
+export const COLUMN_RADIUS = 58;
+export const COLUMNS: [number, number][] = [
+  [-ARENA_X + 300, -ARENA_Y + 260], [ARENA_X - 300, -ARENA_Y + 260],
+  [-ARENA_X + 300, ARENA_Y - 260], [ARENA_X - 300, ARENA_Y - 260],
+  [-520, 0], [520, 0],
+  [0, -430], [0, 430],
+];
+
 /** Where the static half stands. Built once; the game never touches these. */
 export function arenaMatrices(): { tiles: Float32Array; blocks: Float32Array; columns: Float32Array } {
   const tiles: number[] = [];
-  const step = 132;
-  const across = Math.floor((ARENA_X * 2 - 160) / step);
-  const up = Math.floor((ARENA_Y * 2 - 160) / step);
+  const step = 167;
+  const across = Math.floor((ARENA_X * 2 - 190) / step);
+  const up = Math.floor((ARENA_Y * 2 - 190) / step);
   for (let j = 0; j < up; j++) {
     for (let i = 0; i < across; i++) {
       tiles.push((i - (across - 1) / 2) * step, (j - (up - 1) / 2) * step, 0);
     }
   }
   const blocks: number[] = [];
-  for (let x = -ARENA_X + 80; x <= ARENA_X - 80; x += 160) {
+  for (let x = -ARENA_X + 100; x <= ARENA_X - 100; x += 198) {
     blocks.push(x, -ARENA_Y, 0, x, ARENA_Y, 0);
   }
-  for (let y = -ARENA_Y + 90; y <= ARENA_Y - 90; y += 170) {
+  for (let y = -ARENA_Y + 110; y <= ARENA_Y - 110; y += 210) {
     blocks.push(-ARENA_X, y, Math.PI / 2, ARENA_X, y, Math.PI / 2);
   }
-  const columns = [
-    -ARENA_X + 210, -ARENA_Y + 190, 0,
-    ARENA_X - 210, -ARENA_Y + 190, 0,
-    -ARENA_X + 210, ARENA_Y - 190, 0,
-    ARENA_X - 210, ARENA_Y - 190, 0,
-  ];
+  const columns: number[] = [];
+  for (const [x, y] of COLUMNS) columns.push(x, y, 0);
   return { tiles: pack(tiles), blocks: pack(blocks), columns: pack(columns) };
 }
 

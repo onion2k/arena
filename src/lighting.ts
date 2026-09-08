@@ -11,6 +11,7 @@
 import { LightPool } from 'artshape-render/game/lights';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
 import type { Arena } from './game';
+import { ARENA_X, ARENA_Y } from './scene';
 import { project } from './matrix';
 
 export const LIGHT_CAPACITY = 512;
@@ -24,16 +25,26 @@ export const EFFECT_CAPACITY = 512;
  */
 const ENEMY_LIGHTS = 128;
 
-/** The slow coloured wash that keeps the arena from being black when it is empty. */
+/**
+ * The slow coloured wash that keeps the arena from being black when it is
+ * empty. Ten of them rather than seven, and their orbit and reach scale with
+ * the arena: the same seven lights over nearly three times the floor left
+ * most of it dark.
+ */
+const AMBIENT = 10;
 function ambience(pool: LightPool, t: number) {
-  for (let i = 0; i < 7; i++) {
-    const a = t * 0.22 + (i / 7) * Math.PI * 2;
-    const hue = (i / 7 + t * 0.03) % 1;
+  for (let i = 0; i < AMBIENT; i++) {
+    const a = t * 0.22 + (i / AMBIENT) * Math.PI * 2;
+    const hue = (i / AMBIENT + t * 0.03) % 1;
     pool.add({
-      position: [Math.cos(a) * 700, Math.sin(a) * 470, 300 + Math.sin(t * 0.7 + i) * 70],
-      radius: 900,
+      position: [
+        Math.cos(a) * ARENA_X * 0.82,
+        Math.sin(a) * ARENA_Y * 0.82,
+        340 + Math.sin(t * 0.7 + i) * 80,
+      ],
+      radius: Math.max(ARENA_X, ARENA_Y) * 0.95,
       colour: hueToRgb(hue),
-      intensity: 2.6,
+      intensity: 3.0,
     });
   }
 }

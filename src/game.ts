@@ -6,10 +6,10 @@
  * and a count that moves. Killing an enemy swaps the last live one into its
  * slot rather than leaving a hole, so the live prefix stays dense.
  */
-import { ARENA_X, ARENA_Y } from './scene';
+import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS } from './scene';
 
-export const MAX_ENEMIES = 140;
-export const MAX_BOLTS = 220;
+export const MAX_ENEMIES = 220;
+export const MAX_BOLTS = 260;
 export const MAX_BLASTS = 28;
 
 /**
@@ -17,16 +17,18 @@ export const MAX_BLASTS = 28;
  * is pointing, and it keeps going. Nothing here steers toward a cursor.
  */
 const TURN_RATE = 3.7;         // radians a second
-const THRUST = 1650;           // mm a second squared
+const THRUST = 2150;           // mm a second squared
 /** Drag as a rate: velocity is multiplied by exp(-rate · dt) each step, so it
  *  is frame-rate independent in a way `v *= 0.98` is not. */
 const DRAG = 0.5;
 const BRAKE = 3.4;
-const MAX_SPEED = 820;
-/** How much of its speed the ship keeps when it meets a wall. */
+const MAX_SPEED = 1180;
+/** How much of its speed the ship keeps when it meets a wall or a post. */
 const BOUNCE = 0.45;
-const BOLT_SPEED = 1450;
-const BOLT_LIFE = 1.3;
+/** How wide the ship is for the purpose of not being inside a post. */
+const SHIP_RADIUS = 74;
+const BOLT_SPEED = 1950;
+const BOLT_LIFE = 1.5;
 const FIRE_EVERY = 0.085;
 const ENEMY_RADIUS = 34;
 const HIT_RADIUS = 42;
@@ -77,7 +79,7 @@ export class Arena {
   blasts: Blast[] = [];
 
   private spawnIn = 0.5;
-  private waveLeft = 16;
+  private waveLeft = 26;
 
   step(dt: number, input: Input) {
     this.flyShip(dt, input);
@@ -128,6 +130,26 @@ export class Arena {
     if (this.py < -limY) { this.py = -limY; this.pvy = Math.abs(this.pvy) * BOUNCE; }
     if (this.py > limY) { this.py = limY; this.pvy = -Math.abs(this.pvy) * BOUNCE; }
 
+    // and against the posts: pushed out of the overlap, then the part of its
+    // velocity going into the post reflected, which leaves the part going
+    // along it alone. Sliding round one at speed is the point of them.
+    for (const [cx, cy] of COLUMNS) {
+      const dx = this.px - cx;
+      const dy = this.py - cy;
+      const reach = COLUMN_RADIUS + SHIP_RADIUS;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= reach * reach || d2 < 1e-6) continue;
+      const d = Math.sqrt(d2);
+      const nx = dx / d; const ny = dy / d;
+      this.px = cx + nx * reach;
+      this.py = cy + ny * reach;
+      const into = this.pvx * nx + this.pvy * ny;
+      if (into < 0) {
+        this.pvx -= into * (1 + BOUNCE) * nx;
+        this.pvy -= into * (1 + BOUNCE) * ny;
+      }
+    }
+
     // a shot goes where the nose points, not where a cursor is
     this.aim = this.pAngle;
   }
@@ -171,7 +193,13 @@ export class Arena {
       this.bx[i] += this.bvx[i] * dt;
       this.by[i] += this.bvy[i] * dt;
       this.blife[i] -= dt;
-      const out = Math.abs(this.bx[i]) > ARENA_X - 40 || Math.abs(this.by[i]) > ARENA_Y - 40;
+      let out = Math.abs(this.bx[i]) > ARENA_X - 40 || Math.abs(this.by[i]) > ARENA_Y - 40;
+      if (!out) {
+        for (const [cx, cy] of COLUMNS) {
+          const dx = this.bx[i] - cx; const dy = this.by[i] - cy;
+          if (dx * dx + dy * dy < COLUMN_RADIUS * COLUMN_RADIUS) { out = true; break; }
+        }
+      }
       if (this.blife[i] <= 0 || out) {
         if (out) this.blasts.push({ x: this.bx[i], y: this.by[i], age: 0, life: 0.16, power: 0.35 });
         this.dropBolt(i);
@@ -205,7 +233,7 @@ export class Arena {
       const dx = this.px - this.ex[i];
       const dy = this.py - this.ey[i];
       const d = Math.hypot(dx, dy) || 1;
-      const speed = 130 + this.wave * 9;
+      const speed = 165 + this.wave * 11;
       // a wobble across the line of approach, so a crowd does not become one dot
       const wob = Math.sin(this.ephase[i]) * 0.55;
       let vx = (dx / d) * speed + (-dy / d) * speed * wob;
@@ -222,6 +250,17 @@ export class Arena {
       }
       this.ex[i] = clamp(this.ex[i] + vx * dt, -ARENA_X + 70, ARENA_X - 70);
       this.ey[i] = clamp(this.ey[i] + vy * dt, -ARENA_Y + 70, ARENA_Y - 70);
+      // they do not bounce, they are simply never inside one, so a crowd
+      // arriving from one side flows round a post rather than through it
+      for (const [cx, cy] of COLUMNS) {
+        const dx = this.ex[i] - cx; const dy = this.ey[i] - cy;
+        const reach = COLUMN_RADIUS + ENEMY_RADIUS;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= reach * reach || d2 < 1e-6) continue;
+        const d = Math.sqrt(d2);
+        this.ex[i] = cx + (dx / d) * reach;
+        this.ey[i] = cy + (dy / d) * reach;
+      }
 
       if (d < 62 && this.invuln <= 0) {
         this.blasts.push({ x: this.ex[i], y: this.ey[i], age: 0, life: 0.7, power: 1.6 });
@@ -237,14 +276,14 @@ export class Arena {
   private stepSpawns(dt: number) {
     this.spawnIn -= dt;
     if (this.spawnIn > 0) return;
-    this.spawnIn = Math.max(0.09, 0.5 - this.wave * 0.03);
+    this.spawnIn = Math.max(0.08, 0.45 - this.wave * 0.028);
     if (this.waveLeft <= 0 && this.enemies === 0) {
       this.wave += 1;
-      this.waveLeft = 14 + this.wave * 4;
+      this.waveLeft = 22 + this.wave * 7;
       return;
     }
     // in from an edge, away from the player, so nothing lands on top of them
-    for (let n = 0; n < 1 + Math.floor(this.wave / 3); n++) this.spawnOne();
+    for (let n = 0; n < 2 + Math.floor(this.wave / 2); n++) this.spawnOne();
   }
 
   private spawnOne() {
@@ -256,7 +295,7 @@ export class Arena {
       const t = Math.random();
       const x = edge < 2 ? (t * 2 - 1) * (ARENA_X - 90) : (edge === 2 ? -1 : 1) * (ARENA_X - 90);
       const y = edge < 2 ? (edge === 0 ? -1 : 1) * (ARENA_Y - 90) : (t * 2 - 1) * (ARENA_Y - 90);
-      if (Math.hypot(x - this.px, y - this.py) < 320 && attempt < 7) continue;
+      if (Math.hypot(x - this.px, y - this.py) < 520 && attempt < 7) continue;
       this.ex[i] = x; this.ey[i] = y;
       break;
     }
@@ -268,7 +307,7 @@ export class Arena {
   restart() {
     this.enemies = 0; this.bolts = 0; this.blasts = [];
     this.lives = 3; this.score = 0; this.wave = 1;
-    this.waveLeft = 16; this.spawnIn = 1.0;
+    this.waveLeft = 26; this.spawnIn = 1.0;
     this.px = 0; this.py = -220; this.invuln = 2;
     this.pvx = 0; this.pvy = 0; this.pAngle = Math.PI / 2; this.aim = this.pAngle;
   }

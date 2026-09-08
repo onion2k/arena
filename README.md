@@ -28,8 +28,7 @@ Needs a browser with WebGPU.
 | **X** | auto-fire on and off |
 | **R** | restart |
 | drag | swing the camera round |
-| wheel | in and out |
-| shift-drag | slide it |
+| wheel | in, or out until the whole arena is in frame |
 | **C** | put the camera back |
 
 The ship flies the way Asteroids' does. It carries momentum, drag pulls it
@@ -37,10 +36,21 @@ down over about a second, and its own velocity carries into the shots it
 fires, so running away while shooting backwards gives slow bullets. The walls
 are solid rather than a wrap — it keeps about half its speed off one.
 
-The camera is free but starts framed. It solves for a distance that fits the
-whole arena in whatever shape the window is, and stays there until you move
-it; after that a resize adjusts how far the wheel may go but leaves the view
-alone. **C** re-frames. That fit is not a nicety: a hardcoded distance
+The arena is 2.8 by 1.9 metres of modelled floor, with eight solid posts in
+it. The posts are the only thing you cannot fly through: the ship is pushed
+out of one and keeps the part of its speed that was going along it, so
+sliding round a post at full tilt works and is the reason they are there.
+Shots stop against them. Enemies flow round them.
+
+The camera follows the ship, and how closely depends on how far out you are
+zoomed. The renderer solves for the distance at which the whole arena is in
+frame; at exactly that distance the camera stays dead centre, so nothing can
+arrive unseen, and the leash lengthens in proportion as you zoom in until up
+close it simply follows. That is one behaviour rather than a follow mode and
+an overview mode — zooming all the way out *is* the overview. Drag swings it
+round, **C** puts it back.
+
+Solving for that distance is not a nicety: it was hardcoded at first, which
 cropped the near corners on a narrow window, and in a game where enemies come
 in from the edges that means dying to something that was never on screen.
 
@@ -73,21 +83,26 @@ slower. `measure(width, height, frames)` is on the console for repeating it.
 
 | scene | lights | ms a frame |
 | --- | ---: | ---: |
-| empty arena | 18 | 0.64 |
-| 20 enemies | 37 | 1.05 |
-| 70 enemies | 90 | 1.91 |
-| 140 enemies | 146 | 3.12 |
-| 140 enemies, point lights off | — | 0.29 |
-| 140 enemies, effects off | 146 | 3.14 |
+| empty arena | 22 | 1.25 |
+| 60 enemies | 81 | 2.81 |
+| 140 enemies | 150 | 4.82 |
+| 220 enemies (the pool full) | 150 | 4.89 |
+| 220 enemies, point lights off | — | 0.42 |
 
-Medians of five runs of 120 frames each; one run in five came back 40% high,
-which is why they are medians rather than firsts.
+Medians of five runs of 120 frames each; one run in five came back high,
+which is why they are medians rather than firsts. The light count stops at
+150 because only the first 128 enemies carry one — that cap is what makes the
+last two rows the same, and it is the first thing a quality ladder would take
+away.
 
-So the point-light loop is 2.8 ms of the 3.1 — about **0.019 ms a light** at
-1080p — and the additive effect stage, up to a couple of hundred glows, does
-not show above the noise at all. A frame at sixty is 16.7 ms, so there is room
-for something like seven hundred more lights before the loop is the problem,
-and no reason at all to reach for tiles or clusters at this scale.
+So the point-light loop is 4.5 ms of the 4.9, about **0.031 ms a light** at
+1080p, and the additive effect stage — up to a couple of hundred glows — does
+not clear the noise. A frame at sixty is 16.7 ms, so a full arena is under a
+third of one.
+
+The CPU side is not the problem either: one `arena.step` with the pool full
+is 0.139 ms, including the every-enemy-against-every-enemy separation, which
+at 220 is forty-eight thousand distance tests a frame.
 
 Do not read the frame rate in the corner as the cost of any of this. It is
 wall-clock between `requestAnimationFrame` callbacks, and a tab the browser is
