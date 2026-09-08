@@ -46,11 +46,20 @@ another is the whole point of the thing. The aim is only taken while no
 button is down, so dragging the camera round does not haul the turret with
 it.
 
-The arena is 2.8 by 1.9 metres of modelled floor, with eight solid posts in
-it. The posts are the only thing you cannot fly through: the ship is pushed
-out of one and keeps the part of its speed that was going along it, so
-sliding round a post at full tilt works and is the reason they are there.
-Shots stop against them. Enemies flow round them.
+The arena is 4.8 metres square, with twenty-four solid posts standing on a
+five-by-five grid — only the very middle is left open. The posts are the only
+thing you cannot drive through: the truck is pushed out of one and keeps the
+part of its speed that was running along it, so sliding round one at full
+tilt works and is the reason they are there. Shots stop against them. Enemies
+flow round them.
+
+The grid is what makes the place feel big. A larger empty floor just looks
+like the same floor with the camera further back; what reads as size is a
+thing whose size you know, repeating away into the distance, so the posts
+stand in rows and the outer ring is half again as tall as the inner — that
+difference is the cue that tells the eye it is looking at distance rather
+than at a smaller object. The truck is 250mm long on a 4800mm floor: nineteen
+of it end to end.
 
 The camera follows the ship, and how closely depends on how far out you are
 zoomed. The renderer solves for the distance at which the whole arena is in
@@ -99,11 +108,11 @@ slower. `measure(width, height, frames)` is on the console for repeating it.
 
 | scene | lights | ms a frame |
 | --- | ---: | ---: |
-| empty arena | 23 | 1.19 |
-| 60 enemies | 83 | 2.62 |
-| 140 enemies | 148 | 4.34 |
-| 220 enemies (the pool full) | 151 | 4.53 |
-| 220 enemies, point lights off | — | 0.42 |
+| empty arena | 27 | 2.17 |
+| 80 enemies | 105 | 5.33 |
+| 180 enemies | 152 | 7.42 |
+| 300 enemies (the pool full) | 155 | 7.69 |
+| 300 enemies, point lights off | — | 0.86 |
 
 Medians of five runs of 120 frames each; one run in five came back high,
 which is why they are medians rather than firsts. The light count stops at
@@ -111,15 +120,17 @@ which is why they are medians rather than firsts. The light count stops at
 last two rows the same, and it is the first thing a quality ladder would take
 away.
 
-So the point-light loop is 4.1 ms of the 4.5, about **0.026 ms a light** at
-1080p, and the additive effect stage — up to a couple of hundred glows — does
-not clear the noise. A frame at sixty is 16.7 ms, so a full arena is a bit over
-a quarter of one — and that is with the truck's headlights, exhaust and brake
-lamps in the count.
+So the point-light loop is 6.8 ms of the 7.7, about **0.053 ms a light** at
+1080p — twice what it cost in the smaller arena, because a bigger floor puts
+more of every light's reach on screen at once. The additive effect stage still
+does not clear the noise. A frame at sixty is 16.7 ms, so a full arena at its
+worst is under half of one.
 
-The CPU side is not the problem either: one `arena.step` with the pool full
-is 0.147 ms, including the every-enemy-against-every-enemy separation, which
-at 220 is forty-eight thousand distance tests a frame.
+The CPU side is not the problem either: one `arena.step` with the pool of 300
+full is **0.16 ms**. It is 0.56 ms if the shots and the crowd scan every enemy
+instead of reading a grid of the floor — neither is near a frame's budget, but
+the scan grows with the square of the crowd and the grid does not, so the grid
+is there for the next size rather than for this one.
 
 Do not read the frame rate in the corner as the cost of any of this. It is
 wall-clock between `requestAnimationFrame` callbacks, and a tab the browser is

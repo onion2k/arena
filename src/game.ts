@@ -8,8 +8,8 @@
  */
 import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS } from './scene';
 
-export const MAX_ENEMIES = 220;
-export const MAX_BOLTS = 260;
+export const MAX_ENEMIES = 300;
+export const MAX_BOLTS = 300;
 export const MAX_BLASTS = 28;
 
 /**
@@ -43,6 +43,29 @@ const FIRE_EVERY = 0.085;
 const ENEMY_RADIUS = 34;
 const HIT_RADIUS = 42;
 
+/**
+ * A grid over the floor, so that neither the shots nor the crowd is an
+ * every-one-against-every-one problem.
+ *
+ * It was one until the arena went square and 4.8 metres across, which took
+ * the pool to three hundred enemies. Measured on the same busy state, a fresh
+ * page each time: scanning every enemy for every query costs 0.56 ms a step,
+ * bucketing costs 0.16. Neither is anywhere near a frame's budget — this is
+ * headroom for the next size rather than a fire being put out — but the
+ * scan grows with the square of the crowd and this does not.
+ *
+ * (An earlier reading put the scan at 2.6 ms. It has not reproduced in any
+ * later run, cold page or warm, and the number above is what six runs agree
+ * on. Recorded because a number that does not reproduce is worth saying so
+ * about rather than quietly dropping.)
+ *
+ * The cell is wider than any radius asked of it, so a query never reads more
+ * than the nine cells around a point.
+ */
+const CELL = 240;
+const GRID_W = Math.ceil((ARENA_X * 2) / CELL) + 1;
+const GRID_H = Math.ceil((ARENA_Y * 2) / CELL) + 1;
+
 export interface Blast { x: number; y: number; age: number; life: number; power: number }
 
 /** What the player is asking for this step. */
@@ -60,7 +83,7 @@ export interface Input {
 
 export class Arena {
   // the player
-  px = 0; py = -220; pAngle = Math.PI / 2; aim = Math.PI / 2;
+  px = 0; py = -700; pAngle = Math.PI / 2; aim = Math.PI / 2;
   /** How far the wheels have rolled, in radians. Only the bolts show it. */
   wheelSpin = 0;
   /** Velocity. The ship carries it: nothing else in the arena does. */
@@ -93,13 +116,18 @@ export class Arena {
 
   blasts: Blast[] = [];
 
+  /** Head of each cell's list, and the next-in-cell for each enemy. -1 ends. */
+  private cellHead = new Int32Array(GRID_W * GRID_H).fill(-1);
+  private cellNext = new Int32Array(MAX_ENEMIES).fill(-1);
+
   private spawnIn = 0.5;
-  private waveLeft = 26;
+  private waveLeft = 34;
 
   step(dt: number, input: Input) {
     this.drive(dt, input);
     this.slewGun(dt, input);
     if (this.invuln > 0) this.invuln -= dt;
+    this.rebuildGrid();
 
     this.cooldown -= dt;
     this.lastShot += dt;
@@ -110,6 +138,9 @@ export class Arena {
     }
 
     this.stepBolts(dt);
+    // the shots have killed some and swapped the pool about; the crowd needs
+    // an honest grid before it asks who its neighbours are
+    this.rebuildGrid();
     this.stepEnemies(dt);
     this.stepSpawns(dt);
     for (const b of this.blasts) b.age += dt;
@@ -149,10 +180,10 @@ export class Arena {
     // and against the posts: pushed out of the overlap, then the part of its
     // velocity going into the post reflected, which leaves the part going
     // along it alone. Sliding round one at speed is the point of them.
-    for (const [cx, cy] of COLUMNS) {
+    for (const [cx, cy, scale] of COLUMNS) {
       const dx = this.px - cx;
       const dy = this.py - cy;
-      const reach = COLUMN_RADIUS + SHIP_RADIUS;
+      const reach = COLUMN_RADIUS * scale + SHIP_RADIUS;
       const d2 = dx * dx + dy * dy;
       if (d2 >= reach * reach || d2 < 1e-6) continue;
       const d = Math.sqrt(d2);
@@ -199,6 +230,47 @@ export class Arena {
   /** How fast it is going, for the panel and for the plume. */
   get speed(): number { return Math.hypot(this.pvx, this.pvy); }
 
+  /** Bucket every live enemy by where it is standing. */
+  private rebuildGrid() {
+    this.cellHead.fill(-1);
+    for (let i = 0; i < this.enemies; i++) {
+      const c = this.cellOf(this.ex[i], this.ey[i]);
+      this.cellNext[i] = this.cellHead[c];
+      this.cellHead[c] = i;
+    }
+  }
+
+  private cellOf(x: number, y: number): number {
+    const cx = clamp(Math.floor((x + ARENA_X) / CELL), 0, GRID_W - 1);
+    const cy = clamp(Math.floor((y + ARENA_Y) / CELL), 0, GRID_H - 1);
+    return cy * GRID_W + cx;
+  }
+
+  /**
+   * The enemies within `radius` of a point, near enough — it walks whole
+   * cells, so it hands back a few that are further. Every caller measures the
+   * real distance anyway.
+   *
+   * An index may be stale by the time it is visited: killing an enemy swaps
+   * the last one into its slot, and the grid still lists it under the old
+   * one. Indices past the live end are skipped, so the worst that happens is
+   * that one enemy goes untested for one frame, which nothing can see.
+   */
+  private near(x: number, y: number, radius: number, visit: (i: number) => boolean | void) {
+    const x0 = clamp(Math.floor((x - radius + ARENA_X) / CELL), 0, GRID_W - 1);
+    const x1 = clamp(Math.floor((x + radius + ARENA_X) / CELL), 0, GRID_W - 1);
+    const y0 = clamp(Math.floor((y - radius + ARENA_Y) / CELL), 0, GRID_H - 1);
+    const y1 = clamp(Math.floor((y + radius + ARENA_Y) / CELL), 0, GRID_H - 1);
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        for (let e = this.cellHead[cy * GRID_W + cx]; e !== -1; e = this.cellNext[e]) {
+          if (e >= this.enemies) continue;
+          if (visit(e) === true) return;
+        }
+      }
+    }
+  }
+
   private fire() {
     // both barrels, a little apart, so the muzzle flash has width
     for (const side of [-1, 1]) {
@@ -237,9 +309,10 @@ export class Arena {
       this.blife[i] -= dt;
       let out = Math.abs(this.bx[i]) > ARENA_X - 40 || Math.abs(this.by[i]) > ARENA_Y - 40;
       if (!out) {
-        for (const [cx, cy] of COLUMNS) {
+        for (const [cx, cy, scale] of COLUMNS) {
           const dx = this.bx[i] - cx; const dy = this.by[i] - cy;
-          if (dx * dx + dy * dy < COLUMN_RADIUS * COLUMN_RADIUS) { out = true; break; }
+          const r = COLUMN_RADIUS * scale;
+          if (dx * dx + dy * dy < r * r) { out = true; break; }
         }
       }
       if (this.blife[i] <= 0 || out) {
@@ -247,12 +320,12 @@ export class Arena {
         this.dropBolt(i);
         continue;
       }
-      // a shot against every live enemy: two hundred by a hundred and forty is
-      // twenty-eight thousand distance tests, which is nothing beside a frame
-      for (let e = this.enemies - 1; e >= 0; e--) {
+      // only the enemies in the cells this shot is over
+      let hit = false;
+      this.near(this.bx[i], this.by[i], HIT_RADIUS, (e) => {
         const dx = this.ex[e] - this.bx[i];
         const dy = this.ey[e] - this.by[i];
-        if (dx * dx + dy * dy > HIT_RADIUS * HIT_RADIUS) continue;
+        if (dx * dx + dy * dy > HIT_RADIUS * HIT_RADIUS) return;
         this.ehp[e] -= 1;
         this.eflash[e] = 0.12;
         if (this.ehp[e] <= 0) {
@@ -262,9 +335,10 @@ export class Arena {
         } else {
           this.blasts.push({ x: this.bx[i], y: this.by[i], age: 0, life: 0.14, power: 0.4 });
         }
-        this.dropBolt(i);
-        break;
-      }
+        hit = true;
+        return true;
+      });
+      if (hit) this.dropBolt(i);
     }
   }
 
@@ -275,28 +349,29 @@ export class Arena {
       const dx = this.px - this.ex[i];
       const dy = this.py - this.ey[i];
       const d = Math.hypot(dx, dy) || 1;
-      const speed = 165 + this.wave * 11;
+      const speed = 205 + this.wave * 13;
       // a wobble across the line of approach, so a crowd does not become one dot
       const wob = Math.sin(this.ephase[i]) * 0.55;
       let vx = (dx / d) * speed + (-dy / d) * speed * wob;
       let vy = (dy / d) * speed + (dx / d) * speed * wob;
       // and a shove away from whoever is nearest, so they spread as they arrive
-      for (let j = 0; j < this.enemies; j++) {
-        if (j === i) continue;
+      const spread = ENEMY_RADIUS * 2.4;
+      this.near(this.ex[i], this.ey[i], spread, (j) => {
+        if (j === i) return;
         const sx = this.ex[i] - this.ex[j];
         const sy = this.ey[i] - this.ey[j];
         const s2 = sx * sx + sy * sy;
-        if (s2 > (ENEMY_RADIUS * 2.4) ** 2 || s2 < 1e-3) continue;
+        if (s2 > spread * spread || s2 < 1e-3) return;
         const s = Math.sqrt(s2);
         vx += (sx / s) * 190; vy += (sy / s) * 190;
-      }
+      });
       this.ex[i] = clamp(this.ex[i] + vx * dt, -ARENA_X + 70, ARENA_X - 70);
       this.ey[i] = clamp(this.ey[i] + vy * dt, -ARENA_Y + 70, ARENA_Y - 70);
       // they do not bounce, they are simply never inside one, so a crowd
       // arriving from one side flows round a post rather than through it
-      for (const [cx, cy] of COLUMNS) {
+      for (const [cx, cy, scale] of COLUMNS) {
         const dx = this.ex[i] - cx; const dy = this.ey[i] - cy;
-        const reach = COLUMN_RADIUS + ENEMY_RADIUS;
+        const reach = COLUMN_RADIUS * scale + ENEMY_RADIUS;
         const d2 = dx * dx + dy * dy;
         if (d2 >= reach * reach || d2 < 1e-6) continue;
         const d = Math.sqrt(d2);
@@ -321,11 +396,11 @@ export class Arena {
     this.spawnIn = Math.max(0.08, 0.45 - this.wave * 0.028);
     if (this.waveLeft <= 0 && this.enemies === 0) {
       this.wave += 1;
-      this.waveLeft = 22 + this.wave * 7;
+      this.waveLeft = 30 + this.wave * 9;
       return;
     }
     // in from an edge, away from the player, so nothing lands on top of them
-    for (let n = 0; n < 2 + Math.floor(this.wave / 2); n++) this.spawnOne();
+    for (let n = 0; n < 3 + Math.floor(this.wave / 2); n++) this.spawnOne();
   }
 
   private spawnOne() {
@@ -337,7 +412,7 @@ export class Arena {
       const t = Math.random();
       const x = edge < 2 ? (t * 2 - 1) * (ARENA_X - 90) : (edge === 2 ? -1 : 1) * (ARENA_X - 90);
       const y = edge < 2 ? (edge === 0 ? -1 : 1) * (ARENA_Y - 90) : (t * 2 - 1) * (ARENA_Y - 90);
-      if (Math.hypot(x - this.px, y - this.py) < 520 && attempt < 7) continue;
+      if (Math.hypot(x - this.px, y - this.py) < 900 && attempt < 7) continue;
       this.ex[i] = x; this.ey[i] = y;
       break;
     }
@@ -349,8 +424,8 @@ export class Arena {
   restart() {
     this.enemies = 0; this.bolts = 0; this.blasts = [];
     this.lives = 3; this.score = 0; this.wave = 1;
-    this.waveLeft = 26; this.spawnIn = 1.0;
-    this.px = 0; this.py = -220; this.invuln = 2;
+    this.waveLeft = 34; this.spawnIn = 1.0;
+    this.px = 0; this.py = -700; this.invuln = 2;
     this.pvx = 0; this.pvy = 0; this.pAngle = Math.PI / 2; this.aim = this.pAngle;
     this.wheelSpin = 0;
   }

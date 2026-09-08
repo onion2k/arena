@@ -63,24 +63,30 @@ export function part(source: string, anchor: Anchor = 'centre'): Mesh {
 }
 
 /**
- * Half the arena, in the millimetres everything else is modelled in.
+ * Half the arena, in the millimetres everything else is modelled in: square,
+ * and 4.8 metres across.
  *
- * Nearly three times the area it started at. At the old size a ship at full
- * speed crossed it in two seconds, which leaves nowhere to run and nothing to
- * outmanoeuvre: the whole of Asteroids is the room to keep moving. Everything
- * that stands in the arena is placed from these two numbers and the camera
- * solves its distance from them, so this is the only place the size lives.
+ * Twelve times the area it started at, and four times the last size. Size
+ * alone does not read as size, though — a bigger empty floor just looks like
+ * the same floor with the camera further back. What gives a space scale is
+ * things of a known size repeating away into it, which is why the posts are
+ * on a grid and why the tiles are worth their draw call. The truck is 250mm
+ * long against a 4800mm floor: nineteen of it end to end.
+ *
+ * Everything that stands in the arena is placed from these two numbers and
+ * the camera solves its distance from them, so this is the only place the
+ * size lives.
  */
-export const ARENA_X = 1400;
-export const ARENA_Y = 940;
+export const ARENA_X = 2400;
+export const ARENA_Y = 2400;
 
 export const MESHES = {
   /** The slab, its face at z = 0 so everything else can sit on zero. */
   floor: () => part(`plate(card(width: ${ARENA_X * 2}, height: ${ARENA_Y * 2}, corner: 90), thickness: 40, bevel: 10)`, 'top'),
   /** A raised tile. A hundred of them give the moving lights edges to catch. */
-  tile: () => part('plate(card(width: 152, height: 152, corner: 16), thickness: 6, bevel: 3)', 'base'),
+  tile: () => part('plate(card(width: 200, height: 200, corner: 18), thickness: 7, bevel: 4)', 'base'),
   /** A perimeter block, laid along the wall it belongs to. */
-  block: () => part('plate(card(width: 186, height: 62, corner: 11), thickness: 86, bevel: 10)', 'base'),
+  block: () => part('plate(card(width: 218, height: 74, corner: 12), thickness: 132, bevel: 12)', 'base'),
   /** An eight-sided column, for the corners to reflect things in. */
   column: () => part('disc(radius: 54, thickness: 250, sides: 8, bevel: 11)', 'base'),
   /**
@@ -120,47 +126,68 @@ export const MESHES = {
  * what you see and what you hit cannot drift apart.
  */
 export const COLUMN_RADIUS = 58;
-export const COLUMNS: [number, number][] = [
-  [-ARENA_X + 300, -ARENA_Y + 260], [ARENA_X - 300, -ARENA_Y + 260],
-  [-ARENA_X + 300, ARENA_Y - 260], [ARENA_X - 300, ARENA_Y - 260],
-  [-520, 0], [520, 0],
-  [0, -430], [0, 430],
-];
+
+/**
+ * The posts: a five-by-five grid with only the very middle left out, so
+ * twenty-four of them, the outer ring half again as tall as the inner.
+ *
+ * The grid is the point. A dozen posts scattered at random read as clutter;
+ * twenty-four in rows read as a hall, and rows of a thing whose size you
+ * know running away from you is the strongest sense of scale available for
+ * twenty-four instances of one draw. The heights differ by ring so the far
+ * ones are not simply the near ones smaller, which is the cue that tells the
+ * eye it is looking at distance rather than at a smaller object.
+ *
+ * The gaps are 900mm between centres, better than 700 clear: wide enough to
+ * drive a 250mm truck through at speed, tight enough that a shot across the
+ * arena usually meets one.
+ */
+const POST_GRID = [-1800, -900, 0, 900, 1800];
+export const COLUMNS: [number, number, number][] = [];
+for (const x of POST_GRID) {
+  for (const y of POST_GRID) {
+    if (x === 0 && y === 0) continue;   // the middle stays open
+    const outer = Math.abs(x) === 1800 || Math.abs(y) === 1800;
+    COLUMNS.push([x, y, outer ? 1.5 : 0.95]);
+  }
+}
 
 /** Where the static half stands. Built once; the game never touches these. */
 export function arenaMatrices(): { tiles: Float32Array; blocks: Float32Array; columns: Float32Array } {
   const tiles: number[] = [];
-  const step = 167;
-  const across = Math.floor((ARENA_X * 2 - 190) / step);
-  const up = Math.floor((ARENA_Y * 2 - 190) / step);
+  const step = 218;
+  const across = Math.floor((ARENA_X * 2 - 220) / step);
+  const up = Math.floor((ARENA_Y * 2 - 220) / step);
   for (let j = 0; j < up; j++) {
     for (let i = 0; i < across; i++) {
       tiles.push((i - (across - 1) / 2) * step, (j - (up - 1) / 2) * step, 0);
     }
   }
   const blocks: number[] = [];
-  for (let x = -ARENA_X + 100; x <= ARENA_X - 100; x += 198) {
+  for (let x = -ARENA_X + 115; x <= ARENA_X - 115; x += 232) {
     blocks.push(x, -ARENA_Y, 0, x, ARENA_Y, 0);
   }
-  for (let y = -ARENA_Y + 110; y <= ARENA_Y - 110; y += 210) {
+  for (let y = -ARENA_Y + 125; y <= ARENA_Y - 125; y += 245) {
     blocks.push(-ARENA_X, y, Math.PI / 2, ARENA_X, y, Math.PI / 2);
   }
   const columns: number[] = [];
-  for (const [x, y] of COLUMNS) columns.push(x, y, 0);
-  return { tiles: pack(tiles), blocks: pack(blocks), columns: pack(columns) };
+  const columnScales: number[] = [];
+  for (const [x, y, scale] of COLUMNS) { columns.push(x, y, 0); columnScales.push(scale); }
+  return { tiles: pack(tiles), blocks: pack(blocks), columns: pack(columns, columnScales) };
 }
 
-/** Triples of x, y, turn into column-major placements. */
-function pack(triples: number[]): Float32Array {
+/** Triples of x, y, turn into column-major placements, optionally scaled. */
+function pack(triples: number[], scales?: number[]): Float32Array {
   const n = triples.length / 3;
   const out = new Float32Array(n * 16);
   for (let i = 0; i < n; i++) {
     const a = triples[i * 3 + 2];
-    const c = Math.cos(a); const s = Math.sin(a);
+    const k = scales ? scales[i] : 1;
+    const c = Math.cos(a) * k; const s = Math.sin(a) * k;
     const o = i * 16;
     out[o] = c; out[o + 1] = s;
     out[o + 4] = -s; out[o + 5] = c;
-    out[o + 10] = 1;
+    out[o + 10] = k;
     out[o + 12] = triples[i * 3]; out[o + 13] = triples[i * 3 + 1]; out[o + 15] = 1;
   }
   return out;

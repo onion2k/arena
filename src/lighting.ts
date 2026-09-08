@@ -31,7 +31,7 @@ const ENEMY_LIGHTS = 128;
  * the arena: the same seven lights over nearly three times the floor left
  * most of it dark.
  */
-const AMBIENT = 10;
+const AMBIENT = 12;
 function ambience(pool: LightPool, t: number) {
   for (let i = 0; i < AMBIENT; i++) {
     const a = t * 0.22 + (i / AMBIENT) * Math.PI * 2;
@@ -40,9 +40,9 @@ function ambience(pool: LightPool, t: number) {
       position: [
         Math.cos(a) * ARENA_X * 0.82,
         Math.sin(a) * ARENA_Y * 0.82,
-        340 + Math.sin(t * 0.7 + i) * 80,
+        400 + Math.sin(t * 0.7 + i) * 90,
       ],
-      radius: Math.max(ARENA_X, ARENA_Y) * 0.95,
+      radius: Math.max(ARENA_X, ARENA_Y) * 0.8,
       colour: hueToRgb(hue),
       intensity: 3.0,
     });

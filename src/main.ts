@@ -389,7 +389,7 @@ async function main() {
 const ARENA_CORNERS: [number, number, number][] = [];
 for (const x of [-ARENA_X, ARENA_X]) {
   for (const y of [-ARENA_Y, ARENA_Y]) {
-    for (const z of [0, 260]) ARENA_CORNERS.push([x, y, z]);
+    for (const z of [0, 380]) ARENA_CORNERS.push([x, y, z]);
   }
 }
 
@@ -473,7 +473,7 @@ function floorUnderCursor(cam: GameRenderer['camera'], mx: number, my: number): 
 }
 
 /** Where the camera starts, as a fraction of the distance that fits the arena. */
-const START_ZOOM = 0.68;
+const START_ZOOM = 0.46;
 /** How high off the floor the camera looks. The fit solves for this exact
  *  point, so at full zoom-out the guarantee that everything is in frame holds. */
 const CAMERA_HEIGHT = 55;
