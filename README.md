@@ -90,9 +90,17 @@ error and nothing else wrong with the frame.
 Every frame the light list is cleared and written again from scratch. Twenty
 four spotlights sit on the posts, each turning at its own rate and starting at
 its own angle so the pattern never repeats; a narrow searchlight rides the
-cannon; two headlights point where the truck is going; and shots, explosions
-and the muzzle carry the rest. About thirty lights at rest, and the count
-barely moves with the size of the crowd, because **the drones carry nothing**.
+cannon; two headlights wash the road ahead. About thirty lights, and the count
+barely moves — with the crowd, or with how hard you are firing.
+
+Almost nothing else carries a light. The drones do not, which is the game. The
+tracers do not either: a dozen rounds a second crossing a dark hall, each
+relighting every surface it passes, reads as a fault rather than as gunfire —
+they are drawn as additive glows, which light nothing but themselves. What is
+left is the muzzle, kept small enough to be a flash at a barrel rather than a
+strobe over the hall, and the explosion when a drone dies, which is the one
+moment the room is bright and is worth the whole light budget for half a
+second.
 
 That is the game. The environment contributes 0.035 of what it would and the
 sun is nearly off, so a drone outside a beam is a shape you can only just make
@@ -122,12 +130,12 @@ slower. `measure(width, height, frames)` is on the console for repeating it.
 
 | scene | lights | ms a frame |
 | --- | ---: | ---: |
-| empty arena | 35 | 2.96 |
-| 80 enemies | 34 | 2.91 |
-| 180 enemies | 33 | 2.85 |
-| 300 enemies (the pool full) | 35 | 3.02 |
-| 300 enemies, point lights off | — | 0.83 |
-| 300 enemies, radius cull off | 35 | 3.92 |
+| empty arena | 29 | 2.61 |
+| 80 enemies | 30 | 2.67 |
+| 180 enemies | 30 | 2.70 |
+| 300 enemies (the pool full) | 29 | 2.69 |
+| 300 enemies, point lights off | — | 0.85 |
+| 300 enemies, radius cull off | 29 | 3.35 |
 
 Medians of five runs of 120 frames each; one run in five came back high,
 which is why they are medians rather than firsts. The light count stops at
@@ -141,7 +149,7 @@ hundred of them. Taking their lights away for the sake of the dark took two
 thirds of the frame with it. A frame at sixty is 16.7 ms.
 
 All of what is left is the beams, which are on whether anything is happening
-or not — 2.96 ms of the 3.02 is there before a single enemy exists. Narrow
+or not — 2.61 ms of the 2.69 is there before a single enemy exists. Narrow
 cones are cheap to *look* at and not cheap to evaluate: a pixel outside the
 cone still costs the distance test and the dot product that discovers it is
 outside. The radius cull earns much less here than it did with wide

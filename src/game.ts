@@ -329,7 +329,7 @@ export class Arena {
         this.ehp[e] -= 1;
         this.eflash[e] = 0.12;
         if (this.ehp[e] <= 0) {
-          this.blasts.push({ x: this.ex[e], y: this.ey[e], age: 0, life: 0.55, power: 1 });
+          this.blasts.push({ x: this.ex[e], y: this.ey[e], age: 0, life: 0.75, power: 1 });
           this.score += 100;
           this.dropEnemy(e);
         } else {

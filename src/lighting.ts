@@ -135,32 +135,34 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
     }
   }
 
+  // The muzzle, kept small. A light that reaches a metre and a half, going
+  // off twelve times a second, is a strobe over the whole hall rather than a
+  // flash at the end of a barrel.
   if (arena.lastShot < 0.055) {
     const f = 1 - arena.lastShot / 0.055;
     pool.add({
-      position: [arena.muzzleX, arena.muzzleY, 104], radius: 1400,
-      colour: [1, 0.92, 0.72], intensity: 9 * f * f,
+      position: [arena.muzzleX, arena.muzzleY, 104], radius: 620,
+      colour: [1, 0.92, 0.72], intensity: 4.5 * f * f,
     });
   }
 
-  // The tracers. These are the only thing besides the beams that lights the
-  // floor, and watching one fly is how you read the room between sweeps.
-  for (let i = 0; i < arena.bolts; i++) {
-    pool.add({
-      position: [arena.bx[i], arena.by[i], 44], radius: 950,
-      colour: [0.34, 0.92, 1], intensity: 1.1,
-    });
-  }
-
-  // and an explosion, which lights everything around it for half a second —
-  // the one moment the room is bright, and worth using
+  // The tracers carry no light. They used to carry one each, and a dozen
+  // rounds a second crossing a dark hall meant every surface in it was being
+  // relit several times a second by things that were only passing through —
+  // which reads as a fault rather than as gunfire. They are still bright:
+  // what draws them is an additive glow, which lights nothing but itself.
+  //
+  // An explosion is the exception, and now the only one. It is the single
+  // moment the room is bright, so it is worth making it count.
   for (const b of arena.blasts) {
     const k = 1 - b.age / b.life;
     pool.add({
-      position: [b.x, b.y, 50 + (1 - k) * 90],
-      radius: (700 + (1 - k) * 1600) * b.power,
+      position: [b.x, b.y, 60 + (1 - k) * 120],
+      radius: (900 + (1 - k) * 2200) * b.power,
       colour: [1, 0.52 + k * 0.35, 0.16 + k * 0.2],
-      intensity: 14 * k * k * b.power,
+      // squared in the power as well as in what is left, so a spark off a
+      // wall stays a spark while a kill lights the bay it happened in
+      intensity: 46 * k * k * b.power * b.power,
     });
   }
 }
@@ -200,12 +202,18 @@ export function effectsFor(out: Float32Array, arena: Arena, vp: Float32Array): n
   for (let i = 0; i < arena.bolts; i++) {
     n = glow(out, n, vp, arena.bx[i], arena.by[i], 44, 20, 2.2, [0.4, 0.95, 1], 3.2);
   }
+  // Four layers to an explosion: a white core that is gone in a tenth of a
+  // second, the body of it, a slower orange bloom, and a wide red halo that
+  // opens out well past the rest. The core is what makes it read as a bang
+  // rather than as a light being turned on.
   for (const b of arena.blasts) {
     const k = 1 - b.age / b.life;
     const grow = (1 - k) * b.power;
-    n = glow(out, n, vp, b.x, b.y, 60, (30 + grow * 90) * b.power, 3.4 * k * k, [1, 0.95, 0.8], 3);
-    n = glow(out, n, vp, b.x, b.y, 60, (55 + grow * 190) * b.power, 1.1 * k, [1, 0.55, 0.18], 1.7);
-    n = glow(out, n, vp, b.x, b.y, 60, (95 + grow * 300) * b.power, 0.32 * k, [1, 0.28, 0.1], 1.1);
+    const flash = Math.max(0, 1 - b.age / (b.life * 0.22));
+    n = glow(out, n, vp, b.x, b.y, 60, (34 + grow * 40) * b.power, 7 * flash * flash, [1, 1, 0.95], 4);
+    n = glow(out, n, vp, b.x, b.y, 60, (44 + grow * 150) * b.power, 3.4 * k * k, [1, 0.93, 0.72], 2.6);
+    n = glow(out, n, vp, b.x, b.y, 60, (80 + grow * 330) * b.power, 1.3 * k, [1, 0.52, 0.16], 1.6);
+    n = glow(out, n, vp, b.x, b.y, 60, (130 + grow * 520) * b.power, 0.34 * k * k, [1, 0.24, 0.08], 1.0);
   }
   const cy = Math.cos(arena.pAngle); const sy = Math.sin(arena.pAngle);
   const at = (lx: number, ly: number) => [arena.px + lx * cy - ly * sy, arena.py + lx * sy + ly * cy];
