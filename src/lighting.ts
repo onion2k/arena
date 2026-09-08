@@ -72,7 +72,9 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
   pool.add({
     position: [arena.gunX, arena.gunY, 150],
     radius: 4200,
-    colour: [1, 0.98, 0.92],
+    // cold, against the headlights' warm: the two are hard to tell apart by
+    // shape when they overlap and trivial to tell apart by colour
+    colour: [0.80, 0.90, 1],
     intensity: 30,
     direction: [Math.cos(arena.aim), Math.sin(arena.aim), -0.20],
     cone: [6, 16],
@@ -82,19 +84,29 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
   // than where it is looking. They are what stops you driving into a post
   // while watching something else.
   //
-  // Each comes out of its own lamp and is toed a little outward, so the two
-  // pools sit side by side instead of on top of one another. Two beams from
-  // the same point aimed the same way are one beam of twice the strength,
-  // which is what these were.
+  // What separates the two is the angle they are toed at, not the 92mm
+  // between the lamps — at the length of a beam that gap is nothing. Two
+  // 27-degree cones toed 7 degrees apart are one cone; the overlap swallows
+  // the difference, which is what these were.
+  //
+  // They also have to survive the searchlight, which sits directly between
+  // them at nearly four times the strength: aimed forward it swamped both and
+  // the truck appeared to have one lamp. So they are toed right out to either
+  // side of it, and they are warm where it is cold.
   for (const side of [-1, 1]) {
-    const toe = arena.pAngle + side * 0.13;
+    const toe = arena.pAngle + side * 0.36;
     pool.add({
       position: at(LAMP_AHEAD, side * LAMP_ACROSS, LAMP_HEIGHT),
       radius: 2200,
-      colour: hurt ? [1, 0.45, 0.4] : [1, 0.96, 0.86],
-      intensity: 7,
-      direction: [Math.cos(toe), Math.sin(toe), -0.30],
-      cone: [12, 27],
+      colour: hurt ? [1, 0.45, 0.4] : [1, 0.87, 0.62],
+      // A lamp 84mm above the floor sees it almost edge-on: at 900mm out the
+      // cosine between the floor's normal and the way back to the lamp is
+      // 0.09, so nine tenths of the beam is thrown away by the geometry
+      // before intensity is even considered. That is true of a real headlight
+      // too, and a real headlight answers it by being very bright.
+      intensity: 20,
+      direction: [Math.cos(toe), Math.sin(toe), -0.22],
+      cone: [5, 13],
     });
   }
 
@@ -210,7 +222,7 @@ export function effectsFor(out: Float32Array, arena: Arena, vp: Float32Array): n
   // than two dark discs with light appearing in front of them
   for (const side of [-1, 1]) {
     const [lx, ly] = at(LAMP_AHEAD + 6, side * LAMP_ACROSS);
-    n = glow(out, n, vp, lx, ly, LAMP_HEIGHT, 24, 2.2, [1, 0.96, 0.86], 2.8);
+    n = glow(out, n, vp, lx, ly, LAMP_HEIGHT, 24, 2.2, [1, 0.9, 0.7], 2.8);
   }
   if (arena.lastShot < 0.06) {
     const f = 1 - arena.lastShot / 0.06;

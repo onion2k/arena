@@ -122,12 +122,12 @@ slower. `measure(width, height, frames)` is on the console for repeating it.
 
 | scene | lights | ms a frame |
 | --- | ---: | ---: |
-| empty arena | 33 | 2.29 |
-| 80 enemies | 35 | 2.39 |
-| 180 enemies | 34 | 2.39 |
-| 300 enemies (the pool full) | 33 | 2.39 |
-| 300 enemies, point lights off | — | 0.89 |
-| 300 enemies, radius cull off | 33 | 3.40 |
+| empty arena | 35 | 2.96 |
+| 80 enemies | 34 | 2.91 |
+| 180 enemies | 33 | 2.85 |
+| 300 enemies (the pool full) | 35 | 3.02 |
+| 300 enemies, point lights off | — | 0.83 |
+| 300 enemies, radius cull off | 35 | 3.92 |
 
 Medians of five runs of 120 frames each; one run in five came back high,
 which is why they are medians rather than firsts. The light count stops at
@@ -140,11 +140,13 @@ the crowd used to carry a light each and the frame ran to 8.2 ms with three
 hundred of them. Taking their lights away for the sake of the dark took two
 thirds of the frame with it. A frame at sixty is 16.7 ms.
 
-Most of what is left is the twenty-four sweeping spots, which are on whether
-anything is happening or not — 2.29 ms of the 2.39 is there before a single
-enemy exists. Narrow cones are cheap to *look* at and not cheap to evaluate:
-a pixel outside the cone still costs the distance test and the dot product
-that discovers it is outside.
+All of what is left is the beams, which are on whether anything is happening
+or not — 2.96 ms of the 3.02 is there before a single enemy exists. Narrow
+cones are cheap to *look* at and not cheap to evaluate: a pixel outside the
+cone still costs the distance test and the dot product that discovers it is
+outside. The radius cull earns much less here than it did with wide
+omnidirectional lights, 3.9 ms against 3.0, because a spotlight's radius is
+already most of the arena and it is the cone that rejects the pixel.
 
 The CPU side is not the problem either: one `arena.step` with the pool of 300
 full is **0.16 ms**. It is 0.56 ms if the shots and the crowd scan every enemy

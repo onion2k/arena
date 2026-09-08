@@ -68,7 +68,7 @@ export function part(source: string, anchor: Anchor = 'centre'): Mesh {
  * beam, so a beam always comes out of a lamp you can see.
  */
 export const LAMP_AHEAD = 118;
-export const LAMP_ACROSS = 42;
+export const LAMP_ACROSS = 46;
 export const LAMP_HEIGHT = 84;
 
 /**
