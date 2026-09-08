@@ -84,29 +84,30 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
   // than where it is looking. They are what stops you driving into a post
   // while watching something else.
   //
-  // What separates the two is the angle they are toed at, not the 92mm
-  // between the lamps — at the length of a beam that gap is nothing. Two
-  // 27-degree cones toed 7 degrees apart are one cone; the overlap swallows
-  // the difference, which is what these were.
+  // Forward, because that is what a headlight is for. They were toed right
+  // out to either side for a while so that you could tell there were two of
+  // them, and two beams you can count while neither lights the road is worse
+  // than one wash that does. What makes them read as a pair is the two lamps
+  // on the truck: a car throws one pool ahead and nobody looks at it and
+  // thinks it has one lamp.
   //
-  // They also have to survive the searchlight, which sits directly between
-  // them at nearly four times the strength: aimed forward it swamped both and
-  // the truck appeared to have one lamp. So they are toed right out to either
-  // side of it, and they are warm where it is cold.
+  // So a few degrees of splay each, which is what a real pair has, and a wide
+  // cone — a wash over the road rather than a beam at a thing. The narrow
+  // beam at a thing is the searchlight, and it is cold where these are warm.
   for (const side of [-1, 1]) {
-    const toe = arena.pAngle + side * 0.36;
+    const toe = arena.pAngle + side * 0.07;
     pool.add({
       position: at(LAMP_AHEAD, side * LAMP_ACROSS, LAMP_HEIGHT),
-      radius: 2200,
+      radius: 2400,
       colour: hurt ? [1, 0.45, 0.4] : [1, 0.87, 0.62],
       // A lamp 84mm above the floor sees it almost edge-on: at 900mm out the
       // cosine between the floor's normal and the way back to the lamp is
       // 0.09, so nine tenths of the beam is thrown away by the geometry
       // before intensity is even considered. That is true of a real headlight
       // too, and a real headlight answers it by being very bright.
-      intensity: 20,
-      direction: [Math.cos(toe), Math.sin(toe), -0.22],
-      cone: [5, 13],
+      intensity: 22,
+      direction: [Math.cos(toe), Math.sin(toe), -0.20],
+      cone: [10, 25],
     });
   }
 
