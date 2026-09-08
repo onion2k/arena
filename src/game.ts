@@ -271,21 +271,21 @@ export class Arena {
     }
   }
 
+  /**
+   * One round, out of the muzzle. There is one barrel on the truck, so a pair
+   * of shots either side of it never matched what was drawn.
+   */
   private fire() {
-    // both barrels, a little apart, so the muzzle flash has width
-    for (const side of [-1, 1]) {
-      if (this.bolts >= MAX_BOLTS) return;
-      const i = this.bolts++;
-      const off = this.aim + Math.PI / 2;
-      const spread = (Math.random() - 0.5) * 0.05;
-      this.bx[i] = this.muzzleX + Math.cos(off) * side * 13;
-      this.by[i] = this.muzzleY + Math.sin(off) * side * 13;
-      // the ship's own velocity carries into the shot, as it should when the
-      // ship has momentum: firing backwards while running away is slower
-      this.bvx[i] = Math.cos(this.aim + spread) * BOLT_SPEED + this.pvx;
-      this.bvy[i] = Math.sin(this.aim + spread) * BOLT_SPEED + this.pvy;
-      this.blife[i] = BOLT_LIFE;
-    }
+    if (this.bolts >= MAX_BOLTS) return;
+    const i = this.bolts++;
+    const spread = (Math.random() - 0.5) * 0.03;
+    this.bx[i] = this.muzzleX;
+    this.by[i] = this.muzzleY;
+    // the truck's own velocity carries into the shot, as it should when the
+    // truck has momentum: firing backwards while running away is slower
+    this.bvx[i] = Math.cos(this.aim + spread) * BOLT_SPEED + this.pvx;
+    this.bvy[i] = Math.sin(this.aim + spread) * BOLT_SPEED + this.pvy;
+    this.blife[i] = BOLT_LIFE;
   }
 
   private dropBolt(i: number) {
