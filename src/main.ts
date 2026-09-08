@@ -162,6 +162,7 @@ async function main() {
     // a hundred frames to get there
     followShip(1);
     orbit.update();
+    setDepthRange(renderer.camera);
     upload();
     renderer.frame(ctx.context.getCurrentTexture().createView(), 'redraw');
     await ctx.queue.onSubmittedWorkDone();
@@ -321,6 +322,7 @@ async function main() {
     if (input.takeRecentre()) { aim[0] = 0; aim[1] = 0; reframe(true); }
     followShip(dt);
     orbit.update();
+    setDepthRange(renderer.camera);
     arena.step(dt, input.read());
 
     const effects = upload();
@@ -357,30 +359,64 @@ async function main() {
  * was never on screen. So the corners are projected and the distance is
  * solved for, on every resize.
  */
+/** The eight corners of the box everything in the arena stands inside. */
+const ARENA_CORNERS: [number, number, number][] = [];
+for (const x of [-ARENA_X, ARENA_X]) {
+  for (const y of [-ARENA_Y, ARENA_Y]) {
+    for (const z of [0, 260]) ARENA_CORNERS.push([x, y, z]);
+  }
+}
+
+/**
+ * Keep the depth range around what the camera can actually see.
+ *
+ * The camera class defaults to a far plane of four metres, which was ample
+ * for a piece of jewellery on a table and is not for an arena 2.8 metres
+ * across seen from three metres back: the far corners fall outside it and
+ * are simply not drawn. Nothing warns about this — the geometry is there,
+ * the frame is fine, the arena just stops. So the range is derived from the
+ * corners every frame rather than set once and hoped over.
+ */
+function setDepthRange(cam: GameRenderer['camera']) {
+  let far = 0;
+  for (const c of ARENA_CORNERS) {
+    const d = Math.hypot(c[0] - cam.position[0], c[1] - cam.position[1], c[2] - cam.position[2]);
+    if (d > far) far = d;
+  }
+  // a fifth over, for the posts standing up and the glows drawn past them
+  cam.far = far * 1.2 + 300;
+  // near is fixed and small: the ratio to far stays under a thousand, which
+  // a 24-bit depth buffer carries without a hint of z-fighting
+  cam.near = 15;
+}
+
 function fitCamera(cam: GameRenderer['camera'], aspect: number): number {
   const target: [number, number, number] = [0, 0, CAMERA_HEIGHT];
   // back and up from the target, at the angle the arena reads best from
   const back = norm([0, -1.32, 0.915]);
-  const corners: [number, number, number][] = [];
-  for (const x of [-ARENA_X, ARENA_X]) {
-    for (const y of [-ARENA_Y, ARENA_Y]) {
-      for (const z of [0, 230]) corners.push([x, y, z]);
-    }
-  }
+  const corners = ARENA_CORNERS;
   cam.aspect = aspect;
   cam.target = target;
   let lo = 500, hi = 6000;
   for (let i = 0; i < 22; i++) {
     const d = (lo + hi) / 2;
     cam.position = [target[0] + back[0] * d, target[1] + back[1] * d, target[2] + back[2] * d];
+    setDepthRange(cam);
     cam.update();
+    // Across the frame only. Depth is not tested here and must not be: the
+    // far plane is derived from these same corners a line above, so it always
+    // clears them, and normalised depth is so nonlinear that everything at
+    // arena range reads 0.998 whatever the plane is set to — a threshold on
+    // it rejects every distance and the search runs to its cap.
     const fits = corners.every((c) => {
       const p = project(cam.viewProjection, c[0], c[1], c[2]);
-      return p !== null && Math.abs(p[0]) <= 0.985 && Math.abs(p[1]) <= 0.985;
+      return p !== null && p[2] < cam.far
+        && Math.abs(p[0]) <= 0.985 && Math.abs(p[1]) <= 0.985;
     });
     if (fits) hi = d; else lo = d;
   }
   cam.position = [target[0] + back[0] * hi, target[1] + back[1] * hi, target[2] + back[2] * hi];
+  setDepthRange(cam);
   cam.update();
   return hi;
 }

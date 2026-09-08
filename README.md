@@ -54,6 +54,12 @@ Solving for that distance is not a nicety: it was hardcoded at first, which
 cropped the near corners on a narrow window, and in a game where enemies come
 in from the edges that means dying to something that was never on screen.
 
+The depth range is solved for too, every frame, from the same corners. The
+camera class defaults to a far plane of four metres, which is ample for a
+piece of jewellery on a table and is not for an arena 2.8 metres across seen
+from three metres back — the far corners simply stop being drawn, with no
+error and nothing else wrong with the frame.
+
 ## What it is doing
 
 Every frame the light list is cleared and written again from scratch. A shot

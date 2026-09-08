@@ -46,14 +46,21 @@ export function hide(out: Float32Array, i: number) {
 }
 
 /**
- * A world point in clip space, given a column-major view-projection. Returns
- * null behind the camera, where the perspective divide turns the picture
- * inside out. Effects are placed with this.
+ * A world point in normalised device coordinates, given a column-major
+ * view-projection: x and y across the frame in -1 to 1, then the view depth
+ * `w` in world units, then depth in 0 to 1 where 1 is the far plane.
+ *
+ * Returns null behind the camera, where the perspective divide turns the
+ * picture inside out. Effects are placed with the first three; the fourth is
+ * how the camera's own fit knows a corner has fallen out the back.
  */
-export function project(vp: Float32Array, x: number, y: number, z: number): [number, number, number] | null {
+export function project(
+  vp: Float32Array, x: number, y: number, z: number,
+): [number, number, number, number] | null {
   const cx = vp[0] * x + vp[4] * y + vp[8] * z + vp[12];
   const cy = vp[1] * x + vp[5] * y + vp[9] * z + vp[13];
+  const cz = vp[2] * x + vp[6] * y + vp[10] * z + vp[14];
   const cw = vp[3] * x + vp[7] * y + vp[11] * z + vp[15];
   if (cw <= 1e-4) return null;
-  return [cx / cw, cy / cw, cw];
+  return [cx / cw, cy / cw, cw, cz / cw];
 }
