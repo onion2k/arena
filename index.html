@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Arena</title>
+<style>
+  :root { color-scheme: dark; --ink: #e8e6f0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #07070b; overflow: hidden; }
+  body { font: 13px/1.5 ui-monospace, "SF Mono", Menlo, monospace; color: var(--ink); }
+  #stage { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+  .panel { position: fixed; padding: 10px 14px; background: rgba(10, 10, 16, 0.55);
+           border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 8px;
+           backdrop-filter: blur(6px); pointer-events: none; }
+  #score { top: 16px; left: 16px; font-size: 15px; letter-spacing: 0.06em; }
+  #score b { font-size: 26px; font-weight: 600; display: block; letter-spacing: 0.02em; }
+  #stats { top: 16px; right: 16px; text-align: right; color: #9a97ab; }
+  #stats span { color: var(--ink); }
+  #help { bottom: 16px; left: 16px; color: #9a97ab; }
+  #boot { position: fixed; inset: 0; display: grid; place-content: center; gap: 12px;
+          text-align: center; background: #07070b; transition: opacity .4s; }
+  #boot.gone { opacity: 0; pointer-events: none; }
+  #boot h1 { margin: 0; font-size: 22px; font-weight: 500; letter-spacing: 0.3em; }
+  #boot p { margin: 0; color: #9a97ab; }
+  .lives i { font-style: normal; color: #ffd27a; }
+  .lives i.spent { color: #3a3746; }
+</style>
+<div id="stage"><canvas id="view"></canvas></div>
+<div class="panel" id="score" hidden><b>0</b><span class="lives"></span> · wave <span id="wave">1</span></div>
+<div class="panel" id="stats" hidden></div>
+<div class="panel" id="help" hidden>move <span>WASD</span> / arrows · aim with the mouse · <span>F</span> hold fire · <span>R</span> restart</div>
+<div id="boot"><h1>ARENA</h1><p id="bootMsg">starting the GPU…</p></div>
+<script type="module" src="/src/main.ts"></script>
