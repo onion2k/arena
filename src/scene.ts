@@ -63,6 +63,15 @@ export function part(source: string, anchor: Anchor = 'centre'): Mesh {
 }
 
 /**
+ * Where a headlamp sits in the truck's own frame: ahead of the cab, out to
+ * either side, at bumper height. The model is placed from these and so is the
+ * beam, so a beam always comes out of a lamp you can see.
+ */
+export const LAMP_AHEAD = 118;
+export const LAMP_ACROSS = 42;
+export const LAMP_HEIGHT = 84;
+
+/**
  * Half the arena, in the millimetres everything else is modelled in: square,
  * and 4.8 metres across.
  *
@@ -104,6 +113,13 @@ export const MESHES = {
   turret: () => part('disc(radius: 37, thickness: 22, sides: 12, bolts: 6, boltCircle: 23, boltBore: 4, bevel: 4)'),
   /** The barrel. Modelled along its own z and laid over to point where it aims. */
   barrel: () => part('disc(radius: 11, thickness: 146, sides: 12, bevel: 3)'),
+  /**
+   * A headlamp. Two of them on the front of the cab, laid over to face the
+   * way the truck is going. There were two headlight beams before this and
+   * nothing on the truck they came out of, which read as one glow with no
+   * source — a lamp you can see is what makes a beam belong to the vehicle.
+   */
+  lamp: () => part('disc(radius: 17, thickness: 14, sides: 14, bevel: 4)'),
 
   /**
    * An enemy: a spiked star, lying flat and spinning. A round bead read as a

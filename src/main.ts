@@ -14,13 +14,13 @@ import { bakeEnvironment } from 'artshape-render/render/env';
 import { GameRenderer, EFFECT_STRIDE, type GameGroup } from 'artshape-render/game/renderer';
 import { LightPool } from 'artshape-render/game/lights';
 import { Arena, MAX_BOLTS, MAX_ENEMIES, type Input } from './game';
-import { ARENA_X, ARENA_Y, MESHES, arenaMatrices } from './scene';
+import { ARENA_X, ARENA_Y, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices } from './scene';
 import { hide, place, placeAxle, placeTipped, project } from './matrix';
 import { EFFECT_CAPACITY, LIGHT_CAPACITY, effectsFor, lightsFor, setProjectionScale } from './lighting';
 
 const FOV = 40;
 /** Where the dynamic groups sit, in the order they are handed over. */
-const CHASSIS = 0, CAB = 1, WHEELS = 2, TURRET = 3, BARREL = 4, DRONES = 5, BOLTS = 6;
+const CHASSIS = 0, CAB = 1, WHEELS = 2, TURRET = 3, BARREL = 4, LAMPS = 5, DRONES = 6, BOLTS = 7;
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
@@ -75,7 +75,7 @@ async function main() {
   const mesh = {
     floor: MESHES.floor(), tile: MESHES.tile(), block: MESHES.block(), column: MESHES.column(),
     chassis: MESHES.chassis(), cab: MESHES.cab(), wheel: MESHES.wheel(),
-    turret: MESHES.turret(), barrel: MESHES.barrel(),
+    turret: MESHES.turret(), barrel: MESHES.barrel(), lamp: MESHES.lamp(),
     drone: MESHES.drone(), bolt: MESHES.bolt(),
   };
   const at = arenaMatrices();
@@ -94,6 +94,7 @@ async function main() {
   const wheelM = new Float32Array(4 * 16);
   const turretM = new Float32Array(16);
   const barrelM = new Float32Array(16);
+  const lampM = new Float32Array(2 * 16);
   const droneM = new Float32Array(MAX_ENEMIES * 16);
   const boltM = new Float32Array(MAX_BOLTS * 16);
   const droneMat = new Float32Array(MAX_ENEMIES * 4);
@@ -107,6 +108,9 @@ async function main() {
     { mesh: mesh.wheel, matrices: wheelM, count: 4, albedo: [0.07, 0.07, 0.08], roughness: 0.62 },
     { mesh: mesh.turret, matrices: turretM, albedo: [0.74, 0.76, 0.82], roughness: 0.2 },
     { mesh: mesh.barrel, matrices: barrelM, albedo: [0.90, 0.92, 0.97], roughness: 0.1 },
+    // near white and glossy, so the lamps read as lit glass rather than as
+    // two more lumps of the same metal the truck is made of
+    { mesh: mesh.lamp, matrices: lampM, count: 2, albedo: [1.0, 0.97, 0.9], roughness: 0.06 },
     // hotter and glossier than the floor it stands on, so it reads as a thing
     // rather than as a patch of the ground
     { mesh: mesh.drone, matrices: droneM, count: 0, albedo: [1.0, 0.32, 0.20], roughness: 0.19 },
@@ -311,6 +315,15 @@ async function main() {
       }
     }
     renderer.move(WHEELS, wheelM, 4);
+
+    // the lamps, laid over to face along the nose as the barrel and the
+    // bolts are, a quarter turn past the heading
+    let lamp = 0;
+    for (const ly of [-LAMP_ACROSS, LAMP_ACROSS]) {
+      placeTipped(lampM, lamp++, wx(LAMP_AHEAD, ly), wy(LAMP_AHEAD, ly), LAMP_HEIGHT,
+        yaw + Math.PI / 2, Math.PI / 2, 1);
+    }
+    renderer.move(LAMPS, lampM, 2);
 
     const gx = arena.gunX; const gy = arena.gunY;
     place(turretM, 0, gx, gy, 88, arena.aim, 1);

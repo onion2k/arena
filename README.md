@@ -167,6 +167,6 @@ and quality ladder exist for exactly that and this demo does not use them yet.
 | --- | --- |
 | `src/main.ts` | wiring: device, meshes, pools, the frame loop |
 | `src/game.ts` | state, flight and rules. Knows nothing about the GPU |
-| `src/scene.ts` | the parametric parts and where the static half stands |
+| `src/scene.ts` | the parametric parts, where the static half stands, and where a headlamp sits |
 | `src/lighting.ts` | the light list and the glow list, rebuilt every frame |
 | `src/matrix.ts` | placements, and projecting a point to the screen |

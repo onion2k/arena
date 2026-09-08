@@ -18,7 +18,7 @@
 import { LightPool } from 'artshape-render/game/lights';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
 import type { Arena } from './game';
-import { COLUMNS, COLUMN_HEIGHT } from './scene';
+import { COLUMNS, COLUMN_HEIGHT, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT } from './scene';
 import { project } from './matrix';
 
 export const LIGHT_CAPACITY = 256;
@@ -81,14 +81,20 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
   // Headlights: shorter, wider, and pointed where the truck is going rather
   // than where it is looking. They are what stops you driving into a post
   // while watching something else.
+  //
+  // Each comes out of its own lamp and is toed a little outward, so the two
+  // pools sit side by side instead of on top of one another. Two beams from
+  // the same point aimed the same way are one beam of twice the strength,
+  // which is what these were.
   for (const side of [-1, 1]) {
+    const toe = arena.pAngle + side * 0.13;
     pool.add({
-      position: at(120, side * 46, 74),
+      position: at(LAMP_AHEAD, side * LAMP_ACROSS, LAMP_HEIGHT),
       radius: 2200,
       colour: hurt ? [1, 0.45, 0.4] : [1, 0.96, 0.86],
-      intensity: 11,
-      direction: [cy, sy, -0.30],
-      cone: [13, 30],
+      intensity: 7,
+      direction: [Math.cos(toe), Math.sin(toe), -0.30],
+      cone: [12, 27],
     });
   }
 
@@ -199,6 +205,12 @@ export function effectsFor(out: Float32Array, arena: Arena, vp: Float32Array): n
       const [bx, by] = at(-140, side * 48);
       n = glow(out, n, vp, bx, by, 58, 22, 1.6 * arena.braking, [1, 0.15, 0.08], 2.6);
     }
+  }
+  // the lamps themselves, so they are two bright points on the truck rather
+  // than two dark discs with light appearing in front of them
+  for (const side of [-1, 1]) {
+    const [lx, ly] = at(LAMP_AHEAD + 6, side * LAMP_ACROSS);
+    n = glow(out, n, vp, lx, ly, LAMP_HEIGHT, 24, 2.2, [1, 0.96, 0.86], 2.8);
   }
   if (arena.lastShot < 0.06) {
     const f = 1 - arena.lastShot / 0.06;
