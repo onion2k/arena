@@ -1,8 +1,9 @@
 # Arena
 
-An Asteroids-handling arena on the game path of
-[artshape-render](https://github.com/onion2k/artshape-render): turn, thrust,
-and shoot the things coming at you before they reach you.
+A technical in an arena, on the game path of
+[artshape-render](https://github.com/onion2k/artshape-render): drive it with
+the keys, point the gun on the back with the mouse, and hold off the things
+coming at you.
 
 It exists to lean on the two things that path was built for — a great many
 moving point lights, and materials shiny enough to show them — and to be the
@@ -21,9 +22,10 @@ Needs a browser with WebGPU.
 
 | | |
 | --- | --- |
-| **A** **D** or ← → | turn |
-| **W** or ↑ | thrust, along wherever the nose points |
+| **A** **D** or ← → | steer |
+| **W** or ↑ | throttle, along wherever the truck is pointing |
 | **S** or ↓ | brake |
+| mouse | point the gun, which swings independently of the truck |
 | **space** or **F** | fire (it auto-fires as well) |
 | **X** | auto-fire on and off |
 | **R** | restart |
@@ -31,10 +33,18 @@ Needs a browser with WebGPU.
 | wheel | in, or out until the whole arena is in frame |
 | **C** | put the camera back |
 
-The ship flies the way Asteroids' does. It carries momentum, drag pulls it
-down over about a second, and its own velocity carries into the shots it
-fires, so running away while shooting backwards gives slow bullets. The walls
-are solid rather than a wrap — it keeps about half its speed off one.
+The truck drives the way an Asteroids ship flies: it carries momentum, drag
+pulls it down over about a second, and its own velocity carries into the
+shots it fires, so running away while shooting backwards gives slow bullets.
+The walls are solid rather than a wrap — it keeps about half its speed off
+one. The wheels roll by however far it went *along its own nose*, so a slide
+sideways does not turn them and a skid looks like a skid.
+
+The gun is not the truck. It slews toward wherever the mouse is pointing at
+its own rate rather than snapping there, and driving one way while shooting
+another is the whole point of the thing. The aim is only taken while no
+button is down, so dragging the camera round does not haul the turret with
+it.
 
 The arena is 2.8 by 1.9 metres of modelled floor, with eight solid posts in
 it. The posts are the only thing you cannot fly through: the ship is pushed
@@ -89,10 +99,10 @@ slower. `measure(width, height, frames)` is on the console for repeating it.
 
 | scene | lights | ms a frame |
 | --- | ---: | ---: |
-| empty arena | 22 | 1.25 |
-| 60 enemies | 81 | 2.81 |
-| 140 enemies | 150 | 4.82 |
-| 220 enemies (the pool full) | 150 | 4.89 |
+| empty arena | 23 | 1.19 |
+| 60 enemies | 83 | 2.62 |
+| 140 enemies | 148 | 4.34 |
+| 220 enemies (the pool full) | 151 | 4.53 |
 | 220 enemies, point lights off | — | 0.42 |
 
 Medians of five runs of 120 frames each; one run in five came back high,
@@ -101,13 +111,14 @@ which is why they are medians rather than firsts. The light count stops at
 last two rows the same, and it is the first thing a quality ladder would take
 away.
 
-So the point-light loop is 4.5 ms of the 4.9, about **0.031 ms a light** at
+So the point-light loop is 4.1 ms of the 4.5, about **0.026 ms a light** at
 1080p, and the additive effect stage — up to a couple of hundred glows — does
-not clear the noise. A frame at sixty is 16.7 ms, so a full arena is under a
-third of one.
+not clear the noise. A frame at sixty is 16.7 ms, so a full arena is a bit over
+a quarter of one — and that is with the truck's headlights, exhaust and brake
+lamps in the count.
 
 The CPU side is not the problem either: one `arena.step` with the pool full
-is 0.139 ms, including the every-enemy-against-every-enemy separation, which
+is 0.147 ms, including the every-enemy-against-every-enemy separation, which
 at 220 is forty-eight thousand distance tests a frame.
 
 Do not read the frame rate in the corner as the cost of any of this. It is

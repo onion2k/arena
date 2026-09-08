@@ -84,15 +84,21 @@ export const MESHES = {
   /** An eight-sided column, for the corners to reflect things in. */
   column: () => part('disc(radius: 54, thickness: 250, sides: 8, bevel: 11)', 'base'),
   /**
-   * The player's hull: a triangle, nose along its own +x, so turning the
-   * matrix turns the ship and you can see which way it is pointing. That is
-   * the whole requirement of an Asteroids ship and a round one fails it.
+   * The player is a technical: a flatbed with a gun on the back that aims
+   * where it likes, not where the truck is pointing. It is five parts rather
+   * than one because that is what makes it read as a vehicle — a body that
+   * leans into a turn, wheels that actually roll, and a turret that swings
+   * independently of all of it.
    */
-  hull: () => part('plate(polygon(sides: 3, radius: 112, rotate: 0), thickness: 26, bevel: 8)', 'pivot'),
-  /** A stone riding on top of it, spinning: the shiny thing to look at. */
-  core: () => part('gem(cut: brilliant, width: 62, depth: 46, facets: 16)'),
-  /** The ring around the ship, counter-spinning. */
-  ring: () => part('band(radius: 98, width: 13, thickness: 5, segments: 48)'),
+  chassis: () => part('plate(card(width: 250, height: 128, corner: 18), thickness: 40, bevel: 7)'),
+  cab: () => part('plate(card(width: 96, height: 116, corner: 16), thickness: 64, bevel: 8)'),
+  /** Bolts on the face, so that the spin is visible on a shape that is a circle. */
+  wheel: () => part('disc(radius: 31, thickness: 24, sides: 16, bolts: 5, boltCircle: 17, boltBore: 5, bevel: 5)'),
+  /** The ring the gun stands on. */
+  turret: () => part('disc(radius: 37, thickness: 22, sides: 12, bolts: 6, boltCircle: 23, boltBore: 4, bevel: 4)'),
+  /** The barrel. Modelled along its own z and laid over to point where it aims. */
+  barrel: () => part('disc(radius: 11, thickness: 146, sides: 12, bevel: 3)'),
+
   /**
    * An enemy: a spiked star, lying flat and spinning. A round bead read as a
    * traffic cone from a camera this high up — the silhouette is all the

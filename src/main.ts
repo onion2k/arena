@@ -15,12 +15,12 @@ import { GameRenderer, EFFECT_STRIDE, type GameGroup } from 'artshape-render/gam
 import { LightPool } from 'artshape-render/game/lights';
 import { Arena, MAX_BOLTS, MAX_ENEMIES, type Input } from './game';
 import { ARENA_X, ARENA_Y, MESHES, arenaMatrices } from './scene';
-import { hide, placeTipped, project } from './matrix';
+import { hide, place, placeAxle, placeTipped, project } from './matrix';
 import { EFFECT_CAPACITY, LIGHT_CAPACITY, effectsFor, lightsFor, setProjectionScale } from './lighting';
 
 const FOV = 40;
 /** Where the dynamic groups sit, in the order they are handed over. */
-const HULL = 0, CORE = 1, RING = 2, DRONES = 3, BOLTS = 4;
+const CHASSIS = 0, CAB = 1, WHEELS = 2, TURRET = 3, BARREL = 4, DRONES = 5, BOLTS = 6;
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
@@ -57,7 +57,8 @@ async function main() {
 
   const mesh = {
     floor: MESHES.floor(), tile: MESHES.tile(), block: MESHES.block(), column: MESHES.column(),
-    hull: MESHES.hull(), core: MESHES.core(), ring: MESHES.ring(),
+    chassis: MESHES.chassis(), cab: MESHES.cab(), wheel: MESHES.wheel(),
+    turret: MESHES.turret(), barrel: MESHES.barrel(),
     drone: MESHES.drone(), bolt: MESHES.bolt(),
   };
   const at = arenaMatrices();
@@ -71,9 +72,11 @@ async function main() {
 
   // The pools. Their size is fixed here and never changes again: what moves
   // each frame is the live count, and the matrices written into the prefix.
-  const hullM = new Float32Array(16);
-  const coreM = new Float32Array(16);
-  const ringM = new Float32Array(16);
+  const chassisM = new Float32Array(16);
+  const cabM = new Float32Array(16);
+  const wheelM = new Float32Array(4 * 16);
+  const turretM = new Float32Array(16);
+  const barrelM = new Float32Array(16);
   const droneM = new Float32Array(MAX_ENEMIES * 16);
   const boltM = new Float32Array(MAX_BOLTS * 16);
   const droneMat = new Float32Array(MAX_ENEMIES * 4);
@@ -81,9 +84,12 @@ async function main() {
     // not a mirror: a polished metal under a near-black sky has nothing to
     // reflect and reads as a dark shape. A little roughness gives the point
     // lights a highlight wide enough to see the colour in.
-    { mesh: mesh.hull, matrices: hullM, albedo: [1.0, 0.79, 0.36], roughness: 0.22 },
-    { mesh: mesh.core, matrices: coreM, albedo: [0.85, 0.93, 1.0], roughness: 0.12 },
-    { mesh: mesh.ring, matrices: ringM, albedo: [0.96, 0.97, 1.0], roughness: 0.16 },
+    { mesh: mesh.chassis, matrices: chassisM, albedo: [1.0, 0.79, 0.36], roughness: 0.24 },
+    { mesh: mesh.cab, matrices: cabM, albedo: [0.86, 0.90, 0.97], roughness: 0.12 },
+    // tyres: dark and rough, the one thing in the arena that is not a mirror
+    { mesh: mesh.wheel, matrices: wheelM, count: 4, albedo: [0.07, 0.07, 0.08], roughness: 0.62 },
+    { mesh: mesh.turret, matrices: turretM, albedo: [0.74, 0.76, 0.82], roughness: 0.2 },
+    { mesh: mesh.barrel, matrices: barrelM, albedo: [0.90, 0.92, 0.97], roughness: 0.1 },
     { mesh: mesh.drone, matrices: droneM, count: 0, albedo: [0.86, 0.17, 0.12], roughness: 0.27 },
     { mesh: mesh.bolt, matrices: boltM, count: 0, albedo: [0.38, 0.95, 1.0], roughness: 0.05 },
   ];
@@ -99,7 +105,7 @@ async function main() {
   const arena = new Arena();
   const lights = new LightPool(LIGHT_CAPACITY);
   const quads = new Float32Array(EFFECT_CAPACITY * EFFECT_STRIDE);
-  const input = watchInput(arena);
+  const input = watchInput(arena, canvas);
   // Drag to swing the camera round, wheel to come in and out, shift-drag to
   // slide it. The floor is opaque from below and the arena is meant to be
   // looked into, so the polar range stops short of the horizon and of
@@ -170,7 +176,7 @@ async function main() {
     await fetch('/__shot', { method: 'POST', body: png });
     return png.length;
   };
-  Object.assign(globalThis as Record<string, unknown>, { arena, renderer, orbit, measure, shoot });
+  Object.assign(globalThis as Record<string, unknown>, { arena, renderer, orbit, input, measure, shoot });
 
   /**
    * Frame the arena, and set how far in and out the wheel may go from there.
@@ -264,18 +270,38 @@ async function main() {
    * an empty arena lit by a full set of lights.
    */
   const upload = (): number => {
-    // The hull lies flat and points where the nose points, banking a little
-    // into a turn. The stone on top of it spins on its own, and the ring the
-    // other way — those two are decoration and must not be mistaken for the
-    // heading, so only the hull carries `pAngle` alone.
-    const hover = 86 + Math.sin(t * 2.2) * 5;
-    const bank = -arena.lastTurn * 0.32;
-    placeTipped(hullM, 0, arena.px, arena.py, hover, arena.pAngle, bank, 1);
-    renderer.move(HULL, hullM, 1);
-    placeTipped(coreM, 0, arena.px, arena.py, hover + 34, arena.pAngle + arena.pSpin, 0.42, 1);
-    renderer.move(CORE, coreM, 1);
-    placeTipped(ringM, 0, arena.px, arena.py, hover + 12, -arena.pSpin * 0.7, 0.2, 1);
-    renderer.move(RING, ringM, 1);
+    // The truck, laid out in its own frame and turned into the world: the
+    // body leans into a turn, the wheels roll with the distance covered along
+    // the nose, and the turret and barrel answer to the gun rather than to
+    // the truck. Five parts, but only two angles between them.
+    const yaw = arena.pAngle;
+    const cy = Math.cos(yaw); const sy = Math.sin(yaw);
+    const wx = (lx: number, ly: number) => arena.px + lx * cy - ly * sy;
+    const wy = (lx: number, ly: number) => arena.py + lx * sy + ly * cy;
+    const lean = -arena.lastTurn * 0.17;
+
+    placeTipped(chassisM, 0, wx(0, 0), wy(0, 0), 52, yaw, lean, 1);
+    renderer.move(CHASSIS, chassisM, 1);
+    placeTipped(cabM, 0, wx(62, 0), wy(62, 0), 92, yaw, lean, 1);
+    renderer.move(CAB, cabM, 1);
+
+    let w = 0;
+    for (const lx of [88, -78]) {
+      for (const ly of [-64, 64]) {
+        placeAxle(wheelM, w++, wx(lx, ly), wy(lx, ly), 32, yaw, arena.wheelSpin);
+      }
+    }
+    renderer.move(WHEELS, wheelM, 4);
+
+    const gx = arena.gunX; const gy = arena.gunY;
+    place(turretM, 0, gx, gy, 88, arena.aim, 1);
+    renderer.move(TURRET, turretM, 1);
+    // the barrel is modelled along its own z, so it is laid over a quarter
+    // turn past the direction it is meant to point, as the bolts are
+    placeTipped(barrelM, 0,
+      gx + Math.cos(arena.aim) * 82, gy + Math.sin(arena.aim) * 82, 104,
+      arena.aim + Math.PI / 2, Math.PI / 2, 1);
+    renderer.move(BARREL, barrelM, 1);
 
     for (let i = 0; i < arena.enemies; i++) {
       placeTipped(droneM, i, arena.ex[i], arena.ey[i], 44 + Math.sin(arena.ephase[i] * 0.8) * 10,
@@ -323,7 +349,7 @@ async function main() {
     followShip(dt);
     orbit.update();
     setDepthRange(renderer.camera);
-    arena.step(dt, input.read());
+    arena.step(dt, input.read(renderer.camera));
 
     const effects = upload();
 
@@ -421,6 +447,31 @@ function fitCamera(cam: GameRenderer['camera'], aspect: number): number {
   return hi;
 }
 
+/**
+ * Where the cursor lands on the floor the game is played on, in world
+ * millimetres: a ray built from the camera's own axes, met with z = 0.
+ * Built from the axes rather than by inverting the projection because the
+ * camera turns and this stays four lines either way.
+ */
+function floorUnderCursor(cam: GameRenderer['camera'], mx: number, my: number): [number, number] {
+  const u = mx * 2 - 1;
+  const v = 1 - my * 2;
+  const tan = Math.tan((cam.fov * Math.PI) / 360);
+  const [px, py, pz] = cam.position;
+  const f = norm([cam.target[0] - px, cam.target[1] - py, cam.target[2] - pz]);
+  const r = cam.right;
+  const up = cam.up;
+  const dir = [
+    f[0] + r[0] * u * tan * cam.aspect + up[0] * v * tan,
+    f[1] + r[1] * u * tan * cam.aspect + up[1] * v * tan,
+    f[2] + r[2] * u * tan * cam.aspect + up[2] * v * tan,
+  ];
+  // above the horizon there is no floor to hit; aim at the far edge instead
+  if (dir[2] >= -1e-4) return [px + dir[0] * 4000, py + dir[1] * 4000];
+  const t = -pz / dir[2];
+  return [px + dir[0] * t, py + dir[1] * t];
+}
+
 /** Where the camera starts, as a fraction of the distance that fits the arena. */
 const START_ZOOM = 0.68;
 /** How high off the floor the camera looks. The fit solves for this exact
@@ -436,13 +487,18 @@ function identity(): Float32Array {
 }
 
 /**
- * Asteroids: left and right turn, forward thrusts along the nose, back
- * brakes. The mouse is not part of it — it belongs to the camera now.
+ * The truck drives Asteroids-style off the keys; the gun is pointed with the
+ * mouse. The mouse also swings the camera, so the aim is only taken while no
+ * button is down — otherwise dragging the view round would haul the turret
+ * with it.
  */
-function watchInput(arena: Arena) {
+function watchInput(arena: Arena, canvas: HTMLCanvasElement) {
   const held = new Set<string>();
   let autofire = true;
   let recentre = false;
+  let mx = 0.5; let my = 0.4;
+  let seen = false;
+  let dragging = false;
 
   addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
@@ -458,16 +514,27 @@ function watchInput(arena: Arena) {
   // a window that loses focus mid-turn would otherwise keep turning forever
   addEventListener('blur', () => held.clear());
 
+  canvas.addEventListener('pointermove', (e) => {
+    const r = canvas.getBoundingClientRect();
+    mx = (e.clientX - r.left) / Math.max(1, r.width);
+    my = (e.clientY - r.top) / Math.max(1, r.height);
+    seen = true;
+  });
+  canvas.addEventListener('pointerdown', () => { dragging = true; });
+  addEventListener('pointerup', () => { dragging = false; });
+  addEventListener('pointercancel', () => { dragging = false; });
+
   const down = (...keys: string[]) => keys.some((k) => held.has(k));
   return {
     get autofire() { return autofire; },
     /** True once, for the frame the camera should be framed again. */
     takeRecentre() { const r = recentre; recentre = false; return r; },
-    read(): Input {
+    read(cam: GameRenderer['camera']): Input {
       return {
         turn: (down('a', 'arrowleft') ? 1 : 0) - (down('d', 'arrowright') ? 1 : 0),
         thrust: down('w', 'arrowup') ? 1 : 0,
         brake: down('s', 'arrowdown') ? 1 : 0,
+        aimAt: seen && !dragging ? floorUnderCursor(cam, mx, my) : null,
         firing: autofire || down('f', ' '),
       };
     },

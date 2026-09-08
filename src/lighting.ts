@@ -53,42 +53,60 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
   pool.clear();
   ambience(pool, t);
 
-  // the player, lighting the floor it hovers over
   const hurt = arena.invuln > 0 && Math.sin(arena.invuln * 40) > 0;
+  const cy = Math.cos(arena.pAngle); const sy = Math.sin(arena.pAngle);
+  /** A point in the truck's own frame, in the world. */
+  const at = (lx: number, ly: number, z: number): [number, number, number] =>
+    [arena.px + lx * cy - ly * sy, arena.py + lx * sy + ly * cy, z];
+
+  // one over the truck, so the truck itself is lit and not only the floor
   pool.add({
-    position: [arena.px, arena.py, 70],
-    radius: 520,
-    colour: hurt ? [1, 0.3, 0.25] : [1, 0.82, 0.44],
-    intensity: 12,
-  });
-  // and one above it, so the hull itself is lit rather than only the floor
-  pool.add({
-    position: [arena.px - 40, arena.py - 30, 260],
-    radius: 420,
+    position: at(-10, 0, 250),
+    radius: 460,
     colour: hurt ? [1, 0.4, 0.35] : [1, 0.93, 0.78],
-    intensity: 9,
+    intensity: 10,
   });
 
-  // the plume, behind the nose. A ship with momentum has to show which way
-  // it is pushing, or drifting sideways under thrust looks like a bug
-  if (arena.thrusting > 0) {
-    const back = arena.pAngle + Math.PI;
+  // Headlights. A point light throws in every direction, so these are placed
+  // out ahead of the cab rather than at it: what reads as a beam is the pool
+  // they lay on the floor in front, and the tiles picking it up edge by edge.
+  for (const side of [-1, 1]) {
     pool.add({
-      position: [arena.px + Math.cos(back) * 90, arena.py + Math.sin(back) * 90, 60],
-      radius: 400,
-      colour: [0.45, 0.72, 1],
-      intensity: 16 * arena.thrusting,
+      position: at(210, side * 46, 62),
+      radius: 720,
+      colour: hurt ? [1, 0.45, 0.4] : [1, 0.95, 0.82],
+      intensity: 13,
     });
+  }
+
+  // exhaust under the tailgate when the throttle is down, and brake lights
+  if (arena.thrusting > 0) {
+    pool.add({
+      position: at(-150, 0, 40),
+      radius: 320,
+      colour: [1, 0.62, 0.3],
+      intensity: 12 * arena.thrusting,
+    });
+  }
+  if (arena.braking > 0) {
+    for (const side of [-1, 1]) {
+      pool.add({
+        position: at(-140, side * 48, 58),
+        radius: 260,
+        colour: [1, 0.12, 0.07],
+        intensity: 11 * arena.braking,
+      });
+    }
   }
 
   // the muzzle: brief, bright, and the reason the floor flickers when firing
   if (arena.lastShot < 0.055) {
     const f = 1 - arena.lastShot / 0.055;
     pool.add({
-      position: [arena.px + Math.cos(arena.aim) * 60, arena.py + Math.sin(arena.aim) * 60, 55],
-      radius: 460,
-      colour: [0.75, 0.95, 1],
-      intensity: 34 * f * f,
+      position: [arena.muzzleX, arena.muzzleY, 104],
+      radius: 520,
+      colour: [1, 0.92, 0.72],
+      intensity: 38 * f * f,
     });
   }
 
@@ -163,18 +181,21 @@ export function effectsFor(out: Float32Array, arena: Arena, vp: Float32Array): n
     n = glow(out, n, vp, b.x, b.y, 60, (55 + grow * 190) * b.power, 1.1 * k, [1, 0.55, 0.18], 1.7);
     n = glow(out, n, vp, b.x, b.y, 60, (95 + grow * 300) * b.power, 0.32 * k, [1, 0.28, 0.1], 1.1);
   }
+  const cy = Math.cos(arena.pAngle); const sy = Math.sin(arena.pAngle);
+  const at = (lx: number, ly: number) => [arena.px + lx * cy - ly * sy, arena.py + lx * sy + ly * cy];
   if (arena.thrusting > 0) {
-    const back = arena.pAngle + Math.PI;
-    // two blobs, one tight and one trailing, so the plume has a direction
-    n = glow(out, n, vp, arena.px + Math.cos(back) * 78, arena.py + Math.sin(back) * 78, 58,
-      44 * arena.thrusting, 2.6 * arena.thrusting, [0.55, 0.8, 1], 2.6);
-    n = glow(out, n, vp, arena.px + Math.cos(back) * 128, arena.py + Math.sin(back) * 128, 58,
-      76 * arena.thrusting, 0.9 * arena.thrusting, [0.35, 0.6, 1], 1.2);
+    const [ex, ey] = at(-150, 0);
+    n = glow(out, n, vp, ex, ey, 42, 34 * arena.thrusting, 1.3 * arena.thrusting, [1, 0.6, 0.28], 2.2);
+  }
+  if (arena.braking > 0) {
+    for (const side of [-1, 1]) {
+      const [bx, by] = at(-140, side * 48);
+      n = glow(out, n, vp, bx, by, 58, 22, 1.6 * arena.braking, [1, 0.15, 0.08], 2.6);
+    }
   }
   if (arena.lastShot < 0.06) {
     const f = 1 - arena.lastShot / 0.06;
-    n = glow(out, n, vp, arena.px + Math.cos(arena.aim) * 58, arena.py + Math.sin(arena.aim) * 58, 55,
-      70 * f, 3 * f, [0.8, 0.97, 1], 2);
+    n = glow(out, n, vp, arena.muzzleX, arena.muzzleY, 104, 78 * f, 3.2 * f, [1, 0.93, 0.72], 2);
   }
   return n;
 }

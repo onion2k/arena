@@ -64,3 +64,26 @@ export function project(
   if (cw <= 1e-4) return null;
   return [cx / cw, cy / cw, cw, cz / cw];
 }
+
+/**
+ * A wheel: axle across a body pointing along `yaw`, spinning by `spin`.
+ *
+ * `placeTipped` cannot do this — it composes two rotations and a wheel needs
+ * three. The order is Rz(yaw) · Rx(90°) · Rz(spin): turn with the truck, lay
+ * the disc over so its axis runs across it, then roll it about that axis.
+ * The spin only shows because the disc has bolts on its face; a plain
+ * cylinder would be turning invisibly.
+ */
+export function placeAxle(
+  out: Float32Array, i: number,
+  x: number, y: number, z: number,
+  yaw: number, spin: number, scale = 1,
+) {
+  const o = i * 16;
+  const cy = Math.cos(yaw) * scale; const sy = Math.sin(yaw) * scale;
+  const cs = Math.cos(spin); const ss = Math.sin(spin);
+  out[o] = cy * cs; out[o + 1] = sy * cs; out[o + 2] = ss * scale; out[o + 3] = 0;
+  out[o + 4] = -cy * ss; out[o + 5] = -sy * ss; out[o + 6] = cs * scale; out[o + 7] = 0;
+  out[o + 8] = sy; out[o + 9] = -cy; out[o + 10] = 0; out[o + 11] = 0;
+  out[o + 12] = x; out[o + 13] = y; out[o + 14] = z; out[o + 15] = 1;
+}

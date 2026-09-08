@@ -17,6 +17,11 @@ export const MAX_BLASTS = 28;
  * is pointing, and it keeps going. Nothing here steers toward a cursor.
  */
 const TURN_RATE = 3.7;         // radians a second
+/** How fast the gun can be swung round. A turret slews; it does not snap. */
+const SLEW_RATE = 6.5;
+/** Where the gun sits along the truck, and how far the muzzle is past it. */
+export const TURRET_BACK = -52;
+export const BARREL_REACH = 150;
 const THRUST = 2150;           // mm a second squared
 /** Drag as a rate: velocity is multiplied by exp(-rate · dt) each step, so it
  *  is frame-rate independent in a way `v *= 0.98` is not. */
@@ -25,8 +30,13 @@ const BRAKE = 3.4;
 const MAX_SPEED = 1180;
 /** How much of its speed the ship keeps when it meets a wall or a post. */
 const BOUNCE = 0.45;
-/** How wide the ship is for the purpose of not being inside a post. */
-const SHIP_RADIUS = 74;
+/**
+ * How wide the truck is for the purpose of not being inside a post. It is
+ * 250 long and 128 across, so no one circle is right; this is between the
+ * two, which keeps a corner from visibly sinking into a post without making
+ * the gaps between them feel narrower than they look.
+ */
+const SHIP_RADIUS = 98;
 const BOLT_SPEED = 1950;
 const BOLT_LIFE = 1.5;
 const FIRE_EVERY = 0.085;
@@ -37,22 +47,27 @@ export interface Blast { x: number; y: number; age: number; life: number; power:
 
 /** What the player is asking for this step. */
 export interface Input {
-  /** -1 to 1: which way to turn, and how hard. */
+  /** -1 to 1: which way to steer, and how hard. */
   turn: number;
-  /** 0 to 1: thrust along where the nose points. */
+  /** 0 to 1: throttle, along where the truck is pointing. */
   thrust: number;
   /** 0 to 1: brake, which is drag rather than reverse. */
   brake: number;
+  /** Where on the floor the gun is being pointed. Null keeps it where it is. */
+  aimAt: [number, number] | null;
   firing: boolean;
 }
 
 export class Arena {
   // the player
-  px = 0; py = -220; pAngle = Math.PI / 2; pSpin = 0; aim = Math.PI / 2;
+  px = 0; py = -220; pAngle = Math.PI / 2; aim = Math.PI / 2;
+  /** How far the wheels have rolled, in radians. Only the bolts show it. */
+  wheelSpin = 0;
   /** Velocity. The ship carries it: nothing else in the arena does. */
   pvx = 0; pvy = 0;
-  /** How hard it is thrusting, for the plume to be drawn from. */
+  /** How hard the throttle and brake are down, for the lamps to be drawn from. */
   thrusting = 0;
+  braking = 0;
   /** Which way it was last asked to turn, for the hull to bank by. */
   lastTurn = 0;
   lives = 3; invuln = 0; score = 0; wave = 1;
@@ -82,8 +97,8 @@ export class Arena {
   private waveLeft = 26;
 
   step(dt: number, input: Input) {
-    this.flyShip(dt, input);
-    this.pSpin += dt * 1.9;
+    this.drive(dt, input);
+    this.slewGun(dt, input);
     if (this.invuln > 0) this.invuln -= dt;
 
     this.cooldown -= dt;
@@ -101,11 +116,12 @@ export class Arena {
     this.blasts = this.blasts.filter((b) => b.age < b.life);
   }
 
-  private flyShip(dt: number, input: Input) {
+  private drive(dt: number, input: Input) {
     // eased, so the bank the hull is drawn with does not snap on and off
     this.lastTurn += (input.turn - this.lastTurn) * Math.min(1, dt * 9);
     this.pAngle += input.turn * TURN_RATE * dt;
     this.thrusting = Math.max(0, Math.min(1, input.thrust));
+    this.braking = Math.max(0, Math.min(1, input.brake));
     if (this.thrusting > 0) {
       this.pvx += Math.cos(this.pAngle) * THRUST * this.thrusting * dt;
       this.pvy += Math.sin(this.pAngle) * THRUST * this.thrusting * dt;
@@ -150,22 +166,48 @@ export class Arena {
       }
     }
 
-    // a shot goes where the nose points, not where a cursor is
-    this.aim = this.pAngle;
+    // the wheels roll by however far the truck went along its own nose; a
+    // slide sideways does not turn them, which is what makes a skid look like
+    // a skid
+    const along = this.pvx * Math.cos(this.pAngle) + this.pvy * Math.sin(this.pAngle);
+    this.wheelSpin += (along * dt) / 31;
   }
+
+  /**
+   * The gun is not the truck. It swings toward where it is being pointed at
+   * its own rate, so shooting one way while driving another is the whole
+   * point of the thing.
+   */
+  private slewGun(dt: number, input: Input) {
+    if (!input.aimAt) return;
+    const want = Math.atan2(input.aimAt[1] - this.gunY, input.aimAt[0] - this.gunX);
+    // the short way round, so it never takes the long path through the back
+    let d = want - this.aim;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    const step = SLEW_RATE * dt;
+    this.aim += Math.abs(d) <= step ? d : Math.sign(d) * step;
+  }
+
+  /** Where the turret stands, in the world. */
+  get gunX(): number { return this.px + Math.cos(this.pAngle) * TURRET_BACK; }
+  get gunY(): number { return this.py + Math.sin(this.pAngle) * TURRET_BACK; }
+  /** Where the muzzle is: what the shots come out of and the flash sits on. */
+  get muzzleX(): number { return this.gunX + Math.cos(this.aim) * BARREL_REACH; }
+  get muzzleY(): number { return this.gunY + Math.sin(this.aim) * BARREL_REACH; }
 
   /** How fast it is going, for the panel and for the plume. */
   get speed(): number { return Math.hypot(this.pvx, this.pvy); }
 
   private fire() {
-    // a shot from either side of the hull, so the muzzle flash has width
+    // both barrels, a little apart, so the muzzle flash has width
     for (const side of [-1, 1]) {
       if (this.bolts >= MAX_BOLTS) return;
       const i = this.bolts++;
       const off = this.aim + Math.PI / 2;
       const spread = (Math.random() - 0.5) * 0.05;
-      this.bx[i] = this.px + Math.cos(off) * side * 26 + Math.cos(this.aim) * 40;
-      this.by[i] = this.py + Math.sin(off) * side * 26 + Math.sin(this.aim) * 40;
+      this.bx[i] = this.muzzleX + Math.cos(off) * side * 13;
+      this.by[i] = this.muzzleY + Math.sin(off) * side * 13;
       // the ship's own velocity carries into the shot, as it should when the
       // ship has momentum: firing backwards while running away is slower
       this.bvx[i] = Math.cos(this.aim + spread) * BOLT_SPEED + this.pvx;
@@ -262,7 +304,7 @@ export class Arena {
         this.ey[i] = cy + (dy / d) * reach;
       }
 
-      if (d < 62 && this.invuln <= 0) {
+      if (d < 82 && this.invuln <= 0) {
         this.blasts.push({ x: this.ex[i], y: this.ey[i], age: 0, life: 0.7, power: 1.6 });
         this.dropEnemy(i);
         this.lives -= 1;
@@ -310,6 +352,7 @@ export class Arena {
     this.waveLeft = 26; this.spawnIn = 1.0;
     this.px = 0; this.py = -220; this.invuln = 2;
     this.pvx = 0; this.pvy = 0; this.pAngle = Math.PI / 2; this.aim = this.pAngle;
+    this.wheelSpin = 0;
   }
 }
 
