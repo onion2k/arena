@@ -84,7 +84,13 @@ async function main() {
 
   renderer.setStatic([
     { mesh: mesh.floor, matrices: identity(), albedo: [0.055, 0.060, 0.078], roughness: 0.14 },
-    { mesh: mesh.tile, matrices: at.tiles, albedo: [0.135, 0.140, 0.160], roughness: 0.34 },
+    // Tarmac. Roughness is what darkens it, not the colour: albedo here is
+    // the Fresnel base, and at the grazing angles a camera following a car
+    // looks along a road at, Fresnel goes to one whatever that base is. So
+    // dropping the colour from 0.135 to 0.062 changed almost nothing, and
+    // taking the roughness from 0.34 to 0.85 — asphalt rather than wet
+    // asphalt — is what stopped the road out-shining the cars on it.
+    { mesh: mesh.tile, matrices: at.tiles, albedo: [0.058, 0.062, 0.072], roughness: 0.85 },
     { mesh: mesh.block, matrices: at.blocks, albedo: [0.58, 0.61, 0.68], roughness: 0.26 },
     { mesh: mesh.column, matrices: at.columns, albedo: [0.46, 0.38, 0.24], roughness: 0.30 },
     { mesh: mesh.gantry, matrices: gantryPosts(), count: 2, albedo: [0.62, 0.64, 0.70], roughness: 0.25 },
