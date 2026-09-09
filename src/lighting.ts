@@ -17,50 +17,55 @@
  */
 import { LightPool } from 'artshape-render/game/lights';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
-import { TURRET_BACK, type Arena } from './game';
+import type { Race } from './game';
 import { COLUMNS, COLUMN_HEIGHT, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT } from './scene';
+import { height } from './terrain';
 import { project } from './matrix';
 
 export const LIGHT_CAPACITY = 256;
 export const EFFECT_CAPACITY = 512;
 
 /**
- * The spots over the posts, one each, sweeping.
+ * The floodlights on the trackside posts: one each, aimed inward and down at
+ * the tarmac beside it.
  *
- * They are what makes the arena a place rather than a void: a slow turning
- * beam that catches a drone crossing it, and the only light that reaches
- * anywhere the player is not pointing. Each turns at its own rate and starts
- * at its own angle, so the pattern never repeats and there is no safe corner.
+ * They used to sweep, which was right when the game was about finding things
+ * in the dark and is wrong now. A driver needs to know what the corner does
+ * before entering it, and a light that will be pointing elsewhere by the time
+ * you arrive is worse than no light. So they are fixed, and between them they
+ * light the whole circuit — the arena beyond it stays dark, which is what
+ * makes the track read as a track.
  */
-function posts(pool: LightPool, t: number) {
+function floods(pool: LightPool) {
   for (let i = 0; i < COLUMNS.length; i++) {
     const [x, y, scale] = COLUMNS[i];
-    // a rate that is not a multiple of any other, and alternating direction
-    const rate = 0.17 + (i % 5) * 0.043;
-    const spin = i % 2 === 0 ? 1 : -1;
-    const az = t * rate * spin + i * 1.37;
-    // tilted well off vertical, so the pool it throws sweeps a wide ring
-    const tilt = 0.62;
+    // inward, toward the middle of the arena, which is where the track is
+    const r = Math.hypot(x, y) || 1;
+    const inx = -x / r; const iny = -y / r;
+    // The posts come in pairs, the inner edge first: an inner post has to
+    // look outward to light the track and an outer one inward. Getting this
+    // the wrong way round lights the empty arena and leaves the circuit dark,
+    // which is exactly what it did.
+    const side = i % 2 === 0 ? -1 : 1;
     const hue = (i / COLUMNS.length + 0.12) % 1;
     const c = hueToRgb(hue);
     pool.add({
-      position: [x, y, COLUMN_HEIGHT * scale - 24],
-      radius: 2400,
-      // barely tinted: a coloured beam is pretty and a white one shows you
-      // what colour the thing you have found is
-      colour: [0.55 + c[0] * 0.45, 0.55 + c[1] * 0.45, 0.6 + c[2] * 0.4],
-      intensity: 5.5,
-      direction: [Math.cos(az) * Math.sin(tilt), Math.sin(az) * Math.sin(tilt), -Math.cos(tilt)],
-      cone: [7, 17],
+      position: [x, y, height(x, y) + COLUMN_HEIGHT * scale - 24],
+      radius: 2000,
+      // barely tinted: a coloured circuit is pretty, a white one is legible
+      colour: [0.72 + c[0] * 0.28, 0.72 + c[1] * 0.28, 0.75 + c[2] * 0.25],
+      intensity: 9,
+      direction: [inx * side * 0.55, iny * side * 0.55, -0.83],
+      cone: [16, 34],
     });
   }
 }
 
-export function lightsFor(pool: LightPool, arena: Arena, t: number) {
+export function lightsFor(pool: LightPool, arena: Race) {
   pool.clear();
-  posts(pool, t);
+  floods(pool);
 
-  const hurt = arena.invuln > 0 && Math.sin(arena.invuln * 40) > 0;
+  const hurt = false;
   // The lamps are bolted to a body that pitches, rolls and leaves the ground,
   // so they are placed and aimed in its frame rather than on a plane at zero.
   // A headlight that stays level while the truck noses over a crest is a
@@ -85,24 +90,6 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
     bf[1] * lx + bl[1] * ly + bu[1] * lz,
     bf[2] * lx + bl[2] * ly + bu[2] * lz,
   ];
-
-  // The searchlight, on the gun. This is the player's eye: a long narrow beam
-  // that goes wherever the cannon is aimed, so looking and shooting are the
-  // same act and you cannot do one without committing to the other.
-  pool.add({
-    position: at(TURRET_BACK, 0, 150),
-    radius: 4200,
-    // cold, against the headlights' warm: the two are hard to tell apart by
-    // shape when they overlap and trivial to tell apart by colour
-    colour: [0.80, 0.90, 1],
-    intensity: 30,
-    // The turret keeps its bearing whatever the body does — a gun that
-    // swung with every bump would be unusable — but its elevation follows the
-    // nose, so cresting a rise throws the beam out and dropping into a
-    // hollow brings it in close.
-    direction: [Math.cos(arena.aim), Math.sin(arena.aim), -0.20 + bf[2]],
-    cone: [6, 16],
-  });
 
   // Headlights: shorter, wider, and pointed where the truck is going rather
   // than where it is looking. They are what stops you driving into a post
@@ -158,36 +145,6 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
     }
   }
 
-  // The muzzle, kept small. A light that reaches a metre and a half, going
-  // off twelve times a second, is a strobe over the whole hall rather than a
-  // flash at the end of a barrel.
-  if (arena.lastShot < 0.055) {
-    const f = 1 - arena.lastShot / 0.055;
-    pool.add({
-      position: [arena.muzzleX, arena.muzzleY, 104], radius: 620,
-      colour: [1, 0.92, 0.72], intensity: 4.5 * f * f,
-    });
-  }
-
-  // The tracers carry no light. They used to carry one each, and a dozen
-  // rounds a second crossing a dark hall meant every surface in it was being
-  // relit several times a second by things that were only passing through —
-  // which reads as a fault rather than as gunfire. They are still bright:
-  // what draws them is an additive glow, which lights nothing but itself.
-  //
-  // An explosion is the exception, and now the only one. It is the single
-  // moment the room is bright, so it is worth making it count.
-  for (const b of arena.blasts) {
-    const k = 1 - b.age / b.life;
-    pool.add({
-      position: [b.x, b.y, 60 + (1 - k) * 120],
-      radius: (900 + (1 - k) * 2200) * b.power,
-      colour: [1, 0.52 + k * 0.35, 0.16 + k * 0.2],
-      // squared in the power as well as in what is left, so a spark off a
-      // wall stays a spark while a kill lights the bay it happened in
-      intensity: 46 * k * k * b.power * b.power,
-    });
-  }
 }
 
 /** One glow: where on screen, how big, how bright, what colour, how hard-edged. */
@@ -220,46 +177,31 @@ export function setProjectionScale(fovDegrees: number) {
   PROJECTION_SCALE = 1 / Math.tan((fovDegrees * Math.PI) / 360);
 }
 
-export function effectsFor(out: Float32Array, arena: Arena, vp: Float32Array): number {
+/**
+ * The glows over the top: the lamps on the truck, its exhaust under power and
+ * its brake lights when it is stopping. The tracers and the explosions went
+ * with the gun.
+ */
+export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): number {
   let n = 0;
-  for (let i = 0; i < arena.bolts; i++) {
-    n = glow(out, n, vp, arena.bx[i], arena.by[i], 44, 20, 2.2, [0.4, 0.95, 1], 3.2);
-  }
-  // Four layers to an explosion: a white core that is gone in a tenth of a
-  // second, the body of it, a slower orange bloom, and a wide red halo that
-  // opens out well past the rest. The core is what makes it read as a bang
-  // rather than as a light being turned on.
-  for (const b of arena.blasts) {
-    const k = 1 - b.age / b.life;
-    const grow = (1 - k) * b.power;
-    const flash = Math.max(0, 1 - b.age / (b.life * 0.22));
-    n = glow(out, n, vp, b.x, b.y, 60, (34 + grow * 40) * b.power, 7 * flash * flash, [1, 1, 0.95], 4);
-    n = glow(out, n, vp, b.x, b.y, 60, (44 + grow * 150) * b.power, 3.4 * k * k, [1, 0.93, 0.72], 2.6);
-    n = glow(out, n, vp, b.x, b.y, 60, (80 + grow * 330) * b.power, 1.3 * k, [1, 0.52, 0.16], 1.6);
-    n = glow(out, n, vp, b.x, b.y, 60, (130 + grow * 520) * b.power, 0.34 * k * k, [1, 0.24, 0.08], 1.0);
-  }
   const t = arena.truck;
-  const cy = Math.cos(t.yaw), sy = Math.sin(t.yaw);
+  const cy = Math.cos(t.yaw); const sy = Math.sin(t.yaw);
   const at = (lx: number, ly: number) => [t.x + lx * cy - ly * sy, t.y + lx * sy + ly * cy];
   if (arena.thrusting > 0) {
     const [ex, ey] = at(-150, 0);
-    n = glow(out, n, vp, ex, ey, 42, 34 * arena.thrusting, 1.3 * arena.thrusting, [1, 0.6, 0.28], 2.2);
+    n = glow(out, n, vp, ex, ey, t.z - 10, 34 * arena.thrusting, 1.3 * arena.thrusting, [1, 0.6, 0.28], 2.2);
   }
   if (arena.braking > 0) {
     for (const side of [-1, 1]) {
       const [bx, by] = at(-140, side * 48);
-      n = glow(out, n, vp, bx, by, 58, 22, 1.6 * arena.braking, [1, 0.15, 0.08], 2.6);
+      n = glow(out, n, vp, bx, by, t.z + 6, 22, 1.6 * arena.braking, [1, 0.15, 0.08], 2.6);
     }
   }
   // the lamps themselves, so they are two bright points on the truck rather
   // than two dark discs with light appearing in front of them
   for (const side of [-1, 1]) {
     const [lx, ly] = at(LAMP_AHEAD + 6, side * LAMP_ACROSS);
-    n = glow(out, n, vp, lx, ly, LAMP_HEIGHT, 24, 2.2, [1, 0.9, 0.7], 2.8);
-  }
-  if (arena.lastShot < 0.06) {
-    const f = 1 - arena.lastShot / 0.06;
-    n = glow(out, n, vp, arena.muzzleX, arena.muzzleY, 104, 78 * f, 3.2 * f, [1, 0.93, 0.72], 2);
+    n = glow(out, n, vp, lx, ly, t.z + LAMP_HEIGHT - 52, 24, 2.2, [1, 0.9, 0.7], 2.8);
   }
   return n;
 }

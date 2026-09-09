@@ -13,6 +13,7 @@
  */
 import { compile } from 'artshape-render/dsl';
 import { placeOnSlope } from './matrix';
+import { posts as trackPosts, tarmac } from './track';
 import { groupByMesh } from 'artshape-render/assembly/groups';
 import type { Mesh } from 'artshape-render/mesh/types';
 import { groundMesh, height, normal } from './terrain';
@@ -97,8 +98,8 @@ export const MESHES = {
    * runs 400mm past the walls so that its own edge is never the edge you see.
    */
   floor: () => groundMesh(ARENA_X + 400, ARENA_Y + 400, 50),
-  /** A raised tile. A hundred of them give the moving lights edges to catch. */
-  tile: () => part('plate(card(width: 200, height: 200, corner: 18), thickness: 7, bevel: 4)', 'base'),
+  /** A slab of tarmac. Three abreast make the track, laid along it. */
+  tile: () => part('plate(card(width: 224, height: 220, corner: 14), thickness: 7, bevel: 4)', 'base'),
   /** A perimeter block, laid along the wall it belongs to. */
   block: () => part('plate(card(width: 218, height: 74, corner: 12), thickness: 132, bevel: 12)', 'base'),
   /** An eight-sided column, for the corners to reflect things in. */
@@ -126,69 +127,27 @@ export const MESHES = {
    */
   lamp: () => part('disc(radius: 17, thickness: 14, sides: 14, bevel: 4)'),
 
-  /**
-   * An enemy: a spiked star, lying flat and spinning. A round bead read as a
-   * traffic cone from a camera this high up — the silhouette is all the
-   * player sees of it, so the silhouette is where the shape has to be.
-   */
-  drone: () => part('plate(sunburst(radius: 38, rays: 7, inner: 0.42, tip: 0.22), thickness: 20, bevel: 6)'),
-  /** A shot. Long axis is Z, so it is tipped over to point where it is going. */
-  bolt: () => part('egg(radius: 7, height: 38, taper: 0.7, segments: 12)'),
 };
 
-/**
- * The columns, which are the only things in the arena you cannot fly through.
- * Eight rather than the four the small arena had: the corners, a pair either
- * side of the middle, and one at each end. An arena this size with an empty
- * middle is a field, not an arena — there has to be something to break the
- * line of a charge and something for a passing shot to light up.
- *
- * The game reads these for collision and the scene places posts on them, so
- * what you see and what you hit cannot drift apart.
- */
-export const COLUMN_RADIUS = 58;
 /** How tall an unscaled post is, so a spotlight can sit on top of one. */
 export const COLUMN_HEIGHT = 250;
 
 /**
- * The posts: a five-by-five grid with only the very middle left out, so
- * twenty-four of them, the outer ring half again as tall as the inner.
+ * The posts, which line the circuit rather than standing on a grid.
  *
- * The grid is the point. A dozen posts scattered at random read as clutter;
- * twenty-four in rows read as a hall, and rows of a thing whose size you
- * know running away from you is the strongest sense of scale available for
- * twenty-four instances of one draw. The heights differ by ring so the far
- * ones are not simply the near ones smaller, which is the cue that tells the
- * eye it is looking at distance rather than at a smaller object.
- *
- * The gaps are 900mm between centres, better than 700 clear: wide enough to
- * drive a 250mm truck through at speed, tight enough that a shot across the
- * arena usually meets one.
+ * They are far enough outside the tarmac that the truck can run a little wide
+ * without hitting one — 260mm past the edge, against a truck 98 wide and a
+ * post up to 78 — so they are the price of a mistake and not the edge of the
+ * road. Alternating heights, because a row of identical posts running away
+ * from you is the strongest sense of distance there is.
  */
-const POST_GRID = [-1800, -900, 0, 900, 1800];
-export const COLUMNS: [number, number, number][] = [];
-for (const x of POST_GRID) {
-  for (const y of POST_GRID) {
-    if (x === 0 && y === 0) continue;   // the middle stays open
-    const outer = Math.abs(x) === 1800 || Math.abs(y) === 1800;
-    COLUMNS.push([x, y, outer ? 1.5 : 0.95]);
-  }
-}
+export const COLUMN_RADIUS = 58;
+export const COLUMNS: [number, number, number][] = trackPosts(640);
 
-/** Where the static half stands. Built once; the game never touches these. */
 /** How far a post or a wall block is sunk, so no slope opens a gap under it. */
 const SINK = 48;
 
 export function arenaMatrices(): { tiles: Float32Array; blocks: Float32Array; columns: Float32Array } {
-  const tiles: number[] = [];
-  const step = 218;
-  const across = Math.floor((ARENA_X * 2 - 220) / step);
-  const up = Math.floor((ARENA_Y * 2 - 220) / step);
-  for (let j = 0; j < up; j++) {
-    for (let i = 0; i < across; i++) {
-      tiles.push((i - (across - 1) / 2) * step, (j - (up - 1) / 2) * step, 0);
-    }
-  }
   const blocks: number[] = [];
   for (let x = -ARENA_X + 115; x <= ARENA_X - 115; x += 232) {
     blocks.push(x, -ARENA_Y, 0, x, ARENA_Y, 0);
@@ -199,11 +158,12 @@ export function arenaMatrices(): { tiles: Float32Array; blocks: Float32Array; co
   const columns: number[] = [];
   const columnScales: number[] = [];
   for (const [x, y, scale] of COLUMNS) { columns.push(x, y, 0); columnScales.push(scale); }
-  // Tiles lie on the ground and tip with it, like slabs laid over a hill.
-  // Posts and walls stay upright and are sunk instead: a leaning post reads
-  // as a mistake where a leaning paving slab reads as ground.
+
+  // The tarmac lies on the ground and tips with it, like slabs laid over a
+  // hill. Posts and walls stay upright and are sunk instead: a leaning post
+  // reads as a mistake where a leaning paving slab reads as ground.
   return {
-    tiles: layOnGround(tiles),
+    tiles: layOnGround(tarmac(3, 232)),
     blocks: pack(blocks, undefined, true),
     columns: pack(columns, columnScales, true),
   };
