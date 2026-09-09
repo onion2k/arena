@@ -582,10 +582,13 @@ function buildMinimap(race: Race) {
     const c = document.createElementNS(NS, 'circle');
     const [r, g, b] = car.colour;
     const hex = (v: number) => Math.round(Math.min(1, v) * 255).toString(16).padStart(2, '0');
-    c.setAttribute('r', i === 0 ? '260' : '210');
+    // The player's is half again as big and outlined, so which dot is yours
+    // is never a question. At 168 pixels across a map ten metres wide, 260
+    // world units is four pixels — big enough to see and not big enough to
+    // pick out at a glance while driving.
+    c.setAttribute('r', i === 0 ? '430' : '230');
     c.setAttribute('fill', `#${hex(r)}${hex(g)}${hex(b)}`);
-    // the player gets an outline, so which dot is yours never has to be worked out
-    if (i === 0) { c.setAttribute('stroke', '#ffffff'); c.setAttribute('stroke-width', '90'); }
+    if (i === 0) { c.setAttribute('stroke', '#ffffff'); c.setAttribute('stroke-width', '150'); }
     mapSvg.appendChild(c);
     return c;
   });
