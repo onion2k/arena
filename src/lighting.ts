@@ -63,7 +63,10 @@ function floods(pool: LightPool) {
       radius: 2900,
       // barely tinted: a coloured circuit is pretty, a white one is legible
       colour: [0.72 + c[0] * 0.28, 0.72 + c[1] * 0.28, 0.75 + c[2] * 0.25],
-      intensity: 8.5,
+      // Turned down from 8.5. The trade is against lighting the whole width
+      // of the road, which is what the wide cones are for: too far down and
+      // the far edge goes back to being a guess.
+      intensity: 5.8,
       direction: [inx * side * 0.60, iny * side * 0.60, -0.80],
       cone: [30, 58],
     });
