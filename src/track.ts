@@ -267,3 +267,71 @@ export function trackMesh(across: number, step: number, lift = 7): Mesh {
   }
   return { positions, normals, uvs, indices };
 }
+
+/**
+ * The kerbs: short blocks laid end to end down both edges of the tarmac,
+ * alternating between two colours, which is what this returns two of.
+ *
+ * The tarmac and the ground either side of it are both dark, and a change of
+ * shade at a grazing angle in the dark is not an edge you can drive to. Every
+ * real circuit answers this the same way, and so does this one: a banded
+ * strip that catches the floodlights is legible from far enough away to plan
+ * a corner, and legible at the moment two wheels are on it.
+ *
+ * `parity` picks alternate runs of blocks, so drawing both meshes in
+ * different colours gives the stripe. They are separate meshes rather than
+ * one mesh with a colour per vertex because material here belongs to a draw.
+ */
+export function kerbMesh(parity: 0 | 1, step = 90, lift = 30): Mesh {
+  const rings: number[] = [];
+  let theta = -Math.PI;
+  while (theta < Math.PI) {
+    rings.push(theta);
+    theta += step / Math.max(radiusAt(theta), 200);
+  }
+  const n = rings.length;
+  // two sides, two vertices across each: inner lip on the tarmac, outer lip
+  // just past it
+  const perRing = 4;
+  const positions = new Float32Array(n * perRing * 3);
+  const normals = new Float32Array(n * perRing * 3);
+  const uvs = new Float32Array(n * perRing * 2);
+  const edges = [-KERB_OUTER, -1, 1, KERB_OUTER];
+
+  for (let j = 0; j < n; j++) {
+    const t = rings[j];
+    const r = radiusAt(t);
+    const perRadial = 1 / radialToAcross(t);
+    for (let i = 0; i < perRing; i++) {
+      const d = edges[i] * TRACK_HALF * perRadial;
+      const x = Math.cos(t) * (r + d);
+      const y = Math.sin(t) * (r + d);
+      const o = (j * perRing + i) * 3;
+      positions[o] = x; positions[o + 1] = y; positions[o + 2] = height(x, y) + lift;
+      const gn = groundNormal(x, y);
+      normals[o] = gn[0]; normals[o + 1] = gn[1]; normals[o + 2] = gn[2];
+      uvs[(j * perRing + i) * 2] = i / (perRing - 1);
+      uvs[(j * perRing + i) * 2 + 1] = j / n;
+    }
+  }
+
+  // A block is BLOCK_RINGS segments long, and every other block is ours. The
+  // loop closes on an even number of blocks or the stripe would meet itself,
+  // so the count is rounded rather than taken as it falls.
+  const blocks = Math.max(2, Math.round(n / BLOCK_RINGS / 2) * 2);
+  const idx: number[] = [];
+  for (let j = 0; j < n; j++) {
+    if (Math.floor((j / n) * blocks) % 2 !== parity) continue;
+    const j2 = (j + 1) % n;
+    for (const i of [0, 2]) {
+      const a = j * perRing + i, b = a + 1, c = j2 * perRing + i, d = c + 1;
+      idx.push(a, b, c, c, b, d);
+    }
+  }
+  return { positions, normals, uvs, indices: new Uint32Array(idx) };
+}
+
+/** How far past the tarmac's edge a kerb reaches, as a fraction of the half width. */
+const KERB_OUTER = 1.17;
+/** How many ribbon steps make one block of kerb. */
+const BLOCK_RINGS = 2;

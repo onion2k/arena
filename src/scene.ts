@@ -12,7 +12,7 @@
  * again: the game writes those every frame.
  */
 import { compile } from 'artshape-render/dsl';
-import { posts as trackPosts, trackMesh } from './track';
+import { kerbMesh, posts as trackPosts, trackMesh } from './track';
 import { groupByMesh } from 'artshape-render/assembly/groups';
 import type { Mesh } from 'artshape-render/mesh/types';
 import { groundMesh, height } from './terrain';
@@ -99,6 +99,14 @@ export const MESHES = {
   floor: () => groundMesh(ARENA_X + 400, ARENA_Y + 400, 85),
   /** The tarmac: one ribbon following the centreline, not a run of slabs. */
   tile: () => trackMesh(6, 90, 22),
+  /**
+   * The kerbs, in two halves so the blocks can alternate colour. They sit
+   * 8mm above the tarmac: enough to catch a light from the side, not enough
+   * for a wheel to trip over — nothing collides with them, and a kerb that
+   * looked like a step you could not cross would be a lie.
+   */
+  kerbA: () => kerbMesh(0, 90, 30),
+  kerbB: () => kerbMesh(1, 90, 30),
   /** A perimeter block, laid along the wall it belongs to. */
   block: () => part('plate(card(width: 218, height: 74, corner: 12), thickness: 132, bevel: 12)', 'base'),
   /** An eight-sided column, for the corners to reflect things in. */

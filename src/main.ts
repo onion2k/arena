@@ -51,7 +51,11 @@ async function main() {
     // it lays a sheet of highlight across the floor and there is no dark for
     // a beam to cut. What is left is enough to keep the posts from being
     // flat black cutouts.
-    sunColour: [0.05, 0.05, 0.07],
+    // Cold. It is the only thing lighting the ground away from the circuit,
+    // and the floods are warm, so making it moonlight rather than grey is
+    // what puts the arena at night instead of in an unlit room: the track is
+    // a warm ribbon through cold ground, and the two read apart at a glance.
+    sunColour: [0.040, 0.052, 0.092],
     exposure: 1.05,
     // Half brightness at 900mm rather than the library's 50. The arena is
     // 4800 across; at fifty a light was a coin of brightness under whatever
@@ -67,7 +71,7 @@ async function main() {
     ambient: 0.035,
     // the environment lights the metal but is never drawn, so this is the
     // whole sky: near black, to leave the point lights all the contrast
-    background: [0.004, 0.004, 0.007],
+    background: [0.006, 0.011, 0.026],
   };
 
   bootMsg.textContent = 'generating the arena…';
@@ -79,13 +83,19 @@ async function main() {
 
   const mesh = {
     floor: MESHES.floor(), tile: MESHES.tile(), block: MESHES.block(), column: MESHES.column(),
+    kerbA: MESHES.kerbA(), kerbB: MESHES.kerbB(),
     chassis: MESHES.chassis(), cab: MESHES.cab(), wheel: MESHES.wheel(),
     lamp: MESHES.lamp(), gantry: MESHES.gantry(),
   };
   const at = arenaMatrices();
 
   renderer.setStatic([
-    { mesh: mesh.floor, matrices: identity(), albedo: [0.055, 0.060, 0.078], roughness: 0.14 },
+    // The ground. It was glossier than the tarmac at 0.14, which meant every
+    // ridge on it answered the trackside floods with a specular streak and
+    // the arena read as corrugated iron — the bumps you could see were mostly
+    // highlights rather than shape. Rough and cold now: it takes the light
+    // and does not throw it back, so what you see of the ground is its form.
+    { mesh: mesh.floor, matrices: identity(), albedo: [0.042, 0.048, 0.066], roughness: 0.62 },
     // Tarmac. Roughness is what darkens it, not the colour: albedo here is
     // the Fresnel base, and at the grazing angles a camera following a car
     // looks along a road at, Fresnel goes to one whatever that base is. So
@@ -93,6 +103,11 @@ async function main() {
     // taking the roughness from 0.34 to 0.85 — asphalt rather than wet
     // asphalt — is what stopped the road out-shining the cars on it.
     { mesh: mesh.tile, matrices: at.tiles, albedo: [0.058, 0.062, 0.072], roughness: 0.85 },
+    // The kerbs: red and off-white blocks, matte enough to read as paint at
+    // any angle. They are the only saturated colour in the arena, and they
+    // are on the one thing the driver has to see.
+    { mesh: mesh.kerbA, matrices: at.tiles, albedo: [0.62, 0.075, 0.055], roughness: 0.55 },
+    { mesh: mesh.kerbB, matrices: at.tiles, albedo: [0.80, 0.80, 0.82], roughness: 0.55 },
     { mesh: mesh.block, matrices: at.blocks, albedo: [0.58, 0.61, 0.68], roughness: 0.26 },
     { mesh: mesh.column, matrices: at.columns, albedo: [0.46, 0.38, 0.24], roughness: 0.30 },
     { mesh: mesh.gantry, matrices: gantryPosts(), count: 2, albedo: [0.62, 0.64, 0.70], roughness: 0.25 },

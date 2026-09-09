@@ -182,6 +182,32 @@ mesh, the tarmac, the posts and the walls all read. Nothing approximates
 anything else, so the truck can never be seen floating over a hill or sunk
 into one.
 
+Each wave is a plain sine except the ramps, which are multiplied by a much
+longer wave — an envelope — so that they appear in bands with rolling ground
+between them rather than covering the floor. That envelope is cubed. A plain
+sine one is above half for half of its cycle, which meant a ramp that was
+exciting at its crest was a washboard everywhere else and the arena read as
+corrugated iron: the median slope of the whole floor was 14 degrees, and it
+was the ramps setting it. Cubed, it has fallen to an eighth of its height by
+the midpoint of the cycle, and the median is 5 degrees with the 95th
+percentile still 24 — a smooth floor with steep ramps in it.
+
+Narrowing the bands moved them, though, and the one the circuit used to cross
+came off it: the speed needed to leave the ground anywhere on the racing line
+went from 1559 mm/s to 2373, which against a top speed of 2800 is no jump at
+all. The envelope's length and phase were swept for a band that lands back
+under the road without the floor going rough again. It needs 1443 mm/s now,
+over about 5% of the lap, and a run over the crest at 2400 lifts all four
+wheels for five frames and 48mm of daylight.
+
+The kerbs are blocks laid down both edges of the tarmac, red and off-white
+alternately, which is two meshes rather than one because material here belongs
+to a draw. The tarmac and the ground either side of it are both dark, and a
+change of shade at a grazing angle in the dark is not an edge you can drive
+to; a banded strip that catches the floodlights is legible far enough ahead to
+plan a corner. They stand 8mm proud of the road and nothing collides with
+them.
+
 The ramps in it are sized against the truck rather than for the look. A wheel
 leaves a crest when v²·κ exceeds gravity, but the climb is paid for out of the
 same speed, so for each wavelength there is a best height and a lowest
@@ -193,13 +219,23 @@ a hill is being shaken by a washboard.
 
 ## The light
 
-Twenty-eight floodlights on the trackside posts light the circuit and nothing
+Eighty-four floodlights on the trackside posts light the circuit and nothing
 else, which is what makes the track read as a track: the environment
 contributes 0.035 of what it would and the sun is nearly off. They used to
 sweep, which was right when the game was about finding things in the dark and
 is wrong now — a driver needs to know what a corner does before entering it,
 and a light that will be pointing elsewhere by the time you arrive is worse
 than no light.
+
+The head of every post is drawn as a glow as well. A post is lit by its own
+flood from directly above and so is barely lit at all: the outer row stood as
+black poles against a black arena, which is clutter rather than scenery, and a
+line of lamps running away round a corner is the strongest thing in the scene
+for showing where the track goes before you get there. They are glows and not
+lights — nothing is being lit, only seen — which is a screen-space quad each
+against a light's whole shading loop. The kerbs and the eighty-four post heads
+together cost 0.16ms of a 2.65ms frame at 1080p, measured fenced, median of
+five.
 
 The truck carries two headlamps that wash the road ahead, an exhaust glow
 under power and brake lights, all bolted to a body that pitches and rolls, so

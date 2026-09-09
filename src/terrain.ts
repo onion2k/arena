@@ -25,9 +25,11 @@
  * earned it. Every other wave needs three or four times that speed and so is
  * ground you ride rather than leave.
  *
- * Measured over the whole floor at 10mm: the median slope is 14 degrees, the
- * 95th percentile 23, the steepest 28. Shallow enough to drive anywhere,
- * steep enough that the arena is not a table.
+ * Measured over the whole floor at 25mm: the median slope is 5 degrees, the
+ * 95th percentile 24, the steepest 33 — a smooth floor with steep ramps in
+ * it, rather than the uniformly corrugated 14-degree median it had when the
+ * ramp wave's envelope was a plain sine. The circuit crosses a ramp band over
+ * about 3% of its length, and needs 1595 mm/s to leave the ground there.
  */
 
 import type { Mesh } from 'artshape-render/mesh/types';
@@ -38,6 +40,14 @@ import type { Mesh } from 'artshape-render/mesh/types';
  * covers the whole floor into ramps that appear in bands, with rolling ground
  * between them. Without it the sharpest component sets the slope everywhere
  * and the median gradient of the arena is the gradient of its steepest ramp.
+ *
+ * `sharp` raises that envelope to a power, which is what separates a ramp
+ * from a ripple. A plain sine envelope is above half for half of its cycle,
+ * so a ramp that is exciting at its crest is a washboard everywhere else and
+ * the whole floor reads as corrugated. Cubed, it is above half for less than
+ * a third of the cycle and has fallen to an eighth by the time it reaches the
+ * midpoint: the ramps are as tall as they ever were and the ground between
+ * them is ground.
  */
 
 interface Wave {
@@ -45,7 +55,7 @@ interface Wave {
   len: number;
   angle: number;
   phase: number;
-  env?: { len: number; angle: number; phase: number };
+  env?: { len: number; angle: number; phase: number; sharp?: number };
 }
 
 const WAVES: Wave[] = [
@@ -58,13 +68,21 @@ const WAVES: Wave[] = [
   { amp: 11, len: 2100, angle: 0.95, phase: 2.1 },
   { amp: 9, len: 1600, angle: 1.98, phase: 3.4 },
   // and the ramps, which are the jumps and are meant to be obvious
-  { amp: 58, len: 650, angle: 0.18, phase: 1.9, env: { len: 7000, angle: 1.75, phase: 0.4 } },
+  // The envelope is longer and moved along because sharpening it narrowed the
+  // bands, and the band the circuit used to cross moved off it: the speed
+  // needed to leave the ground anywhere on the racing line went from 1559 to
+  // 2373 mm/s, which against a top speed of 2800 is no jump at all. Swept
+  // over length, phase and amplitude for a band that lands back under the
+  // road without the floor going rough again — 1443 mm/s now, over 4.8% of
+  // the lap, with the median slope of the arena unchanged at 5 degrees.
+  { amp: 58, len: 650, angle: 0.18, phase: 1.9, env: { len: 9600, angle: 1.75, phase: 2.5, sharp: 3 } },
 ];
 /** How much a wave's envelope is letting through at a point, 0 to 1. */
 function envelopeAt(w: Wave, x: number, y: number): number {
   if (!w.env) return 1;
   const k = (Math.PI * 2) / w.env.len;
-  return 0.5 + 0.5 * Math.sin((x * Math.cos(w.env.angle) + y * Math.sin(w.env.angle)) * k + w.env.phase);
+  const e = 0.5 + 0.5 * Math.sin((x * Math.cos(w.env.angle) + y * Math.sin(w.env.angle)) * k + w.env.phase);
+  return w.env.sharp ? Math.pow(e, w.env.sharp) : e;
 }
 
 /** How high the ground is under a point. */
@@ -98,7 +116,12 @@ export function normal(x: number, y: number): [number, number, number] {
     if (w.env) {
       const ke = (Math.PI * 2) / w.env.len;
       const cb = Math.cos(w.env.angle); const sb = Math.sin(w.env.angle);
-      const de = 0.5 * ke * Math.cos((x * cb + y * sb) * ke + w.env.phase);
+      const arg = (x * cb + y * sb) * ke + w.env.phase;
+      const base = 0.5 + 0.5 * Math.sin(arg);
+      let de = 0.5 * ke * Math.cos(arg);
+      // the chain rule through the sharpening power, without which the edge
+      // of every band is a step the wheels can feel
+      if (w.env.sharp) de *= w.env.sharp * Math.pow(base, w.env.sharp - 1);
       dx += w.amp * wave * de * cb; dy += w.amp * wave * de * sb;
     }
   }

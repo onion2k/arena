@@ -269,6 +269,23 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
       n = glow(out, n, vp, bx, by, t.z + 6, 22, 1.6 * arena.braking, [1, 0.15, 0.08], 2.6);
     }
   }
+  /*
+   * The head of every trackside post, as a point of light.
+   *
+   * A post is lit by its own flood from directly above and so is barely lit
+   * at all: the outer row in particular stood as black poles against a black
+   * arena, which is clutter rather than scenery. A lamp you can see is what
+   * makes the post a lamp post, and a line of them running away round a
+   * corner is the strongest thing in this scene for showing where the track
+   * goes before you get there. They are glows and not lights: nothing is
+   * being lit here, only seen, and a glow costs a screen-space quad against
+   * a light's whole shading loop.
+   */
+  for (const [px, py, scale] of COLUMNS) {
+    n = glow(out, n, vp, px, py, height(px, py) + COLUMN_HEIGHT * scale - 24,
+      52, 0.85, [1, 0.93, 0.78], 2.0);
+  }
+
   // the starting bulbs, so a lit one is a hot point rather than a red disc
   const g = gantry();
   for (const [px, py] of g.posts) {
