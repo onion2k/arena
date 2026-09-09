@@ -174,3 +174,36 @@ export function placeVehicleWheel(
   }
   out[o + 12] = x; out[o + 13] = y; out[o + 14] = z; out[o + 15] = 1;
 }
+
+/**
+ * A disc-shaped part on the body with its face looking along the nose — a
+ * headlamp rather than a wheel.
+ *
+ * The two are easy to confuse because both are discs bolted to the truck, and
+ * `placeVehicleWheel` will happily place either. It puts the disc's axis
+ * across the body, which is right for something that rolls and wrong for
+ * something that shines: the lamps were mounted sideways, looking out of the
+ * flanks of the truck.
+ *
+ * The disc is modelled about its own z, so this is the body's rotation with a
+ * quarter turn about its left axis composed on: the part's z becomes the
+ * body's forward, its y stays the body's left, and its x becomes the body's
+ * down, which keeps the frame right-handed.
+ */
+export function placeVehicleFacing(
+  out: Float32Array, i: number,
+  x: number, y: number, z: number,
+  yaw: number, pitch: number, roll: number,
+  scale = 1,
+) {
+  const body = new Float32Array(16);
+  placeVehiclePart(body, 0, 0, 0, 0, yaw, pitch, roll);
+  const o = i * 16;
+  for (let r = 0; r < 3; r++) {
+    out[o + r] = -body[8 + r] * scale;        // the part's x is the body's down
+    out[o + 4 + r] = body[4 + r] * scale;     // its y is the body's left
+    out[o + 8 + r] = body[r] * scale;         // its z is the body's forward
+  }
+  out[o + 3] = 0; out[o + 7] = 0; out[o + 11] = 0;
+  out[o + 12] = x; out[o + 13] = y; out[o + 14] = z; out[o + 15] = 1;
+}

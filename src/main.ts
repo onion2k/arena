@@ -18,7 +18,7 @@ import { WHEELS } from './vehicle';
 import { TRACK_HALF } from './track';
 import { height as groundAt } from './terrain';
 import { ARENA_X, ARENA_Y, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices } from './scene';
-import { placeVehiclePart, placeVehicleWheel, project } from './matrix';
+import { placeVehicleFacing, placeVehiclePart, placeVehicleWheel, project } from './matrix';
 import { EFFECT_CAPACITY, LIGHT_CAPACITY, effectsFor, lightsFor, setProjectionScale } from './lighting';
 
 const FOV = 40;
@@ -327,7 +327,9 @@ async function main() {
     let lamp = 0;
     for (const ly of [-LAMP_ACROSS, LAMP_ACROSS]) {
       const at = on(LAMP_AHEAD, ly, LAMP_HEIGHT - 52);
-      placeVehicleWheel(lampM, lamp++, at[0], at[1], at[2], yaw, pitch, roll, 0, 0);
+      // facing, not wheeled: a lamp looks along the nose where a wheel turns
+      // about an axle across it
+      placeVehicleFacing(lampM, lamp++, at[0], at[1], at[2], yaw, pitch, roll);
     }
     renderer.move(LAMPS, lampM, 2);
 
