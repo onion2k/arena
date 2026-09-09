@@ -57,23 +57,57 @@ const REST = 28;
 const TRAVEL = 26;
 /**
  * Spring rate, as body acceleration per millimetre of compression per wheel.
- * Four wheels at 13mm of squash hold the truck up against gravity:
- * 4 · 190 · 13 = 9880, which is where it sits at rest.
+ * Four wheels at 8mm of squash hold the truck up against gravity:
+ * 4 · 305 · 8 = 9760, which is where it sits at rest.
+ *
+ * It was 190, which is 13mm of sag out of 26mm of travel — half the
+ * suspension used up standing still. A body floating on springs that soft is
+ * most of what "light" means in a vehicle you are driving rather than
+ * weighing: it pitches at every input and takes a while to stop.
  */
-const SPRING = 190;
-const DAMPER = 16;
+const SPRING = 305;
+/** A quarter over critical for the heave mode, which is a firm truck. */
+const DAMPER = 22;
+/**
+ * The anti-roll bars, as load moved across an axle per millimetre of
+ * difference between its two wheels.
+ *
+ * The most effective single thing for making a car feel planted rather than
+ * floaty, and the only one here that a real chassis engineer would also reach
+ * for first. It takes the roll out without taking the suspension travel out,
+ * so the truck still follows the ground.
+ */
+const ANTI_ROLL = 120;
 
 /** Grip, as a multiple of the load a tyre is carrying. */
-const MU = 1.55;
-/** How quickly a tyre tries to kill sideways slip, if it has the grip to. */
-const LATERAL_TAU = 0.09;
+const MU = 2.15;
+/**
+ * How quickly a tyre tries to kill sideways slip, if it has the grip to.
+ * Shorter is a tyre that bites rather than one that takes a moment to decide.
+ */
+const LATERAL_TAU = 0.055;
 const BRAKE_TAU = 0.11;
+/**
+ * The most the brakes can pull, as body acceleration, whatever grip is
+ * available.
+ *
+ * Without it the brakes are limited only by the tyres, and with this much
+ * grip that meant stopping from full speed in sixty millimetres — a fifth of
+ * a truck length, in a tenth of a second. Not a brake, a wall, and it took
+ * braking out of the game entirely: there was no corner you had to slow for
+ * and no line you had to think about.
+ *
+ * A real car's brakes can lock its wheels, so this is a lie. It is the lie
+ * that makes the arithmetic of a lap interesting, and a truck that stops like
+ * a truck is also most of what "heavy" means to drive.
+ */
+const BRAKE_MAX = 3600;
 /** Below this much forward speed, the brake becomes reverse. */
 const REVERSE_BELOW = 60;
 /** How much of the engine reverse gets. Enough to get out of trouble, not to race. */
 const REVERSE_POWER = 0.45;
 const ROLL_RESIST = 0.06;
-const ENGINE = 6900;             // total drive acceleration at full throttle
+const ENGINE = 5800;             // total drive acceleration at full throttle
 /**
  * Aerodynamic drag, and what actually sets the top speed: the engine and this
  * balance at about 2400 mm/s. That is well over the 2015 the ramps need, and
@@ -85,19 +119,34 @@ const ENGINE = 6900;             // total drive acceleration at full throttle
 const AERO = 1.1e-3;
 export const MAX_SPEED = 2800;
 
-/** Steering lock at a standstill, and how sharply it is wound off with speed. */
-const STEER_LOCK = 0.52;
-const STEER_FALLOFF = 430;
-const STEER_RATE = 4.2;
+/**
+ * Steering lock at a standstill, and how sharply it is wound off with speed.
+ *
+ * A larger falloff means less wound off. At 430 the lock at 1500 mm/s was
+ * 0.116 radians, which on a 166mm wheelbase is a 1426mm circle — wider than
+ * the tightest corner on the circuit, so the corner could not be taken at
+ * speed however much grip the tyres had. At 850 the same speed keeps 0.23
+ * radians and a 710mm circle.
+ */
+const STEER_LOCK = 0.62;
+const STEER_FALLOFF = 850;
+const STEER_RATE = 4.6;
 
 /**
  * Mass-normalised inertia about each body axis, for a box 250 long, 128 wide
  * and 90 tall: (a² + b²)/12 over the two axes that are not the one turned
  * about. Roll is the small one, which is why a truck leans before it pitches.
+ *
+ * The gyration factor is because a vehicle is not a uniform box — its mass is
+ * at the corners, in the wheels and the engine and the load bed, not spread
+ * evenly through the middle. A real one is a quarter to a half above the box
+ * figure, and the difference is most of what tells you whether you are
+ * driving something heavy: how long it takes to agree to change direction.
  */
-const I_ROLL = (128 * 128 + 90 * 90) / 12;
-const I_PITCH = (250 * 250 + 90 * 90) / 12;
-const I_YAW = (250 * 250 + 128 * 128) / 12;
+const GYRATION = 1.3;
+const I_ROLL = ((128 * 128 + 90 * 90) / 12) * GYRATION;
+const I_PITCH = ((250 * 250 + 90 * 90) / 12) * GYRATION;
+const I_YAW = ((250 * 250 + 128 * 128) / 12) * GYRATION;
 
 /**
  * How much of the pitching couple from driving and braking is taken by the
@@ -213,6 +262,26 @@ export class Vehicle {
     let ax = 0; let ay = 0; let az = -G;
     let tRoll = 0; let tPitch = 0; let tYaw = 0;
 
+    // Where the ground is under each wheel, before any force is worked out:
+    // an anti-roll bar needs both wheels of an axle at once, so compression
+    // has to be known for all four before any load is.
+    for (let i = 0; i < WHEELS.length; i++) {
+      const w = this.wheels[i];
+      const [lx, ly, lz] = WHEELS[i];
+      const mz = this.z + fz * lx + rz * ly + uz * lz;
+      const mx = this.x + fx * lx + rx * ly + ux * lz;
+      const my = this.y + fy * lx + ry * ly + uy * lz;
+      w.compression = clamp(REST + WHEEL_RADIUS - (mz - height(mx, my)), 0, TRAVEL);
+      w.onGround = w.compression > 0;
+      w.drop = REST - w.compression;
+      w.steer = i < 2 ? this.steer : 0;
+    }
+    // load moved across each axle, toward whichever side is squashed more
+    const bar = [
+      ANTI_ROLL * (this.wheels[0].compression - this.wheels[1].compression),
+      ANTI_ROLL * (this.wheels[2].compression - this.wheels[3].compression),
+    ];
+
     for (let i = 0; i < WHEELS.length; i++) {
       const w = this.wheels[i];
       const [lx, ly, lz] = WHEELS[i];
@@ -220,16 +289,6 @@ export class Vehicle {
       const mx = this.x + fx * lx + rx * ly + ux * lz;
       const my = this.y + fy * lx + ry * ly + uy * lz;
       const mz = this.z + fz * lx + rz * ly + uz * lz;
-
-      // The ray. It goes straight down and the ground is a height field, so
-      // where it lands is simply the height under it — no marching, no mesh.
-      const gz = height(mx, my);
-      const reach = REST + WHEEL_RADIUS;
-      const gap = mz - gz;
-      w.compression = clamp(reach - gap, 0, TRAVEL);
-      w.onGround = w.compression > 0;
-      w.drop = REST - w.compression;
-      w.steer = i < 2 ? this.steer : 0;
 
       if (!w.onGround) { w.slide = 0; w.load = 0; continue; }
 
@@ -247,7 +306,11 @@ export class Vehicle {
 
       // spring and damper, along the ground's normal
       const closing = -(pvx * nx + pvy * ny + pvz * nz);
-      const load = Math.max(0, SPRING * w.compression + DAMPER * closing);
+      // The ray found the ground in the pass above; this is what the spring
+      // and the damper make of it, plus whatever the anti-roll bar is moving
+      // across this axle.
+      const roll = (i % 2 === 0 ? 1 : -1) * bar[i < 2 ? 0 : 1];
+      const load = Math.max(0, SPRING * w.compression + DAMPER * closing + roll);
       w.load = load;
 
       // the tyre's own axes, laid flat on the ground it is touching
@@ -276,9 +339,10 @@ export class Vehicle {
         // a post is wedged there for good. It was: a driver left running for
         // two minutes spent ninety seconds of it stationary against a post
         // with the throttle wide open.
-        if (vFwd > REVERSE_BELOW) wantFwd += (-vFwd / BRAKE_TAU) * this.braking;
+        const stop = clamp(-vFwd / BRAKE_TAU, -BRAKE_MAX / 4, BRAKE_MAX / 4) * this.braking;
+        if (vFwd > REVERSE_BELOW) wantFwd += stop;
         else if (i >= 2) wantFwd -= (this.braking * ENGINE * REVERSE_POWER) / 2;
-        else wantFwd += (-vFwd / BRAKE_TAU) * this.braking;
+        else wantFwd += stop;
       }
 
       // the friction circle: a tyre has one budget and both jobs spend it
@@ -332,7 +396,7 @@ export class Vehicle {
     const air = this.airborne;
     this.wRoll = (this.wRoll + tRoll * dt) * Math.exp(-(air ? AIR_SPIN_DAMP : 2.6) * dt);
     this.wPitch = (this.wPitch + tPitch * dt) * Math.exp(-(air ? AIR_SPIN_DAMP : 2.6) * dt);
-    this.wYaw = (this.wYaw + tYaw * dt) * Math.exp(-0.6 * dt);
+    this.wYaw = (this.wYaw + tYaw * dt) * Math.exp(-1.4 * dt);
 
     this.yaw += this.wYaw * dt;
     this.pitch = clamp(this.pitch + this.wPitch * dt, -TILT_LIMIT, TILT_LIMIT);
@@ -354,7 +418,7 @@ export class Vehicle {
     this.wYaw = this.wPitch = this.wRoll = 0;
     this.steer = 0; this.throttle = 0; this.braking = 0;
     for (const w of this.wheels) {
-      w.compression = 13; w.onGround = true; w.drop = REST - 13; w.slide = 0; w.load = G / 4;
+      w.compression = 8; w.onGround = true; w.drop = REST - 8; w.slide = 0; w.load = G / 4;
     }
   }
 }

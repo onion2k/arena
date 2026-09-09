@@ -51,8 +51,31 @@ A wheel with no ground under it makes no force at all, so a jump is not a
 special case: the springs run out of travel, the wheels stop pushing, and
 gravity is all that is left.
 
-It is too light and too slidy, and its turning circle is too wide. Those are
-known and not yet addressed.
+It was too light, too slidy and too wide in a corner. What fixed each:
+
+- **Light** was the springs. It sagged 13mm of its 26mm of travel standing
+  still — half the suspension used up doing nothing — so the body floated and
+  pitched at every input. At 305 it sags 8mm and a 60mm drop settles in 0.2s.
+  Anti-roll bars took the lean out without taking the travel out, and the
+  inertias carry a gyration factor, because a vehicle is not a uniform box:
+  its mass is at the corners, and how long something takes to agree to change
+  direction is most of what tells you it is heavy.
+- **Slidy** was the tyres taking 90ms to decide, and not a shortage of grip.
+  At 55ms they bite. Grip went up too, which mattered less than it sounds.
+- **The turning circle** was the steering lock winding off too hard with
+  speed. At 1500 mm/s it was leaving 0.116 radians, a 1426mm circle — wider
+  than the tightest corner on the track, so that corner could not be taken at
+  speed however much grip there was. It now keeps 0.23 radians and turns
+  inside 800mm.
+
+The brakes are deliberately weaker than the tyres. Grip alone stopped it from
+full speed in sixty millimetres — a fifth of a truck length, in a tenth of a
+second — which is not a brake but a wall, and it took braking out of the game
+entirely: no corner had to be slowed for. Capped, it stops in 1.6 truck
+lengths, and where to brake is a question again.
+
+Together those took a lap from 8.65 seconds to 5.60, and the line-follower
+that drives it from wandering 295mm off the centreline to 56.
 
 ## The circuit
 
