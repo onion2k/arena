@@ -102,6 +102,30 @@ export function lightsFor(pool: LightPool, arena: Race) {
   floods(pool);
   starter(pool, arena);
 
+  // The field's headlamps. They carry nothing else — no pool under them, no
+  // exhaust, no brake light — because four cars with the player's full set
+  // would be two dozen lights on top of eighty-odd floodlights, and the ones
+  // you are behind are the only ones you can see anyway.
+  for (let i = 1; i < arena.cars.length; i++) {
+    const o = arena.cars[i].vehicle;
+    const ocy = Math.cos(o.yaw), osy = Math.sin(o.yaw);
+    for (const side of [-1, 1]) {
+      const toe = o.yaw + side * 0.07;
+      pool.add({
+        position: [
+          o.x + LAMP_AHEAD * ocy - side * LAMP_ACROSS * osy,
+          o.y + LAMP_AHEAD * osy + side * LAMP_ACROSS * ocy,
+          o.z + LAMP_HEIGHT - 52,
+        ],
+        radius: 2400,
+        colour: [1, 0.87, 0.62],
+        intensity: 16,
+        direction: [Math.cos(toe), Math.sin(toe), -0.20],
+        cone: [10, 25],
+      });
+    }
+  }
+
   const hurt = false;
   // The lamps are bolted to a body that pitches, rolls and leaves the ground,
   // so they are placed and aimed in its frame rather than on a plane at zero.
@@ -251,11 +275,20 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
     }
   }
 
-  // the lamps themselves, so they are two bright points on the truck rather
-  // than two dark discs with light appearing in front of them
-  for (const side of [-1, 1]) {
-    const [lx, ly] = at(LAMP_AHEAD + 6, side * LAMP_ACROSS);
-    n = glow(out, n, vp, lx, ly, t.z + LAMP_HEIGHT - 52, 24, 2.2, [1, 0.9, 0.7], 2.8);
+  // every car's lamps and brake lights, so they are bright points rather than
+  // dark discs with light appearing in front of them
+  for (const car of arena.cars) {
+    const v = car.vehicle;
+    const vcy = Math.cos(v.yaw), vsy = Math.sin(v.yaw);
+    const put = (lx: number, ly: number) => [v.x + lx * vcy - ly * vsy, v.y + lx * vsy + ly * vcy];
+    for (const side of [-1, 1]) {
+      const [lx, ly] = put(LAMP_AHEAD + 6, side * LAMP_ACROSS);
+      n = glow(out, n, vp, lx, ly, v.z + LAMP_HEIGHT - 52, 24, 2.2, [1, 0.9, 0.7], 2.8);
+      if (v.braking > 0) {
+        const [bx2, by2] = put(-140, side * 48);
+        n = glow(out, n, vp, bx2, by2, v.z + 6, 22, 1.6 * v.braking, [1, 0.15, 0.08], 2.6);
+      }
+    }
   }
   return n;
 }

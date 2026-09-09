@@ -2,8 +2,8 @@
 
 A night circuit, on the game path of
 [artshape-render](https://github.com/onion2k/artshape-render): drive a truck
-round a lit track over rolling ground, and try to take a second off your best
-lap.
+round a lit track over rolling ground against three others, and try to take a
+second off your best lap.
 
 It was an arena shooter until the driving turned out to be the more
 interesting half. The drones, the gun and the score are gone; the vehicle they
@@ -29,6 +29,30 @@ Needs a browser with WebGPU.
 | drag | swing the camera round |
 | wheel | in, or out until the whole circuit is in frame |
 | **C** | put the camera back |
+
+## The field
+
+Four cars, the player's and three driven by the same line-follower that has
+been testing the track since it existed. It reads the centreline the lap
+counter reads — offset by its own preferred line, looking further up the road
+the faster it goes, lifting and braking for whatever it cannot steer round.
+No racing line solved in advance, no lap of practice, no memory of the corner
+it is in.
+
+A precomputed ideal line with a speed for every corner is what a serious
+racing game does and would drive better than this. It would also be a second
+description of the track, needing redone every time the circuit changed.
+
+Two things it needs beyond following: a pull back toward the middle when it is
+off the road, because a driver that runs wide and keeps its preferred offset
+points further off it and ends the race beached on the inside; and a reverse,
+because a car cannot steer without moving and is pushed straight back out of
+whatever it hits, so without one a single bad corner ends its race where it
+happened.
+
+Cars are pushed apart and their closing speed exchanged. Not a real impulse —
+no spin, no mass, nothing conserved — but enough that a car cannot be driven
+through, and that being leaned on in a corner costs you the corner.
 
 ## The truck
 

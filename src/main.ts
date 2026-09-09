@@ -13,7 +13,7 @@ import { Orbit } from 'artshape-render/gpu/camera';
 import { bakeEnvironment } from 'artshape-render/render/env';
 import { GameRenderer, EFFECT_STRIDE, type GameGroup } from 'artshape-render/game/renderer';
 import { LightPool } from 'artshape-render/game/lights';
-import { Race, type Input } from './game';
+import { FIELD, Race, type Input } from './game';
 import { WHEELS } from './vehicle';
 import { START_BULBS, TRACK_HALF, gantry } from './track';
 import { height as groundAt } from './terrain';
@@ -92,22 +92,23 @@ async function main() {
 
   // The pools. Their size is fixed here and never changes again: what moves
   // each frame is the live count, and the matrices written into the prefix.
-  const chassisM = new Float32Array(16);
-  const cabM = new Float32Array(16);
-  const wheelM = new Float32Array(4 * 16);
-  const lampM = new Float32Array(2 * 16);
+  const chassisM = new Float32Array(FIELD * 16);
+  const chassisMat = new Float32Array(FIELD * 4);
+  const cabM = new Float32Array(FIELD * 16);
+  const wheelM = new Float32Array(FIELD * 4 * 16);
+  const lampM = new Float32Array(FIELD * 2 * 16);
   const startMat = new Float32Array(2 * START_BULBS * 4);
   const dynamic: GameGroup[] = [
     // not a mirror: a polished metal under a near-black sky has nothing to
     // reflect and reads as a dark shape. A little roughness gives the point
     // lights a highlight wide enough to see the colour in.
-    { mesh: mesh.chassis, matrices: chassisM, albedo: [1.0, 0.79, 0.36], roughness: 0.24 },
-    { mesh: mesh.cab, matrices: cabM, albedo: [0.86, 0.90, 0.97], roughness: 0.12 },
-    // tyres: dark and rough, the one thing in the arena that is not a mirror
-    { mesh: mesh.wheel, matrices: wheelM, count: 4, albedo: [0.07, 0.07, 0.08], roughness: 0.62 },
+    { mesh: mesh.chassis, matrices: chassisM, count: FIELD, albedo: [1.0, 0.79, 0.36], roughness: 0.24 },
+    { mesh: mesh.cab, matrices: cabM, count: FIELD, albedo: [0.86, 0.90, 0.97], roughness: 0.12 },
+    // tyres: dark and rough, the one thing out here that is not a mirror
+    { mesh: mesh.wheel, matrices: wheelM, count: FIELD * 4, albedo: [0.07, 0.07, 0.08], roughness: 0.62 },
     // near white and glossy, so the lamps read as lit glass rather than as
     // two more lumps of the same metal the truck is made of
-    { mesh: mesh.lamp, matrices: lampM, count: 2, albedo: [1.0, 0.97, 0.9], roughness: 0.06 },
+    { mesh: mesh.lamp, matrices: lampM, count: FIELD * 2, albedo: [1.0, 0.97, 0.9], roughness: 0.06 },
     // the starting bulbs, which never move and are recoloured every frame
     { mesh: mesh.lamp, matrices: startBulbs(), count: 2 * START_BULBS, albedo: [0.2, 0.04, 0.03], roughness: 0.12 },
   ];
@@ -296,41 +297,52 @@ async function main() {
    * an empty arena lit by a full set of lights.
    */
   const upload = (): number => {
-    // The truck, from the body the physics is carrying. Nothing here decides
-    // where anything is: the chassis takes the body's three angles, each
-    // wheel takes its own suspension travel and steer and roll, and the lamps
-    // and the turret ride the same frame. A wheel drawn anywhere but where
-    // the ray found the ground is a wheel you can see floating.
-    const truck = arena.truck;
-    const yaw = truck.yaw, pitch = truck.pitch, roll = truck.roll;
-    const cy = Math.cos(yaw); const sy = Math.sin(yaw);
-    const cp = Math.cos(pitch); const sp = Math.sin(pitch);
-    const cr = Math.cos(roll); const sr = Math.sin(roll);
-    // the body's three axes, as the vehicle builds them
-    const bf: [number, number, number] = [cy * cp, sy * cp, -sp];
-    const bl: [number, number, number] = [cy * sp * sr - sy * cr, sy * sp * sr + cy * cr, cp * sr];
-    const bu: [number, number, number] = [cy * sp * cr + sy * sr, sy * sp * cr - cy * sr, cp * cr];
-    /** A point in the truck's own frame, in the world. */
-    const on = (lx: number, ly: number, lz: number): [number, number, number] => [
-      truck.x + bf[0] * lx + bl[0] * ly + bu[0] * lz,
-      truck.y + bf[1] * lx + bl[1] * ly + bu[1] * lz,
-      truck.z + bf[2] * lx + bl[2] * ly + bu[2] * lz,
-    ];
+    // Every car in the field, from the body its own physics is carrying.
+    // Nothing here decides where anything is: the chassis takes the body's
+    // three angles, each wheel takes its own suspension travel and steer and
+    // roll, and the lamps ride the same frame. A wheel drawn anywhere but
+    // where the ray found the ground is a wheel you can see floating.
+    arena.cars.forEach((car, ci) => {
+      const truck = car.vehicle;
+      const yaw = truck.yaw, pitch = truck.pitch, roll = truck.roll;
+      const cy = Math.cos(yaw); const sy = Math.sin(yaw);
+      const cp = Math.cos(pitch); const sp = Math.sin(pitch);
+      const cr = Math.cos(roll); const sr = Math.sin(roll);
+      const bf: [number, number, number] = [cy * cp, sy * cp, -sp];
+      const bl: [number, number, number] = [cy * sp * sr - sy * cr, sy * sp * sr + cy * cr, cp * sr];
+      const bu: [number, number, number] = [cy * sp * cr + sy * sr, sy * sp * cr - cy * sr, cp * cr];
+      const on = (lx: number, ly: number, lz: number): [number, number, number] => [
+        truck.x + bf[0] * lx + bl[0] * ly + bu[0] * lz,
+        truck.y + bf[1] * lx + bl[1] * ly + bu[1] * lz,
+        truck.z + bf[2] * lx + bl[2] * ly + bu[2] * lz,
+      ];
 
-    const chassis = on(0, 0, 0);
-    placeVehiclePart(chassisM, 0, chassis[0], chassis[1], chassis[2], yaw, pitch, roll);
-    renderer.move(CHASSIS, chassisM, 1);
-    const cab = on(62, 0, 40);
-    placeVehiclePart(cabM, 0, cab[0], cab[1], cab[2], yaw, pitch, roll);
-    renderer.move(CAB, cabM, 1);
+      const chassis = on(0, 0, 0);
+      placeVehiclePart(chassisM, ci, chassis[0], chassis[1], chassis[2], yaw, pitch, roll);
+      chassisMat.set([...car.colour, 0.24], ci * 4);
+      const cab = on(62, 0, 40);
+      placeVehiclePart(cabM, ci, cab[0], cab[1], cab[2], yaw, pitch, roll);
 
-    for (let i = 0; i < WHEELS.length; i++) {
-      const [lx, ly, lz] = WHEELS[i];
-      const w = truck.wheels[i];
-      const hub = on(lx, ly, lz - w.drop);
-      placeVehicleWheel(wheelM, i, hub[0], hub[1], hub[2], yaw, pitch, roll, w.steer, w.spin);
-    }
-    renderer.move(WHEELS_GROUP, wheelM, 4);
+      for (let i = 0; i < WHEELS.length; i++) {
+        const [lx, ly, lz] = WHEELS[i];
+        const w = truck.wheels[i];
+        const hub = on(lx, ly, lz - w.drop);
+        placeVehicleWheel(wheelM, ci * 4 + i, hub[0], hub[1], hub[2], yaw, pitch, roll, w.steer, w.spin);
+      }
+
+      let lamp = 0;
+      for (const ly of [-LAMP_ACROSS, LAMP_ACROSS]) {
+        const at = on(LAMP_AHEAD, ly, LAMP_HEIGHT - 52);
+        // facing, not wheeled: a lamp looks along the nose where a wheel
+        // turns about an axle across it
+        placeVehicleFacing(lampM, ci * 2 + lamp++, at[0], at[1], at[2], yaw, pitch, roll);
+      }
+    });
+    renderer.move(CHASSIS, chassisM, FIELD);
+    renderer.tint(CHASSIS, chassisMat);
+    renderer.move(CAB, cabM, FIELD);
+    renderer.move(WHEELS_GROUP, wheelM, FIELD * 4);
+    renderer.move(LAMPS, lampM, FIELD * 2);
 
     // the starting lights: dark until lit, then a hot red, all out on the go
     for (let i = 0; i < 2 * START_BULBS; i++) {
@@ -342,15 +354,6 @@ async function main() {
       startMat[o + 3] = on ? 0.10 : 0.35;
     }
     renderer.tint(START_LAMPS, startMat);
-
-    let lamp = 0;
-    for (const ly of [-LAMP_ACROSS, LAMP_ACROSS]) {
-      const at = on(LAMP_AHEAD, ly, LAMP_HEIGHT - 52);
-      // facing, not wheeled: a lamp looks along the nose where a wheel turns
-      // about an axle across it
-      placeVehicleFacing(lampM, lamp++, at[0], at[1], at[2], yaw, pitch, roll);
-    }
-    renderer.move(LAMPS, lampM, 2);
 
     lightsFor(lights, arena);
     renderer.setLights(lights);
@@ -390,7 +393,8 @@ async function main() {
       statsIn = 0.2;
       scorePanel.innerHTML =
         `<b>${arena.running ? clock(arena.lapTime) : Math.ceil(arena.countdown) + '…'}</b>`
-        + `lap <span>${arena.laps + 1}</span>`
+        + `P<span>${arena.position}</span> of ${FIELD}`
+        + ` · lap <span>${arena.laps + 1}</span>`
         + ` · best <span>${arena.bestLap === null ? '—:——.—' : clock(arena.bestLap)}</span>`
         + ` · last <span>${arena.lastLap === null ? '—:——.—' : clock(arena.lastLap)}</span>`;
       statsPanel.innerHTML =
