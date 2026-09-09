@@ -87,6 +87,12 @@ the same angle, so **how far round the lap you are is `atan2(y, x)`, exactly,
 for nothing.** No search along the curve, no accumulating error, and a start
 line that cannot be crossed sideways.
 
+A gantry beside the line holds you for three seconds: a bulb lights each
+second, all three go out, and the clock starts. Nothing is timed before that —
+a lap measured from whenever the page happened to finish loading is not a lap
+time. The truck is held on its handbrake rather than frozen, so it settles on
+its springs where it stands instead of being dropped there at the go.
+
 A lap counts when that progress wraps forward past zero, and only if you have
 been round the far side since the last one — so rocking back and forth over
 the line counts nothing, and reversing over it un-arms the next lap rather

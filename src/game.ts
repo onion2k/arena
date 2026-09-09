@@ -11,6 +11,11 @@ import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS } from './scene';
 import { Vehicle } from './vehicle';
 import { radiusAt, tangentAt, where } from './track';
 
+/** How long the lights hold you before the lap starts. */
+export const COUNTDOWN = 3;
+/** How many bulbs the gantry carries. */
+export const START_BULBS = 3;
+
 /** How much of its speed the truck keeps when it meets a wall or a post. */
 const BOUNCE = 0.45;
 /**
@@ -50,8 +55,23 @@ export class Race {
   /** The last lap and the best one, in seconds. Null until there has been one. */
   lastLap: number | null = null;
   bestLap: number | null = null;
-  /** True once the truck has moved and the clock is running. */
+  /** True once the lights have gone out and the clock is running. */
   running = false;
+  /**
+   * Seconds left on the lights. The truck is held on the line while this is
+   * above zero, and the clock does not start until it reaches it — a lap
+   * timed from the moment the page happened to finish loading is not a lap
+   * time.
+   */
+  countdown = COUNTDOWN;
+  /** Seconds since the lights went out, for the flash to fade on. */
+  sinceStart = 0;
+
+  /** How many bulbs are lit: one more each second, then all out on the go. */
+  get bulbsLit(): number {
+    if (this.countdown <= 0) return 0;
+    return Math.min(START_BULBS, 1 + Math.floor(COUNTDOWN - this.countdown));
+  }
   /** How far round the lap it is, 0 to 1, and how far off the middle. */
   progress = 0;
   offset = 0;
@@ -67,6 +87,17 @@ export class Race {
   constructor() { this.reset(); }
 
   step(dt: number, input: Input) {
+    if (this.countdown > 0) {
+      // Held on the line: the wheels are still driven by the same code, with
+      // the brake on and no throttle, so the truck settles on its springs
+      // where it stands rather than being frozen and dropped at the go.
+      this.countdown -= dt;
+      this.truck.step(dt, { steer: input.turn, throttle: 0, brake: 0, hold: true });
+      this.keepInside();
+      if (this.countdown <= 0) { this.countdown = 0; this.running = true; this.lapTime = 0; }
+      return;
+    }
+    this.sinceStart += dt;
     this.truck.step(dt, { steer: input.turn, throttle: input.throttle, brake: input.brake });
     this.keepInside();
     this.timeLap(dt);
@@ -77,12 +108,6 @@ export class Race {
     this.progress = w.lap;
     this.offset = w.offset;
 
-    if (!this.running) {
-      // the clock starts when the truck does, not when the page loads
-      if (this.truck.speed > 30) { this.running = true; this.lapTime = 0; }
-      this.lastProgress = w.lap;
-      return;
-    }
     this.lapTime += dt;
 
     if (w.lap > 0.35 && w.lap < 0.65) this.wentHalfway = true;
@@ -151,6 +176,7 @@ export class Race {
     this.laps = 0; this.lapTime = 0;
     this.lastLap = null; this.bestLap = null;
     this.running = false; this.wentHalfway = false;
+    this.countdown = COUNTDOWN; this.sinceStart = 0;
     this.lastProgress = where(sx, sy).lap;
   }
 }

@@ -13,17 +13,17 @@ import { Orbit } from 'artshape-render/gpu/camera';
 import { bakeEnvironment } from 'artshape-render/render/env';
 import { GameRenderer, EFFECT_STRIDE, type GameGroup } from 'artshape-render/game/renderer';
 import { LightPool } from 'artshape-render/game/lights';
-import { Race, type Input } from './game';
+import { Race, START_BULBS, type Input } from './game';
 import { WHEELS } from './vehicle';
-import { TRACK_HALF } from './track';
+import { TRACK_HALF, gantry } from './track';
 import { height as groundAt } from './terrain';
 import { ARENA_X, ARENA_Y, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices } from './scene';
-import { placeVehicleFacing, placeVehiclePart, placeVehicleWheel, project } from './matrix';
+import { placeOnSlope, placeVehicleFacing, placeVehiclePart, placeVehicleWheel, project } from './matrix';
 import { EFFECT_CAPACITY, LIGHT_CAPACITY, effectsFor, lightsFor, setProjectionScale } from './lighting';
 
 const FOV = 40;
 /** Where the dynamic groups sit, in the order they are handed over. */
-const CHASSIS = 0, CAB = 1, WHEELS_GROUP = 2, LAMPS = 3;
+const CHASSIS = 0, CAB = 1, WHEELS_GROUP = 2, LAMPS = 3, START_LAMPS = 4;
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
@@ -78,7 +78,7 @@ async function main() {
   const mesh = {
     floor: MESHES.floor(), tile: MESHES.tile(), block: MESHES.block(), column: MESHES.column(),
     chassis: MESHES.chassis(), cab: MESHES.cab(), wheel: MESHES.wheel(),
-    lamp: MESHES.lamp(),
+    lamp: MESHES.lamp(), gantry: MESHES.gantry(),
   };
   const at = arenaMatrices();
 
@@ -87,6 +87,7 @@ async function main() {
     { mesh: mesh.tile, matrices: at.tiles, albedo: [0.105, 0.115, 0.145], roughness: 0.24 },
     { mesh: mesh.block, matrices: at.blocks, albedo: [0.58, 0.61, 0.68], roughness: 0.26 },
     { mesh: mesh.column, matrices: at.columns, albedo: [0.76, 0.60, 0.34], roughness: 0.18 },
+    { mesh: mesh.gantry, matrices: gantryPost(), albedo: [0.62, 0.64, 0.70], roughness: 0.25 },
   ]);
 
   // The pools. Their size is fixed here and never changes again: what moves
@@ -95,6 +96,7 @@ async function main() {
   const cabM = new Float32Array(16);
   const wheelM = new Float32Array(4 * 16);
   const lampM = new Float32Array(2 * 16);
+  const startMat = new Float32Array(START_BULBS * 4);
   const dynamic: GameGroup[] = [
     // not a mirror: a polished metal under a near-black sky has nothing to
     // reflect and reads as a dark shape. A little roughness gives the point
@@ -106,6 +108,8 @@ async function main() {
     // near white and glossy, so the lamps read as lit glass rather than as
     // two more lumps of the same metal the truck is made of
     { mesh: mesh.lamp, matrices: lampM, count: 2, albedo: [1.0, 0.97, 0.9], roughness: 0.06 },
+    // the starting bulbs, which never move and are recoloured every frame
+    { mesh: mesh.lamp, matrices: startBulbs(), count: START_BULBS, albedo: [0.2, 0.04, 0.03], roughness: 0.12 },
   ];
   renderer.setDynamic(dynamic);
 
@@ -324,6 +328,17 @@ async function main() {
     }
     renderer.move(WHEELS_GROUP, wheelM, 4);
 
+    // the starting lights: dark until lit, then a hot red, all out on the go
+    for (let i = 0; i < START_BULBS; i++) {
+      const on = i < arena.bulbsLit;
+      const o = i * 4;
+      startMat[o] = on ? 1.0 : 0.20;
+      startMat[o + 1] = on ? 0.10 : 0.035;
+      startMat[o + 2] = on ? 0.07 : 0.030;
+      startMat[o + 3] = on ? 0.10 : 0.35;
+    }
+    renderer.tint(START_LAMPS, startMat);
+
     let lamp = 0;
     for (const ly of [-LAMP_ACROSS, LAMP_ACROSS]) {
       const at = on(LAMP_AHEAD, ly, LAMP_HEIGHT - 52);
@@ -370,7 +385,7 @@ async function main() {
     if (statsIn <= 0) {
       statsIn = 0.2;
       scorePanel.innerHTML =
-        `<b>${clock(arena.running ? arena.lapTime : 0)}</b>`
+        `<b>${arena.running ? clock(arena.lapTime) : Math.ceil(arena.countdown) + '…'}</b>`
         + `lap <span>${arena.laps + 1}</span>`
         + ` · best <span>${arena.bestLap === null ? '—:——.—' : clock(arena.bestLap)}</span>`
         + ` · last <span>${arena.lastLap === null ? '—:——.—' : clock(arena.lastLap)}</span>`;
@@ -464,6 +479,27 @@ const START_ZOOM = 0.46;
 const CAMERA_HEIGHT = 55;
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
+
+/** Where the gantry post stands, and where its bulbs hang on it. */
+function gantryPost(): Float32Array {
+  const g = gantry();
+  const out = new Float32Array(16);
+  placeOnSlope(out, 0, g.post[0], g.post[1], groundAt(g.post[0], g.post[1]) - 20, g.facing, [0, 0, 1]);
+  return out;
+}
+
+function startBulbs(): Float32Array {
+  const g = gantry();
+  const out = new Float32Array(START_BULBS * 16);
+  const base = groundAt(g.post[0], g.post[1]);
+  g.bulbs.forEach((b, i) => {
+    // on the face of the post, looking back down the track at the driver
+    placeVehicleFacing(out, i,
+      g.post[0] + Math.cos(g.facing) * 30, g.post[1] + Math.sin(g.facing) * 30, base + b[2],
+      g.facing, 0, 0);
+  });
+  return out;
+}
 
 /** Minutes, seconds and tenths, which is how a lap time is read. */
 function clock(seconds: number): string {

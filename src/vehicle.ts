@@ -174,6 +174,14 @@ export interface Drive {
   steer: number;
   throttle: number;
   brake: number;
+  /**
+   * Stand still, whatever the ground is doing. A handbrake and not the brake
+   * pedal: the pedal turns into reverse once the truck has stopped, which is
+   * what gets it out from against a post and is exactly wrong for holding it
+   * on the line — held that way it reversed away from the start at over a
+   * metre a second.
+   */
+  hold?: boolean;
 }
 
 export interface Wheel {
@@ -240,8 +248,8 @@ export class Vehicle {
   private substep(dt: number, drive: Drive) {
     const wanted = clamp(drive.steer, -1, 1) * (STEER_LOCK / (1 + this.speed / STEER_FALLOFF));
     this.steer += clamp(wanted - this.steer, -STEER_RATE * dt, STEER_RATE * dt);
-    this.throttle = clamp(drive.throttle, 0, 1);
-    this.braking = clamp(drive.brake, 0, 1);
+    this.throttle = drive.hold ? 0 : clamp(drive.throttle, 0, 1);
+    this.braking = drive.hold ? 1 : clamp(drive.brake, 0, 1);
 
     // the body's axes, from its three angles
     const cy = Math.cos(this.yaw); const sy = Math.sin(this.yaw);
@@ -331,8 +339,14 @@ export class Vehicle {
       const grip = MU * load;
       let wantSide = -vSide / LATERAL_TAU;
       let wantFwd = -vFwd * ROLL_RESIST;
-      if (i >= 2) wantFwd += (this.throttle * ENGINE) / 2;   // rear wheel drive
-      if (this.braking > 0) {
+      if (drive.hold) {
+        // uncapped, unlike the brake pedal: a handbrake locks the wheels and
+        // is limited by the tyres rather than by the brakes, which is what
+        // makes it hold on a slope instead of creeping down one
+        wantFwd += -vFwd / 0.03;
+      }
+      if (i >= 2 && !drive.hold) wantFwd += (this.throttle * ENGINE) / 2;   // rear wheel drive
+      if (this.braking > 0 && !drive.hold) {
         // Brake, and then reverse once it has stopped. A car cannot steer
         // without moving, and this one is pushed straight back out of
         // whatever it hits — so without a reverse gear a truck wedged against

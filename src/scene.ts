@@ -115,10 +115,6 @@ export const MESHES = {
   cab: () => part('plate(card(width: 96, height: 116, corner: 16), thickness: 64, bevel: 8)'),
   /** Bolts on the face, so that the spin is visible on a shape that is a circle. */
   wheel: () => part('disc(radius: 31, thickness: 24, sides: 16, bolts: 5, boltCircle: 17, boltBore: 5, bevel: 5)'),
-  /** The ring the gun stands on. */
-  turret: () => part('disc(radius: 37, thickness: 22, sides: 12, bolts: 6, boltCircle: 23, boltBore: 4, bevel: 4)'),
-  /** The barrel. Modelled along its own z and laid over to point where it aims. */
-  barrel: () => part('disc(radius: 11, thickness: 146, sides: 12, bevel: 3)'),
   /**
    * A headlamp. Two of them on the front of the cab, laid over to face the
    * way the truck is going. There were two headlight beams before this and
@@ -126,7 +122,8 @@ export const MESHES = {
    * source — a lamp you can see is what makes a beam belong to the vehicle.
    */
   lamp: () => part('disc(radius: 17, thickness: 14, sides: 14, bevel: 4)'),
-
+  /** The post the starting lights stand on, beside the line. */
+  gantry: () => part('disc(radius: 26, thickness: 430, sides: 8, bevel: 6)', 'base'),
 };
 
 /** How tall an unscaled post is, so a spotlight can sit on top of one. */

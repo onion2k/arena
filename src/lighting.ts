@@ -20,6 +20,7 @@ import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
 import type { Race } from './game';
 import { COLUMNS, COLUMN_HEIGHT, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT } from './scene';
 import { height } from './terrain';
+import { gantry } from './track';
 import { project } from './matrix';
 
 export const LIGHT_CAPACITY = 256;
@@ -61,9 +62,43 @@ function floods(pool: LightPool) {
   }
 }
 
+/**
+ * The starting lights: red over the line while they hold you, then a green
+ * wash for a second and a half once they go out.
+ *
+ * The bulbs on the post are lit by their own colour and a glow apiece, which
+ * is what you look at; this is what they throw on the tarmac, which is what
+ * tells you the line is under you without looking away from it.
+ */
+function starter(pool: LightPool, arena: Race) {
+  const g = gantry();
+  const z = height(g.post[0], g.post[1]);
+  if (arena.bulbsLit > 0) {
+    pool.add({
+      position: [g.post[0], g.post[1], z + 300],
+      radius: 1500,
+      colour: [1, 0.06, 0.03],
+      intensity: 3.2 * arena.bulbsLit,
+      direction: [Math.cos(g.facing) * 0.5, Math.sin(g.facing) * 0.5, -0.86],
+      cone: [20, 42],
+    });
+  } else if (arena.sinceStart < 1.5) {
+    const k = 1 - arena.sinceStart / 1.5;
+    pool.add({
+      position: [g.post[0], g.post[1], z + 300],
+      radius: 1800,
+      colour: [0.1, 1, 0.25],
+      intensity: 14 * k * k,
+      direction: [Math.cos(g.facing) * 0.5, Math.sin(g.facing) * 0.5, -0.86],
+      cone: [22, 46],
+    });
+  }
+}
+
 export function lightsFor(pool: LightPool, arena: Race) {
   pool.clear();
   floods(pool);
+  starter(pool, arena);
 
   const hurt = false;
   // The lamps are bolted to a body that pitches, rolls and leaves the ground,
@@ -197,6 +232,21 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
       n = glow(out, n, vp, bx, by, t.z + 6, 22, 1.6 * arena.braking, [1, 0.15, 0.08], 2.6);
     }
   }
+  // the starting bulbs, so a lit one is a hot point rather than a red disc
+  const g = gantry();
+  const gz = height(g.post[0], g.post[1]);
+  const bx = g.post[0] + Math.cos(g.facing) * 34;
+  const by = g.post[1] + Math.sin(g.facing) * 34;
+  for (let i = 0; i < arena.bulbsLit; i++) {
+    n = glow(out, n, vp, bx, by, gz + 200 + i * 90, 30, 3.2, [1, 0.12, 0.06], 3);
+  }
+  if (arena.bulbsLit === 0 && arena.sinceStart < 1.5) {
+    const k = 1 - arena.sinceStart / 1.5;
+    for (let i = 0; i < 3; i++) {
+      n = glow(out, n, vp, bx, by, gz + 200 + i * 90, 34, 4 * k * k, [0.2, 1, 0.35], 3);
+    }
+  }
+
   // the lamps themselves, so they are two bright points on the truck rather
   // than two dark discs with light appearing in front of them
   for (const side of [-1, 1]) {

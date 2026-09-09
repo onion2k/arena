@@ -142,3 +142,26 @@ export function measure(): { length: number; tightest: number } {
   }
   return { length, tightest };
 }
+
+/**
+ * The starting gantry: where its post stands, and where each bulb sits on it.
+ *
+ * Beside the line rather than over it — a gantry across the track would be in
+ * the way of a camera that looks down at the circuit from outside. The bulbs
+ * face back the way the cars come, which is against the racing direction.
+ */
+export function gantry(): {
+  post: [number, number];
+  bulbs: [number, number, number][];
+  facing: number;
+} {
+  const theta = -Math.PI;
+  const r = radiusAt(theta) + TRACK_HALF + 150;
+  const [tx, ty] = tangentAt(theta);
+  return {
+    post: [Math.cos(theta) * r, Math.sin(theta) * r],
+    // stacked up the post, the lowest lighting first
+    bulbs: [[0, 0, 200], [0, 0, 290], [0, 0, 380]],
+    facing: Math.atan2(-ty, -tx),
+  };
+}
