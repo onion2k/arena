@@ -9,12 +9,11 @@
  */
 import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS } from './scene';
 import { Vehicle } from './vehicle';
-import { radiusAt, tangentAt, where } from './track';
+import { START_BULBS, radiusAt, tangentAt, where } from './track';
 
 /** How long the lights hold you before the lap starts. */
-export const COUNTDOWN = 3;
-/** How many bulbs the gantry carries. */
-export const START_BULBS = 3;
+export const COUNTDOWN = 4;
+
 
 /** How much of its speed the truck keeps when it meets a wall or a post. */
 const BOUNCE = 0.45;
@@ -67,10 +66,15 @@ export class Race {
   /** Seconds since the lights went out, for the flash to fade on. */
   sinceStart = 0;
 
-  /** How many bulbs are lit: one more each second, then all out on the go. */
+  /**
+   * How many bulbs are lit, then all out on the go. Spread over the countdown
+   * rather than one a second: with five bulbs and a three second count, only
+   * three of them ever lit.
+   */
   get bulbsLit(): number {
     if (this.countdown <= 0) return 0;
-    return Math.min(START_BULBS, 1 + Math.floor(COUNTDOWN - this.countdown));
+    const through = (COUNTDOWN - this.countdown) / COUNTDOWN;
+    return Math.min(START_BULBS, 1 + Math.floor(through * START_BULBS));
   }
   /** How far round the lap it is, 0 to 1, and how far off the middle. */
   progress = 0;

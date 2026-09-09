@@ -13,9 +13,9 @@ import { Orbit } from 'artshape-render/gpu/camera';
 import { bakeEnvironment } from 'artshape-render/render/env';
 import { GameRenderer, EFFECT_STRIDE, type GameGroup } from 'artshape-render/game/renderer';
 import { LightPool } from 'artshape-render/game/lights';
-import { Race, START_BULBS, type Input } from './game';
+import { Race, type Input } from './game';
 import { WHEELS } from './vehicle';
-import { TRACK_HALF, gantry } from './track';
+import { START_BULBS, TRACK_HALF, gantry } from './track';
 import { height as groundAt } from './terrain';
 import { ARENA_X, ARENA_Y, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices } from './scene';
 import { placeOnSlope, placeVehicleFacing, placeVehiclePart, placeVehicleWheel, project } from './matrix';
@@ -84,10 +84,10 @@ async function main() {
 
   renderer.setStatic([
     { mesh: mesh.floor, matrices: identity(), albedo: [0.055, 0.060, 0.078], roughness: 0.14 },
-    { mesh: mesh.tile, matrices: at.tiles, albedo: [0.105, 0.115, 0.145], roughness: 0.24 },
+    { mesh: mesh.tile, matrices: at.tiles, albedo: [0.135, 0.140, 0.160], roughness: 0.34 },
     { mesh: mesh.block, matrices: at.blocks, albedo: [0.58, 0.61, 0.68], roughness: 0.26 },
     { mesh: mesh.column, matrices: at.columns, albedo: [0.76, 0.60, 0.34], roughness: 0.18 },
-    { mesh: mesh.gantry, matrices: gantryPost(), albedo: [0.62, 0.64, 0.70], roughness: 0.25 },
+    { mesh: mesh.gantry, matrices: gantryPosts(), count: 2, albedo: [0.62, 0.64, 0.70], roughness: 0.25 },
   ]);
 
   // The pools. Their size is fixed here and never changes again: what moves
@@ -96,7 +96,7 @@ async function main() {
   const cabM = new Float32Array(16);
   const wheelM = new Float32Array(4 * 16);
   const lampM = new Float32Array(2 * 16);
-  const startMat = new Float32Array(START_BULBS * 4);
+  const startMat = new Float32Array(2 * START_BULBS * 4);
   const dynamic: GameGroup[] = [
     // not a mirror: a polished metal under a near-black sky has nothing to
     // reflect and reads as a dark shape. A little roughness gives the point
@@ -109,7 +109,7 @@ async function main() {
     // two more lumps of the same metal the truck is made of
     { mesh: mesh.lamp, matrices: lampM, count: 2, albedo: [1.0, 0.97, 0.9], roughness: 0.06 },
     // the starting bulbs, which never move and are recoloured every frame
-    { mesh: mesh.lamp, matrices: startBulbs(), count: START_BULBS, albedo: [0.2, 0.04, 0.03], roughness: 0.12 },
+    { mesh: mesh.lamp, matrices: startBulbs(), count: 2 * START_BULBS, albedo: [0.2, 0.04, 0.03], roughness: 0.12 },
   ];
   renderer.setDynamic(dynamic);
 
@@ -333,8 +333,8 @@ async function main() {
     renderer.move(WHEELS_GROUP, wheelM, 4);
 
     // the starting lights: dark until lit, then a hot red, all out on the go
-    for (let i = 0; i < START_BULBS; i++) {
-      const on = i < arena.bulbsLit;
+    for (let i = 0; i < 2 * START_BULBS; i++) {
+      const on = (i % START_BULBS) < arena.bulbsLit;
       const o = i * 4;
       startMat[o] = on ? 1.0 : 0.20;
       startMat[o + 1] = on ? 0.10 : 0.035;
@@ -481,7 +481,7 @@ function fitCamera(cam: GameRenderer['camera'], aspect: number): number {
  * the arena: at a 40 degree lens that is about three and a half metres of road
  * across the frame, with the truck a fourteenth of its width.
  */
-const FOLLOW_DISTANCE = 2700;
+const FOLLOW_DISTANCE = 3900;
 const FOLLOW_MIN = 1100;
 /** How far ahead of itself the camera looks, in seconds of travel. */
 const LEAD_TIME = 0.32;
@@ -490,24 +490,29 @@ const LEAD_TIME = 0.32;
 const CAMERA_HEIGHT = 55;
 
 
-/** Where the gantry post stands, and where its bulbs hang on it. */
-function gantryPost(): Float32Array {
+/** Where the gantry posts stand: one either side of the line. */
+function gantryPosts(): Float32Array {
   const g = gantry();
-  const out = new Float32Array(16);
-  placeOnSlope(out, 0, g.post[0], g.post[1], groundAt(g.post[0], g.post[1]) - 20, g.facing, [0, 0, 1]);
+  const out = new Float32Array(g.posts.length * 16);
+  g.posts.forEach(([x, y], i) => {
+    placeOnSlope(out, i, x, y, groundAt(x, y) - 20, g.facing, [0, 0, 1]);
+  });
   return out;
 }
 
+/** The bulbs on them, facing back down the track at the driver. */
 function startBulbs(): Float32Array {
   const g = gantry();
-  const out = new Float32Array(START_BULBS * 16);
-  const base = groundAt(g.post[0], g.post[1]);
-  g.bulbs.forEach((b, i) => {
-    // on the face of the post, looking back down the track at the driver
-    placeVehicleFacing(out, i,
-      g.post[0] + Math.cos(g.facing) * 30, g.post[1] + Math.sin(g.facing) * 30, base + b[2],
-      g.facing, 0, 0);
-  });
+  const out = new Float32Array(g.posts.length * START_BULBS * 16);
+  let k = 0;
+  for (const [px, py] of g.posts) {
+    const base = groundAt(px, py);
+    for (const h of g.bulbHeights) {
+      placeVehicleFacing(out, k++,
+        px + Math.cos(g.facing) * 34, py + Math.sin(g.facing) * 34, base + h,
+        g.facing, 0, 0);
+    }
+  }
   return out;
 }
 

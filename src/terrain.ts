@@ -49,16 +49,17 @@ interface Wave {
 }
 
 const WAVES: Wave[] = [
-  // the swell: barely a slope, but it is what stops the arena reading as a table
-  { amp: 44, len: 2900, angle: 0.32, phase: 0.0 },
-  { amp: 34, len: 2350, angle: 1.71, phase: 1.3 },
-  // the roll: felt through the suspension rather than seen
-  { amp: 20, len: 1500, angle: 0.95, phase: 2.1 },
-  { amp: 22, len: 1050, angle: 1.98, phase: 3.4 },
-  // the ramps, in bands across the arena rather than everywhere
-  { amp: 52, len: 650, angle: 0.18, phase: 1.9, env: { len: 3400, angle: 1.75, phase: 0.4 } },
+  // The swell: long and low. It was steeper and shorter, which made the
+  // circuit a rough ride everywhere rather than a smooth one with jumps in
+  // it — a race track wants the ground to be a surface, not an event.
+  { amp: 42, len: 3600, angle: 0.32, phase: 0.0 },
+  { amp: 30, len: 2900, angle: 1.71, phase: 1.3 },
+  // barely a roll now: enough to load the suspension, not enough to see
+  { amp: 11, len: 2100, angle: 0.95, phase: 2.1 },
+  { amp: 9, len: 1600, angle: 1.98, phase: 3.4 },
+  // and the ramps, which are the jumps and are meant to be obvious
+  { amp: 58, len: 650, angle: 0.18, phase: 1.9, env: { len: 7000, angle: 1.75, phase: 0.4 } },
 ];
-
 /** How much a wave's envelope is letting through at a point, 0 to 1. */
 function envelopeAt(w: Wave, x: number, y: number): number {
   if (!w.env) return 1;

@@ -12,11 +12,10 @@
  * again: the game writes those every frame.
  */
 import { compile } from 'artshape-render/dsl';
-import { placeOnSlope } from './matrix';
-import { posts as trackPosts, tarmac } from './track';
+import { posts as trackPosts, trackMesh } from './track';
 import { groupByMesh } from 'artshape-render/assembly/groups';
 import type { Mesh } from 'artshape-render/mesh/types';
-import { groundMesh, height, normal } from './terrain';
+import { groundMesh, height } from './terrain';
 
 /** Where a compiled part's origin should end up. */
 type Anchor =
@@ -98,8 +97,8 @@ export const MESHES = {
    * runs 400mm past the walls so that its own edge is never the edge you see.
    */
   floor: () => groundMesh(ARENA_X + 400, ARENA_Y + 400, 85),
-  /** A slab of tarmac. Three abreast make the track, laid along it. */
-  tile: () => part('plate(card(width: 226, height: 272, corner: 16), thickness: 7, bevel: 4)', 'base'),
+  /** The tarmac: one ribbon following the centreline, not a run of slabs. */
+  tile: () => trackMesh(6, 90, 22),
   /** A perimeter block, laid along the wall it belongs to. */
   block: () => part('plate(card(width: 218, height: 74, corner: 12), thickness: 132, bevel: 12)', 'base'),
   /** An eight-sided column, for the corners to reflect things in. */
@@ -123,7 +122,7 @@ export const MESHES = {
    */
   lamp: () => part('disc(radius: 17, thickness: 14, sides: 14, bevel: 4)'),
   /** The post the starting lights stand on, beside the line. */
-  gantry: () => part('disc(radius: 26, thickness: 430, sides: 8, bevel: 6)', 'base'),
+  gantry: () => part('disc(radius: 30, thickness: 900, sides: 8, bevel: 7)', 'base'),
 };
 
 /** How tall an unscaled post is, so a spotlight can sit on top of one. */
@@ -160,7 +159,7 @@ export function arenaMatrices(): { tiles: Float32Array; blocks: Float32Array; co
   // hill. Posts and walls stay upright and are sunk instead: a leaning post
   // reads as a mistake where a leaning paving slab reads as ground.
   return {
-    tiles: layOnGround(tarmac(3, 196)),
+    tiles: identityPlacement(),
     blocks: pack(blocks, undefined, true),
     columns: pack(columns, columnScales, true),
   };
@@ -186,13 +185,9 @@ function pack(triples: number[], scales?: number[], onGround = false): Float32Ar
   return out;
 }
 
-/** Triples of x, y, turn laid flat on the ground and tipped to its slope. */
-function layOnGround(triples: number[]): Float32Array {
-  const n = triples.length / 3;
-  const out = new Float32Array(n * 16);
-  for (let i = 0; i < n; i++) {
-    const x = triples[i * 3]; const y = triples[i * 3 + 1];
-    placeOnSlope(out, i, x, y, height(x, y) - 2, triples[i * 3 + 2], normal(x, y));
-  }
-  return out;
+/** The ribbon is already in world coordinates, so it needs no placement. */
+function identityPlacement(): Float32Array {
+  const m = new Float32Array(16);
+  m[0] = m[5] = m[10] = m[15] = 1;
+  return m;
 }

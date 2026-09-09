@@ -1,3 +1,5 @@
+import type { Mesh } from 'artshape-render/mesh/types';
+import { height, normal as groundNormal } from './terrain';
 /**
  * The circuit: a closed loop the truck races round.
  *
@@ -182,24 +184,86 @@ export function measure(): { length: number; tightest: number } {
 }
 
 /**
- * The starting gantry: where its post stands, and where each bulb sits on it.
+ * The starting gantry: a post either side of the track, each carrying a
+ * column of bulbs, and the line between them.
  *
- * Beside the line rather than over it — a gantry across the track would be in
- * the way of a camera that looks down at the circuit from outside. The bulbs
- * face back the way the cars come, which is against the racing direction.
+ * One post with three bulbs was too easy to miss among eighty-odd trackside
+ * posts that look much the same. Two of them, taller, with five bulbs each,
+ * read as a start line rather than as more scenery.
  */
+export const START_BULBS = 5;
+
 export function gantry(): {
-  post: [number, number];
-  bulbs: [number, number, number][];
+  posts: [number, number][];
   facing: number;
+  bulbHeights: number[];
 } {
   const theta = -Math.PI;
-  const r = radiusAt(theta) + TRACK_HALF + 150;
+  const perRadial = 1 / radialToAcross(theta);
   const [tx, ty] = tangentAt(theta);
-  return {
-    post: [Math.cos(theta) * r, Math.sin(theta) * r],
-    // stacked up the post, the lowest lighting first
-    bulbs: [[0, 0, 200], [0, 0, 290], [0, 0, 380]],
-    facing: Math.atan2(-ty, -tx),
-  };
+  const r = radiusAt(theta);
+  const out: [number, number][] = [];
+  for (const side of [-1, 1]) {
+    const rr = r + side * (TRACK_HALF + 160) * perRadial;
+    out.push([Math.cos(theta) * rr, Math.sin(theta) * rr]);
+  }
+  const bulbHeights: number[] = [];
+  for (let i = 0; i < START_BULBS; i++) bulbHeights.push(300 + i * 105);
+  return { posts: out, facing: Math.atan2(-ty, -tx), bulbHeights };
+}
+
+/**
+ * The tarmac, as one ribbon of triangles following the centreline.
+ *
+ * It was three rows of slabs before, placed at even steps of arc. That is
+ * fine on a straight and wrong on a corner: the arc step is measured on the
+ * centreline, so the outer row spreads apart and the inner bunches, and the
+ * road broke into scattered paving wherever the track turned — worst exactly
+ * where you are looking hardest.
+ *
+ * A ribbon has no such seams. Its vertices sit on the terrain, so it follows
+ * the ground the wheels are reading rather than approximating it, lifted just
+ * enough to win the depth test against it.
+ */
+export function trackMesh(across: number, step: number, lift = 7): Mesh {
+  const rings: number[] = [];
+  let theta = -Math.PI;
+  const end = Math.PI;
+  while (theta < end) {
+    rings.push(theta);
+    theta += step / Math.max(radiusAt(theta), 200);
+  }
+  const n = rings.length;
+  const w = across + 1;
+  const positions = new Float32Array(n * w * 3);
+  const normals = new Float32Array(n * w * 3);
+  const uvs = new Float32Array(n * w * 2);
+  const indices = new Uint32Array(n * across * 6);
+
+  for (let j = 0; j < n; j++) {
+    const t = rings[j];
+    const r = radiusAt(t);
+    const perRadial = 1 / radialToAcross(t);
+    for (let i = 0; i < w; i++) {
+      const d = (i / across - 0.5) * TRACK_HALF * 2 * perRadial;
+      const x = Math.cos(t) * (r + d);
+      const y = Math.sin(t) * (r + d);
+      const o = (j * w + i) * 3;
+      positions[o] = x; positions[o + 1] = y; positions[o + 2] = height(x, y) + lift;
+      const gn = groundNormal(x, y);
+      normals[o] = gn[0]; normals[o + 1] = gn[1]; normals[o + 2] = gn[2];
+      uvs[(j * w + i) * 2] = i / across;
+      uvs[(j * w + i) * 2 + 1] = j / n;
+    }
+  }
+  let k = 0;
+  for (let j = 0; j < n; j++) {
+    const j2 = (j + 1) % n;      // the last ring joins the first: it is a loop
+    for (let i = 0; i < across; i++) {
+      const a = j * w + i, b = a + 1, c = j2 * w + i, d = c + 1;
+      indices[k++] = a; indices[k++] = b; indices[k++] = c;
+      indices[k++] = c; indices[k++] = b; indices[k++] = d;
+    }
+  }
+  return { positions, normals, uvs, indices };
 }
