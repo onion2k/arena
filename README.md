@@ -142,6 +142,15 @@ against the 176 a truck and a post need between them. Off the
 tarmac the grip falls away over 200mm rather than at a line, so running wide
 is a mistake that costs rather than a wall.
 
+## The minimap
+
+The whole circuit in the corner, with a dot per car. Two dimensions and no
+GPU: the track is an analytic curve, so its shape is an SVG path built once
+at startup from the same function the wheels and the lap counter read, and
+the only thing that changes from frame to frame is four pairs of coordinates.
+A second render pass would cost a second pass; this costs eight attribute
+writes.
+
 ## The camera
 
 It follows the truck at a fixed distance behind it, leading it a little in the

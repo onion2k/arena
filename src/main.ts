@@ -15,7 +15,7 @@ import { GameRenderer, EFFECT_STRIDE, type GameGroup } from 'artshape-render/gam
 import { LightPool } from 'artshape-render/game/lights';
 import { FIELD, Race, type Input } from './game';
 import { WHEELS } from './vehicle';
-import { START_BULBS, TRACK_HALF, gantry } from './track';
+import { START_BULBS, TRACK_HALF, centreline, gantry, tangentAt } from './track';
 import { height as groundAt } from './terrain';
 import { ARENA_X, ARENA_Y, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices } from './scene';
 import { placeOnSlope, placeVehicleFacing, placeVehiclePart, placeVehicleWheel, project } from './matrix';
@@ -31,6 +31,8 @@ const bootMsg = document.getElementById('bootMsg')!;
 const scorePanel = document.getElementById('score')!;
 const statsPanel = document.getElementById('stats')!;
 const helpPanel = document.getElementById('help')!;
+const mapPanel = document.getElementById('map')!;
+const mapSvg = document.getElementById('mapSvg') as unknown as SVGSVGElement;
 
 main().catch((err) => { bootMsg.textContent = String(err?.message ?? err); console.error(err); });
 
@@ -131,6 +133,7 @@ async function main() {
   const lights = new LightPool(LIGHT_CAPACITY);
   const quads = new Float32Array(EFFECT_CAPACITY * EFFECT_STRIDE);
   const input = watchInput(arena);
+  const minimap = buildMinimap(arena);
   // Drag to swing the camera round, wheel to come in and out, shift-drag to
   // slide it. The floor is opaque from below and the arena is meant to be
   // looked into, so the polar range stops short of the horizon and of
@@ -291,7 +294,7 @@ async function main() {
   resize();
 
   await renderer.ready;
-  for (const el of [scorePanel, statsPanel, helpPanel]) el.removeAttribute('hidden');
+  for (const el of [scorePanel, statsPanel, helpPanel, mapPanel]) el.removeAttribute('hidden');
   boot.classList.add('gone');
   setTimeout(() => boot.setAttribute('hidden', ''), 500);
 
@@ -392,6 +395,8 @@ async function main() {
     // redraw, not keep: every one of those lights moves, and a kept static
     // half would be lit by where they were when it was baked
     renderer.frame(ctx.context.getCurrentTexture().createView(), 'redraw');
+
+    minimap.update();
 
     smoothed += (dt * 1000 - smoothed) * 0.08;
     statsIn -= dt;
@@ -524,6 +529,75 @@ function startBulbs(): Float32Array {
     }
   }
   return out;
+}
+
+/**
+ * The minimap: the whole circuit drawn once, with a dot per car moved over it.
+ *
+ * Two dimensions and no GPU. The track is an analytic curve, so its shape is
+ * a path built at startup from the same function the wheels and the lap
+ * counter read, and the only thing that changes from frame to frame is four
+ * pairs of coordinates. A second render pass would cost a second pass; this
+ * costs eight attribute writes.
+ *
+ * SVG's y runs down and the world's runs up, so it is negated — otherwise the
+ * map is a mirror of the track, which is worse than no map.
+ */
+function buildMinimap(race: Race) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const STEPS = 320;
+  let lo = Infinity, hi = -Infinity;
+  let path = '';
+  for (let i = 0; i <= STEPS; i++) {
+    const t = (i / STEPS) * Math.PI * 2 - Math.PI;
+    const [x, y] = centreline(t);
+    lo = Math.min(lo, x, -y); hi = Math.max(hi, x, -y);
+    path += `${i === 0 ? 'M' : 'L'}${x.toFixed(0)} ${(-y).toFixed(0)}`;
+  }
+  path += 'Z';
+  const pad = TRACK_HALF + 260;
+  mapSvg.setAttribute('viewBox', `${lo - pad} ${lo - pad} ${hi - lo + pad * 2} ${hi - lo + pad * 2}`);
+
+  const road = document.createElementNS(NS, 'path');
+  road.setAttribute('d', path);
+  road.setAttribute('fill', 'none');
+  road.setAttribute('stroke', '#4a4c58');
+  road.setAttribute('stroke-width', String(TRACK_HALF * 2));
+  road.setAttribute('stroke-linejoin', 'round');
+  mapSvg.appendChild(road);
+
+  // the start line, across the road at the top of the lap
+  const [sx, sy] = centreline(-Math.PI);
+  const [tx, ty] = tangentAt(-Math.PI);
+  const line = document.createElementNS(NS, 'line');
+  line.setAttribute('x1', String(sx + ty * TRACK_HALF));
+  line.setAttribute('y1', String(-(sy - tx * TRACK_HALF)));
+  line.setAttribute('x2', String(sx - ty * TRACK_HALF));
+  line.setAttribute('y2', String(-(sy + tx * TRACK_HALF)));
+  line.setAttribute('stroke', '#e6e4f0');
+  line.setAttribute('stroke-width', '120');
+  mapSvg.appendChild(line);
+
+  const dots = race.cars.map((car, i) => {
+    const c = document.createElementNS(NS, 'circle');
+    const [r, g, b] = car.colour;
+    const hex = (v: number) => Math.round(Math.min(1, v) * 255).toString(16).padStart(2, '0');
+    c.setAttribute('r', i === 0 ? '260' : '210');
+    c.setAttribute('fill', `#${hex(r)}${hex(g)}${hex(b)}`);
+    // the player gets an outline, so which dot is yours never has to be worked out
+    if (i === 0) { c.setAttribute('stroke', '#ffffff'); c.setAttribute('stroke-width', '90'); }
+    mapSvg.appendChild(c);
+    return c;
+  });
+
+  return {
+    update() {
+      race.cars.forEach((car, i) => {
+        dots[i].setAttribute('cx', car.vehicle.x.toFixed(0));
+        dots[i].setAttribute('cy', (-car.vehicle.y).toFixed(0));
+      });
+    },
+  };
 }
 
 /** Minutes, seconds and tenths, which is how a lap time is read. */
