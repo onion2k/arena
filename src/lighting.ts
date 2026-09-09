@@ -17,7 +17,7 @@
  */
 import { LightPool } from 'artshape-render/game/lights';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
-import type { Arena } from './game';
+import { TURRET_BACK, type Arena } from './game';
 import { COLUMNS, COLUMN_HEIGHT, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT } from './scene';
 import { project } from './matrix';
 
@@ -61,22 +61,46 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
   posts(pool, t);
 
   const hurt = arena.invuln > 0 && Math.sin(arena.invuln * 40) > 0;
-  const cy = Math.cos(arena.pAngle); const sy = Math.sin(arena.pAngle);
-  /** A point in the truck's own frame, in the world. */
-  const at = (lx: number, ly: number, z: number): [number, number, number] =>
-    [arena.px + lx * cy - ly * sy, arena.py + lx * sy + ly * cy, z];
+  // The lamps are bolted to a body that pitches, rolls and leaves the ground,
+  // so they are placed and aimed in its frame rather than on a plane at zero.
+  // A headlight that stays level while the truck noses over a crest is a
+  // headlight that has come loose.
+  const car = arena.truck;
+  const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw);
+  const cp = Math.cos(car.pitch), sp = Math.sin(car.pitch);
+  const cr = Math.cos(car.roll), sr = Math.sin(car.roll);
+  const bf: [number, number, number] = [cy * cp, sy * cp, -sp];
+  const bl: [number, number, number] = [cy * sp * sr - sy * cr, sy * sp * sr + cy * cr, cp * sr];
+  const bu: [number, number, number] = [cy * sp * cr + sy * sr, sy * sp * cr - cy * sr, cp * cr];
+  /** A point in the truck's own frame, in the world. Heights are as they were
+   *  when the floor was flat, so the body's own 52mm of ride is taken off. */
+  const at = (lx: number, ly: number, z: number): [number, number, number] => [
+    car.x + bf[0] * lx + bl[0] * ly + bu[0] * (z - 52),
+    car.y + bf[1] * lx + bl[1] * ly + bu[1] * (z - 52),
+    car.z + bf[2] * lx + bl[2] * ly + bu[2] * (z - 52),
+  ];
+  /** A direction in the truck's frame, so a beam tips with the body. */
+  const facing = (lx: number, ly: number, lz: number): [number, number, number] => [
+    bf[0] * lx + bl[0] * ly + bu[0] * lz,
+    bf[1] * lx + bl[1] * ly + bu[1] * lz,
+    bf[2] * lx + bl[2] * ly + bu[2] * lz,
+  ];
 
   // The searchlight, on the gun. This is the player's eye: a long narrow beam
   // that goes wherever the cannon is aimed, so looking and shooting are the
   // same act and you cannot do one without committing to the other.
   pool.add({
-    position: [arena.gunX, arena.gunY, 150],
+    position: at(TURRET_BACK, 0, 150),
     radius: 4200,
     // cold, against the headlights' warm: the two are hard to tell apart by
     // shape when they overlap and trivial to tell apart by colour
     colour: [0.80, 0.90, 1],
     intensity: 30,
-    direction: [Math.cos(arena.aim), Math.sin(arena.aim), -0.20],
+    // The turret keeps its bearing whatever the body does — a gun that
+    // swung with every bump would be unusable — but its elevation follows the
+    // nose, so cresting a rise throws the beam out and dropping into a
+    // hollow brings it in close.
+    direction: [Math.cos(arena.aim), Math.sin(arena.aim), -0.20 + bf[2]],
     cone: [6, 16],
   });
 
@@ -95,7 +119,6 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
   // cone — a wash over the road rather than a beam at a thing. The narrow
   // beam at a thing is the searchlight, and it is cold where these are warm.
   for (const side of [-1, 1]) {
-    const toe = arena.pAngle + side * 0.07;
     pool.add({
       position: at(LAMP_AHEAD, side * LAMP_ACROSS, LAMP_HEIGHT),
       radius: 2400,
@@ -106,7 +129,7 @@ export function lightsFor(pool: LightPool, arena: Arena, t: number) {
       // before intensity is even considered. That is true of a real headlight
       // too, and a real headlight answers it by being very bright.
       intensity: 22,
-      direction: [Math.cos(toe), Math.sin(toe), -0.20],
+      direction: facing(Math.cos(side * 0.07), Math.sin(side * 0.07), -0.20),
       cone: [10, 25],
     });
   }
@@ -215,8 +238,9 @@ export function effectsFor(out: Float32Array, arena: Arena, vp: Float32Array): n
     n = glow(out, n, vp, b.x, b.y, 60, (80 + grow * 330) * b.power, 1.3 * k, [1, 0.52, 0.16], 1.6);
     n = glow(out, n, vp, b.x, b.y, 60, (130 + grow * 520) * b.power, 0.34 * k * k, [1, 0.24, 0.08], 1.0);
   }
-  const cy = Math.cos(arena.pAngle); const sy = Math.sin(arena.pAngle);
-  const at = (lx: number, ly: number) => [arena.px + lx * cy - ly * sy, arena.py + lx * sy + ly * cy];
+  const t = arena.truck;
+  const cy = Math.cos(t.yaw), sy = Math.sin(t.yaw);
+  const at = (lx: number, ly: number) => [t.x + lx * cy - ly * sy, t.y + lx * sy + ly * cy];
   if (arena.thrusting > 0) {
     const [ex, ey] = at(-150, 0);
     n = glow(out, n, vp, ex, ey, 42, 34 * arena.thrusting, 1.3 * arena.thrusting, [1, 0.6, 0.28], 2.2);

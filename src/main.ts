@@ -13,14 +13,16 @@ import { Orbit } from 'artshape-render/gpu/camera';
 import { bakeEnvironment } from 'artshape-render/render/env';
 import { GameRenderer, EFFECT_STRIDE, type GameGroup } from 'artshape-render/game/renderer';
 import { LightPool } from 'artshape-render/game/lights';
-import { Arena, MAX_BOLTS, MAX_ENEMIES, type Input } from './game';
+import { Arena, MAX_BOLTS, MAX_ENEMIES, TURRET_BACK, type Input } from './game';
+import { WHEELS } from './vehicle';
+import { height as groundAt } from './terrain';
 import { ARENA_X, ARENA_Y, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices } from './scene';
-import { hide, place, placeAxle, placeTipped, project } from './matrix';
+import { hide, placeTipped, placeVehiclePart, placeVehicleWheel, project } from './matrix';
 import { EFFECT_CAPACITY, LIGHT_CAPACITY, effectsFor, lightsFor, setProjectionScale } from './lighting';
 
 const FOV = 40;
 /** Where the dynamic groups sit, in the order they are handed over. */
-const CHASSIS = 0, CAB = 1, WHEELS = 2, TURRET = 3, BARREL = 4, LAMPS = 5, DRONES = 6, BOLTS = 7;
+const CHASSIS = 0, CAB = 1, WHEELS_GROUP = 2, TURRET = 3, BARREL = 4, LAMPS = 5, DRONES = 6, BOLTS = 7;
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
@@ -256,6 +258,10 @@ async function main() {
     const k = Math.min(1, dt * 3.4);
     aim[0] += (wantX - aim[0]) * k;
     aim[1] += (wantY - aim[1]) * k;
+    // and up and down with the ground, more slowly than across it: a camera
+    // that tracked every rise and jump exactly would make the arena the thing
+    // that moves rather than the truck
+    aim[2] += ((CAMERA_HEIGHT + groundAt(arena.px, arena.py) * 0.75) - aim[2]) * Math.min(1, dt * 1.8);
     renderer.camera.target = [aim[0], aim[1], aim[2]];
   };
   canvas.addEventListener('pointerdown', () => { touched = true; });
@@ -293,45 +299,57 @@ async function main() {
    * an empty arena lit by a full set of lights.
    */
   const upload = (): number => {
-    // The truck, laid out in its own frame and turned into the world: the
-    // body leans into a turn, the wheels roll with the distance covered along
-    // the nose, and the turret and barrel answer to the gun rather than to
-    // the truck. Five parts, but only two angles between them.
-    const yaw = arena.pAngle;
+    // The truck, from the body the physics is carrying. Nothing here decides
+    // where anything is: the chassis takes the body's three angles, each
+    // wheel takes its own suspension travel and steer and roll, and the lamps
+    // and the turret ride the same frame. A wheel drawn anywhere but where
+    // the ray found the ground is a wheel you can see floating.
+    const truck = arena.truck;
+    const yaw = truck.yaw, pitch = truck.pitch, roll = truck.roll;
     const cy = Math.cos(yaw); const sy = Math.sin(yaw);
-    const wx = (lx: number, ly: number) => arena.px + lx * cy - ly * sy;
-    const wy = (lx: number, ly: number) => arena.py + lx * sy + ly * cy;
-    const lean = -arena.lastTurn * 0.17;
+    const cp = Math.cos(pitch); const sp = Math.sin(pitch);
+    const cr = Math.cos(roll); const sr = Math.sin(roll);
+    // the body's three axes, as the vehicle builds them
+    const bf: [number, number, number] = [cy * cp, sy * cp, -sp];
+    const bl: [number, number, number] = [cy * sp * sr - sy * cr, sy * sp * sr + cy * cr, cp * sr];
+    const bu: [number, number, number] = [cy * sp * cr + sy * sr, sy * sp * cr - cy * sr, cp * cr];
+    /** A point in the truck's own frame, in the world. */
+    const on = (lx: number, ly: number, lz: number): [number, number, number] => [
+      truck.x + bf[0] * lx + bl[0] * ly + bu[0] * lz,
+      truck.y + bf[1] * lx + bl[1] * ly + bu[1] * lz,
+      truck.z + bf[2] * lx + bl[2] * ly + bu[2] * lz,
+    ];
 
-    placeTipped(chassisM, 0, wx(0, 0), wy(0, 0), 52, yaw, lean, 1);
+    const chassis = on(0, 0, 0);
+    placeVehiclePart(chassisM, 0, chassis[0], chassis[1], chassis[2], yaw, pitch, roll);
     renderer.move(CHASSIS, chassisM, 1);
-    placeTipped(cabM, 0, wx(62, 0), wy(62, 0), 92, yaw, lean, 1);
+    const cab = on(62, 0, 40);
+    placeVehiclePart(cabM, 0, cab[0], cab[1], cab[2], yaw, pitch, roll);
     renderer.move(CAB, cabM, 1);
 
-    let w = 0;
-    for (const lx of [88, -78]) {
-      for (const ly of [-64, 64]) {
-        placeAxle(wheelM, w++, wx(lx, ly), wy(lx, ly), 32, yaw, arena.wheelSpin);
-      }
+    for (let i = 0; i < WHEELS.length; i++) {
+      const [lx, ly, lz] = WHEELS[i];
+      const w = truck.wheels[i];
+      const hub = on(lx, ly, lz - w.drop);
+      placeVehicleWheel(wheelM, i, hub[0], hub[1], hub[2], yaw, pitch, roll, w.steer, w.spin);
     }
-    renderer.move(WHEELS, wheelM, 4);
+    renderer.move(WHEELS_GROUP, wheelM, 4);
 
-    // the lamps, laid over to face along the nose as the barrel and the
-    // bolts are, a quarter turn past the heading
     let lamp = 0;
     for (const ly of [-LAMP_ACROSS, LAMP_ACROSS]) {
-      placeTipped(lampM, lamp++, wx(LAMP_AHEAD, ly), wy(LAMP_AHEAD, ly), LAMP_HEIGHT,
-        yaw + Math.PI / 2, Math.PI / 2, 1);
+      const at = on(LAMP_AHEAD, ly, LAMP_HEIGHT - 52);
+      placeVehicleWheel(lampM, lamp++, at[0], at[1], at[2], yaw, pitch, roll, 0, 0);
     }
     renderer.move(LAMPS, lampM, 2);
 
     const gx = arena.gunX; const gy = arena.gunY;
-    place(turretM, 0, gx, gy, 88, arena.aim, 1);
+    const turret = on(TURRET_BACK, 0, 36);
+    placeVehiclePart(turretM, 0, turret[0], turret[1], turret[2], arena.aim, 0, 0);
     renderer.move(TURRET, turretM, 1);
     // the barrel is modelled along its own z, so it is laid over a quarter
     // turn past the direction it is meant to point, as the bolts are
     placeTipped(barrelM, 0,
-      gx + Math.cos(arena.aim) * 82, gy + Math.sin(arena.aim) * 82, 104,
+      gx + Math.cos(arena.aim) * 82, gy + Math.sin(arena.aim) * 82, turret[2] + 16,
       arena.aim + Math.PI / 2, Math.PI / 2, 1);
     renderer.move(BARREL, barrelM, 1);
 
@@ -351,7 +369,7 @@ async function main() {
     for (let i = 0; i < arena.bolts; i++) {
       // the bolt is modelled standing up, so it lies over and then turns a
       // quarter past its heading to point along it
-      placeTipped(boltM, i, arena.bx[i], arena.by[i], 44,
+      placeTipped(boltM, i, arena.bx[i], arena.by[i], groundAt(arena.bx[i], arena.by[i]) + 44,
         Math.atan2(arena.bvy[i], arena.bvx[i]) + Math.PI / 2, Math.PI / 2);
     }
     if (arena.bolts < MAX_BOLTS) hide(boltM, arena.bolts);

@@ -12,8 +12,10 @@
  * again: the game writes those every frame.
  */
 import { compile } from 'artshape-render/dsl';
+import { placeOnSlope } from './matrix';
 import { groupByMesh } from 'artshape-render/assembly/groups';
 import type { Mesh } from 'artshape-render/mesh/types';
+import { groundMesh, height, normal } from './terrain';
 
 /** Where a compiled part's origin should end up. */
 type Anchor =
@@ -90,8 +92,11 @@ export const ARENA_X = 2400;
 export const ARENA_Y = 2400;
 
 export const MESHES = {
-  /** The slab, its face at z = 0 so everything else can sit on zero. */
-  floor: () => part(`plate(card(width: ${ARENA_X * 2}, height: ${ARENA_Y * 2}, corner: 90), thickness: 40, bevel: 10)`, 'top'),
+  /**
+   * The ground: a grid put where the terrain function says, not a plate. It
+   * runs 400mm past the walls so that its own edge is never the edge you see.
+   */
+  floor: () => groundMesh(ARENA_X + 400, ARENA_Y + 400, 50),
   /** A raised tile. A hundred of them give the moving lights edges to catch. */
   tile: () => part('plate(card(width: 200, height: 200, corner: 18), thickness: 7, bevel: 4)', 'base'),
   /** A perimeter block, laid along the wall it belongs to. */
@@ -171,6 +176,9 @@ for (const x of POST_GRID) {
 }
 
 /** Where the static half stands. Built once; the game never touches these. */
+/** How far a post or a wall block is sunk, so no slope opens a gap under it. */
+const SINK = 48;
+
 export function arenaMatrices(): { tiles: Float32Array; blocks: Float32Array; columns: Float32Array } {
   const tiles: number[] = [];
   const step = 218;
@@ -191,14 +199,22 @@ export function arenaMatrices(): { tiles: Float32Array; blocks: Float32Array; co
   const columns: number[] = [];
   const columnScales: number[] = [];
   for (const [x, y, scale] of COLUMNS) { columns.push(x, y, 0); columnScales.push(scale); }
-  return { tiles: pack(tiles), blocks: pack(blocks), columns: pack(columns, columnScales) };
+  // Tiles lie on the ground and tip with it, like slabs laid over a hill.
+  // Posts and walls stay upright and are sunk instead: a leaning post reads
+  // as a mistake where a leaning paving slab reads as ground.
+  return {
+    tiles: layOnGround(tiles),
+    blocks: pack(blocks, undefined, true),
+    columns: pack(columns, columnScales, true),
+  };
 }
 
 /** Triples of x, y, turn into column-major placements, optionally scaled. */
-function pack(triples: number[], scales?: number[]): Float32Array {
+function pack(triples: number[], scales?: number[], onGround = false): Float32Array {
   const n = triples.length / 3;
   const out = new Float32Array(n * 16);
   for (let i = 0; i < n; i++) {
+    const x = triples[i * 3]; const y = triples[i * 3 + 1];
     const a = triples[i * 3 + 2];
     const k = scales ? scales[i] : 1;
     const c = Math.cos(a) * k; const s = Math.sin(a) * k;
@@ -206,7 +222,20 @@ function pack(triples: number[], scales?: number[]): Float32Array {
     out[o] = c; out[o + 1] = s;
     out[o + 4] = -s; out[o + 5] = c;
     out[o + 10] = k;
-    out[o + 12] = triples[i * 3]; out[o + 13] = triples[i * 3 + 1]; out[o + 15] = 1;
+    out[o + 12] = x; out[o + 13] = y;
+    out[o + 14] = onGround ? height(x, y) - SINK : 0;
+    out[o + 15] = 1;
+  }
+  return out;
+}
+
+/** Triples of x, y, turn laid flat on the ground and tipped to its slope. */
+function layOnGround(triples: number[]): Float32Array {
+  const n = triples.length / 3;
+  const out = new Float32Array(n * 16);
+  for (let i = 0; i < n; i++) {
+    const x = triples[i * 3]; const y = triples[i * 3 + 1];
+    placeOnSlope(out, i, x, y, height(x, y) - 2, triples[i * 3 + 2], normal(x, y));
   }
   return out;
 }

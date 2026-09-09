@@ -7,28 +7,18 @@
  * slot rather than leaving a hole, so the live prefix stays dense.
  */
 import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS } from './scene';
+import { Vehicle } from './vehicle';
 
 export const MAX_ENEMIES = 300;
 export const MAX_BOLTS = 300;
 export const MAX_BLASTS = 28;
 
-/**
- * The ship flies the way Asteroids' does: it turns, it thrusts along where it
- * is pointing, and it keeps going. Nothing here steers toward a cursor.
- */
-const TURN_RATE = 3.7;         // radians a second
 /** How fast the gun can be swung round. A turret slews; it does not snap. */
 const SLEW_RATE = 6.5;
 /** Where the gun sits along the truck, and how far the muzzle is past it. */
 export const TURRET_BACK = -52;
 export const BARREL_REACH = 150;
-const THRUST = 2150;           // mm a second squared
-/** Drag as a rate: velocity is multiplied by exp(-rate · dt) each step, so it
- *  is frame-rate independent in a way `v *= 0.98` is not. */
-const DRAG = 0.5;
-const BRAKE = 3.4;
-const MAX_SPEED = 1180;
-/** How much of its speed the ship keeps when it meets a wall or a post. */
+/** How much of its speed the truck keeps when it meets a wall or a post. */
 const BOUNCE = 0.45;
 /**
  * How wide the truck is for the purpose of not being inside a post. It is
@@ -36,7 +26,7 @@ const BOUNCE = 0.45;
  * two, which keeps a corner from visibly sinking into a post without making
  * the gaps between them feel narrower than they look.
  */
-const SHIP_RADIUS = 98;
+const TRUCK_RADIUS = 98;
 const BOLT_SPEED = 1950;
 const BOLT_LIFE = 1.5;
 const FIRE_EVERY = 0.085;
@@ -82,17 +72,31 @@ export interface Input {
 }
 
 export class Arena {
-  // the player
-  px = 0; py = -700; pAngle = Math.PI / 2; aim = Math.PI / 2;
-  /** How far the wheels have rolled, in radians. Only the bolts show it. */
-  wheelSpin = 0;
-  /** Velocity. The ship carries it: nothing else in the arena does. */
-  pvx = 0; pvy = 0;
-  /** How hard the throttle and brake are down, for the lamps to be drawn from. */
-  thrusting = 0;
-  braking = 0;
-  /** Which way it was last asked to turn, for the hull to bank by. */
-  lastTurn = 0;
+  /**
+   * The player, which is now a vehicle rather than a dot with a velocity.
+   * Everything below it is a reading of that: the arena's rules ask where the
+   * truck is and how fast, and never set either.
+   */
+  readonly truck = new Vehicle(0, -700);
+  /** Where the gun points, which is the truck's only independent angle. */
+  aim = Math.PI / 2;
+
+  get px() { return this.truck.x; }
+  get py() { return this.truck.y; }
+  get pz() { return this.truck.z; }
+  get pAngle() { return this.truck.yaw; }
+  get pitch() { return this.truck.pitch; }
+  get roll() { return this.truck.roll; }
+  get pvx() { return this.truck.vx; }
+  get pvy() { return this.truck.vy; }
+  get speed() { return this.truck.speed; }
+  get airborne() { return this.truck.airborne; }
+  get slide() { return this.truck.slide; }
+  get thrusting() { return this.truck.throttle; }
+  get braking() { return this.truck.braking; }
+  /** How far the wheels have rolled. Only the bolts on their faces show it. */
+  get wheelSpin() { return this.truck.wheels[0].spin; }
+
   lives = 3; invuln = 0; score = 0; wave = 1;
   /** Counts down after a shot; drives the muzzle flash as well as the cadence. */
   cooldown = 0;
@@ -124,7 +128,8 @@ export class Arena {
   private waveLeft = 34;
 
   step(dt: number, input: Input) {
-    this.drive(dt, input);
+    this.truck.step(dt, { steer: input.turn, throttle: input.thrust, brake: input.brake });
+    this.keepInside();
     this.slewGun(dt, input);
     if (this.invuln > 0) this.invuln -= dt;
     this.rebuildGrid();
@@ -147,61 +152,41 @@ export class Arena {
     this.blasts = this.blasts.filter((b) => b.age < b.life);
   }
 
-  private drive(dt: number, input: Input) {
-    // eased, so the bank the hull is drawn with does not snap on and off
-    this.lastTurn += (input.turn - this.lastTurn) * Math.min(1, dt * 9);
-    this.pAngle += input.turn * TURN_RATE * dt;
-    this.thrusting = Math.max(0, Math.min(1, input.thrust));
-    this.braking = Math.max(0, Math.min(1, input.brake));
-    if (this.thrusting > 0) {
-      this.pvx += Math.cos(this.pAngle) * THRUST * this.thrusting * dt;
-      this.pvy += Math.sin(this.pAngle) * THRUST * this.thrusting * dt;
-    }
-    // exponential, so the same dt twice slows it by the same amount as one
-    // step of twice the dt — a fixed factor a frame would not
-    const drag = Math.exp(-(DRAG + BRAKE * Math.max(0, Math.min(1, input.brake))) * dt);
-    this.pvx *= drag; this.pvy *= drag;
-    const speed = Math.hypot(this.pvx, this.pvy);
-    if (speed > MAX_SPEED) {
-      this.pvx = (this.pvx / speed) * MAX_SPEED;
-      this.pvy = (this.pvy / speed) * MAX_SPEED;
-    }
-    this.px += this.pvx * dt;
-    this.py += this.pvy * dt;
-
-    // the walls are solid rather than a wrap: the arena has an inside
+  /**
+   * The walls and the posts, applied to the truck after it has moved.
+   *
+   * Still a circle against circles in plan, which is the right amount of
+   * collision for this: the truck cannot leave the floor sideways and the
+   * posts are round. What changed is that it is pushing a body with momentum
+   * and a spin rather than a dot, so a glancing hit turns it.
+   */
+  private keepInside() {
+    const t = this.truck;
     const limX = ARENA_X - 110;
     const limY = ARENA_Y - 110;
-    if (this.px < -limX) { this.px = -limX; this.pvx = Math.abs(this.pvx) * BOUNCE; }
-    if (this.px > limX) { this.px = limX; this.pvx = -Math.abs(this.pvx) * BOUNCE; }
-    if (this.py < -limY) { this.py = -limY; this.pvy = Math.abs(this.pvy) * BOUNCE; }
-    if (this.py > limY) { this.py = limY; this.pvy = -Math.abs(this.pvy) * BOUNCE; }
+    if (t.x < -limX) { t.x = -limX; t.vx = Math.abs(t.vx) * BOUNCE; }
+    if (t.x > limX) { t.x = limX; t.vx = -Math.abs(t.vx) * BOUNCE; }
+    if (t.y < -limY) { t.y = -limY; t.vy = Math.abs(t.vy) * BOUNCE; }
+    if (t.y > limY) { t.y = limY; t.vy = -Math.abs(t.vy) * BOUNCE; }
 
-    // and against the posts: pushed out of the overlap, then the part of its
-    // velocity going into the post reflected, which leaves the part going
-    // along it alone. Sliding round one at speed is the point of them.
     for (const [cx, cy, scale] of COLUMNS) {
-      const dx = this.px - cx;
-      const dy = this.py - cy;
-      const reach = COLUMN_RADIUS * scale + SHIP_RADIUS;
+      const dx = t.x - cx;
+      const dy = t.y - cy;
+      const reach = COLUMN_RADIUS * scale + TRUCK_RADIUS;
       const d2 = dx * dx + dy * dy;
       if (d2 >= reach * reach || d2 < 1e-6) continue;
       const d = Math.sqrt(d2);
       const nx = dx / d; const ny = dy / d;
-      this.px = cx + nx * reach;
-      this.py = cy + ny * reach;
-      const into = this.pvx * nx + this.pvy * ny;
+      t.x = cx + nx * reach;
+      t.y = cy + ny * reach;
+      const into = t.vx * nx + t.vy * ny;
       if (into < 0) {
-        this.pvx -= into * (1 + BOUNCE) * nx;
-        this.pvy -= into * (1 + BOUNCE) * ny;
+        t.vx -= into * (1 + BOUNCE) * nx;
+        t.vy -= into * (1 + BOUNCE) * ny;
+        // a corner clipped off a post turns the truck as well as stopping it
+        t.wYaw += (nx * t.vy - ny * t.vx) * 4e-4;
       }
     }
-
-    // the wheels roll by however far the truck went along its own nose; a
-    // slide sideways does not turn them, which is what makes a skid look like
-    // a skid
-    const along = this.pvx * Math.cos(this.pAngle) + this.pvy * Math.sin(this.pAngle);
-    this.wheelSpin += (along * dt) / 31;
   }
 
   /**
@@ -226,9 +211,6 @@ export class Arena {
   /** Where the muzzle is: what the shots come out of and the flash sits on. */
   get muzzleX(): number { return this.gunX + Math.cos(this.aim) * BARREL_REACH; }
   get muzzleY(): number { return this.gunY + Math.sin(this.aim) * BARREL_REACH; }
-
-  /** How fast it is going, for the panel and for the plume. */
-  get speed(): number { return Math.hypot(this.pvx, this.pvy); }
 
   /** Bucket every live enemy by where it is standing. */
   private rebuildGrid() {
@@ -425,9 +407,9 @@ export class Arena {
     this.enemies = 0; this.bolts = 0; this.blasts = [];
     this.lives = 3; this.score = 0; this.wave = 1;
     this.waveLeft = 34; this.spawnIn = 1.0;
-    this.px = 0; this.py = -700; this.invuln = 2;
-    this.pvx = 0; this.pvy = 0; this.pAngle = Math.PI / 2; this.aim = this.pAngle;
-    this.wheelSpin = 0;
+    this.truck.reset(0, -700, Math.PI / 2);
+    this.invuln = 2;
+    this.aim = Math.PI / 2;
   }
 }
 

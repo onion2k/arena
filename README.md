@@ -30,7 +30,7 @@ Needs a browser with WebGPU.
 | --- | --- |
 | **A** **D** or ← → | steer |
 | **W** or ↑ | throttle, along wherever the truck is pointing |
-| **S** or ↓ | brake |
+| **S** or ↓ | brake, and reverse once stopped |
 | mouse | point the gun and its searchlight, which swing independently of the truck |
 | **space** or **F** | fire (it auto-fires as well) |
 | **X** | auto-fire on and off |
@@ -39,18 +39,46 @@ Needs a browser with WebGPU.
 | wheel | in, or out until the whole arena is in frame |
 | **C** | put the camera back |
 
-The truck drives the way an Asteroids ship flies: it carries momentum, drag
-pulls it down over about a second, and its own velocity carries into the
-shots it fires, so running away while shooting backwards gives slow bullets.
-The walls are solid rather than a wrap — it keeps about half its speed off
-one. The wheels roll by however far it went *along its own nose*, so a slide
-sideways does not turn them and a skid looks like a skid.
+The truck is a rigid body on four wheels, not a dot with a velocity. Every
+frame a ray goes down from each wheel to find the ground; each wheel that
+finds it pushes the body up through a spring and a damper, and that push is
+also the load that wheel is carrying and so the size of the friction circle
+its tyre has to spend. In that circle each tyre kills what sideways velocity
+it can and drives or brakes along its own facing, and asking for more than
+the circle holds is what makes a corner a corner. Everything is summed as
+force *and* as torque about the centre of mass, so the truck dives, leans and
+pitches over a crest without any of those being written down anywhere.
+
+It steers rather than turning: the front wheels point, and a stopped car does
+not rotate. Hold the brake once it has stopped and it reverses, which matters
+more than it sounds — a car pushed straight back out of whatever it hits, and
+unable to steer without moving, is wedged there forever otherwise.
+
+A wheel with no ground under it makes no force at all, so a jump is not a
+special case: the springs run out of travel, the wheels stop pushing, and
+gravity is all that is left.
 
 The gun is not the truck. It slews toward wherever the mouse is pointing at
 its own rate rather than snapping there, and driving one way while shooting
 another is the whole point of the thing. The aim is only taken while no
 button is down, so dragging the camera round does not haul the turret with
 it.
+
+The floor is a field of shallow hills — three long swells, a roll, and bands
+of sharper ramps — described by one function that the wheels, the ground mesh,
+the tiles, the posts and the walls all read. Nothing approximates anything
+else, so the truck can never be seen floating over a hill or sunk into one.
+
+The ramps are sized against the truck rather than for the look. A wheel leaves
+a crest when v²·κ exceeds gravity, but the climb is paid for out of the same
+speed, so for each wavelength there is a best height and a lowest approach
+speed that can clear it at all: 520mm wants 1800 mm/s, 650mm wants 2015, 820mm
+wants 2263. They are 650 by 52 against a top speed of about 2400 — a jump is
+inside what the engine can reach, but only on a run, and only crossing the
+ramps rather than running along them. Nothing shorter, whatever it would do
+for the jumps: at three wheelbases the axles sit on opposite phases of every
+ripple and a truck that should be riding a hill is being shaken by a
+washboard.
 
 The arena is 4.8 metres square, with twenty-four solid posts standing on a
 five-by-five grid — only the very middle is left open. The posts are the only
@@ -130,12 +158,9 @@ slower. `measure(width, height, frames)` is on the console for repeating it.
 
 | scene | lights | ms a frame |
 | --- | ---: | ---: |
-| empty arena | 29 | 2.61 |
-| 80 enemies | 30 | 2.67 |
-| 180 enemies | 30 | 2.70 |
-| 300 enemies (the pool full) | 29 | 2.69 |
-| 300 enemies, point lights off | — | 0.85 |
-| 300 enemies, radius cull off | 29 | 3.35 |
+| empty arena | 30 | 2.52 |
+| 180 enemies | 30 | 2.62 |
+| 300 enemies (the pool full) | 28 | 2.63 |
 
 Medians of five runs of 120 frames each; one run in five came back high,
 which is why they are medians rather than firsts. The light count stops at
@@ -157,7 +182,8 @@ omnidirectional lights, 3.9 ms against 3.0, because a spotlight's radius is
 already most of the arena and it is the cone that rejects the pixel.
 
 The CPU side is not the problem either: one `arena.step` with the pool of 300
-full is **0.16 ms**. It is 0.56 ms if the shots and the crowd scan every enemy
+full is **0.11 ms**, of which the vehicle — four substeps of a rigid body on
+four suspension rays — is 0.006. It is 0.56 ms if the shots and the crowd scan every enemy
 instead of reading a grid of the floor — neither is near a frame's budget, but
 the scan grows with the square of the crowd and the grid does not, so the grid
 is there for the next size rather than for this one.

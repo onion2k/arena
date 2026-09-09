@@ -87,3 +87,90 @@ export function placeAxle(
   out[o + 8] = sy; out[o + 9] = -cy; out[o + 10] = 0; out[o + 11] = 0;
   out[o + 12] = x; out[o + 13] = y; out[o + 14] = z; out[o + 15] = 1;
 }
+
+/**
+ * A placement standing on sloping ground: turned to `yaw` about the world's
+ * up, then tipped so that its own up is the ground's normal.
+ *
+ * The heading is projected onto the ground plane rather than composed as a
+ * second rotation, which keeps a thing pointing the way it was asked to point
+ * however steep the slope under it.
+ */
+export function placeOnSlope(
+  out: Float32Array, i: number,
+  x: number, y: number, z: number,
+  yaw: number, n: [number, number, number], scale = 1,
+) {
+  let fx = Math.cos(yaw); let fy = Math.sin(yaw); let fz = 0;
+  const along = fx * n[0] + fy * n[1] + fz * n[2];
+  fx -= n[0] * along; fy -= n[1] * along; fz -= n[2] * along;
+  const len = Math.hypot(fx, fy, fz) || 1;
+  fx /= len; fy /= len; fz /= len;
+  const lx = n[1] * fz - n[2] * fy;
+  const ly = n[2] * fx - n[0] * fz;
+  const lz = n[0] * fy - n[1] * fx;
+  const o = i * 16;
+  out[o] = fx * scale; out[o + 1] = fy * scale; out[o + 2] = fz * scale; out[o + 3] = 0;
+  out[o + 4] = lx * scale; out[o + 5] = ly * scale; out[o + 6] = lz * scale; out[o + 7] = 0;
+  out[o + 8] = n[0] * scale; out[o + 9] = n[1] * scale; out[o + 10] = n[2] * scale; out[o + 11] = 0;
+  out[o + 12] = x; out[o + 13] = y; out[o + 14] = z; out[o + 15] = 1;
+}
+
+/**
+ * A body's full placement from its three angles, as the vehicle carries them:
+ * Rz(yaw) · Ry(pitch) · Rx(roll), with an optional extra turn about its own
+ * up (a steered wheel) and a roll about its own axle (a turning one).
+ */
+export function placeVehiclePart(
+  out: Float32Array, i: number,
+  x: number, y: number, z: number,
+  yaw: number, pitch: number, roll: number,
+  scale = 1,
+) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const cr = Math.cos(roll), sr = Math.sin(roll);
+  const o = i * 16;
+  out[o] = cy * cp * scale; out[o + 1] = sy * cp * scale; out[o + 2] = -sp * scale; out[o + 3] = 0;
+  out[o + 4] = (cy * sp * sr - sy * cr) * scale;
+  out[o + 5] = (sy * sp * sr + cy * cr) * scale;
+  out[o + 6] = cp * sr * scale; out[o + 7] = 0;
+  out[o + 8] = (cy * sp * cr + sy * sr) * scale;
+  out[o + 9] = (sy * sp * cr - cy * sr) * scale;
+  out[o + 10] = cp * cr * scale; out[o + 11] = 0;
+  out[o + 12] = x; out[o + 13] = y; out[o + 14] = z; out[o + 15] = 1;
+}
+
+/**
+ * A wheel on a body: the body's own rotation, then a steer about its up, then
+ * the roll about the axle. The disc is modelled about its own z, so it is laid
+ * over a quarter turn on the way.
+ */
+export function placeVehicleWheel(
+  out: Float32Array, i: number,
+  x: number, y: number, z: number,
+  yaw: number, pitch: number, roll: number,
+  steer: number, spin: number,
+) {
+  const body = new Float32Array(16);
+  placeVehiclePart(body, 0, 0, 0, 0, yaw, pitch, roll);
+  const cs = Math.cos(steer), ss = Math.sin(steer);
+  // steer about the body's up, then lay the disc over and roll it
+  const cq = Math.cos(spin), sq = Math.sin(spin);
+  // local = Rz(steer) · Rx(90°) · Rz(spin)
+  const l = [
+    cs * cq, -cs * sq, ss,
+    ss * cq, -ss * sq, -cs,
+    sq, cq, 0,
+  ];
+  const o = i * 16;
+  for (let c = 0; c < 3; c++) {
+    for (let r = 0; r < 3; r++) {
+      let v = 0;
+      for (let k = 0; k < 3; k++) v += body[k * 4 + r] * l[k * 3 + c];
+      out[o + c * 4 + r] = v;
+    }
+    out[o + c * 4 + 3] = 0;
+  }
+  out[o + 12] = x; out[o + 13] = y; out[o + 14] = z; out[o + 15] = 1;
+}
