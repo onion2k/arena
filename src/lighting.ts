@@ -27,8 +27,16 @@ export const LIGHT_CAPACITY = 256;
 export const EFFECT_CAPACITY = 512;
 
 /**
- * The floodlights on the trackside posts: one each, aimed inward and down at
- * the tarmac beside it.
+ * The floodlights on the trackside posts: one each, aimed across the road and
+ * down at it.
+ *
+ * They lit an oblique ellipse each and left the road between them dark. A
+ * post stands 640mm to the side of a track 760 wide, so its light has to
+ * reach from 260mm away to 1020 — and a 34 degree cone from a post only 250
+ * tall cannot: it covers a band near the inner edge and grazes everything
+ * past it at an angle too shallow to light anything. The cone is 58 degrees
+ * now, and the posts are 430 tall rather than 250, which is what puts the far
+ * edge of the road at an angle that catches light at all.
  *
  * They used to sweep, which was right when the game was about finding things
  * in the dark and is wrong now. A driver needs to know what the corner does
@@ -52,12 +60,12 @@ function floods(pool: LightPool) {
     const c = hueToRgb(hue);
     pool.add({
       position: [x, y, height(x, y) + COLUMN_HEIGHT * scale - 24],
-      radius: 2000,
+      radius: 2900,
       // barely tinted: a coloured circuit is pretty, a white one is legible
       colour: [0.72 + c[0] * 0.28, 0.72 + c[1] * 0.28, 0.75 + c[2] * 0.25],
-      intensity: 9,
-      direction: [inx * side * 0.55, iny * side * 0.55, -0.83],
-      cone: [16, 34],
+      intensity: 8.5,
+      direction: [inx * side * 0.60, iny * side * 0.60, -0.80],
+      cone: [30, 58],
     });
   }
 }
