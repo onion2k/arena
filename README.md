@@ -87,8 +87,8 @@ the same angle, so **how far round the lap you are is `atan2(y, x)`, exactly,
 for nothing.** No search along the curve, no accumulating error, and a start
 line that cannot be crossed sideways.
 
-A gantry beside the line holds you for three seconds: a bulb lights each
-second, all three go out, and the clock starts. Nothing is timed before that —
+A gantry either side of the line holds you for four seconds: five bulbs on
+each post light in turn, all ten go out, and the clock starts. Nothing is timed before that —
 a lap measured from whenever the page happened to finish loading is not a lap
 time. The truck is held on its handbrake rather than frozen, so it settles on
 its springs where it stands instead of being dropped there at the go.
@@ -122,8 +122,8 @@ is a mistake that costs rather than a wall.
 
 It follows the truck at a fixed distance behind it, leading it a little in the
 direction it is going so there is more road ahead than behind. The circuit
-does not fit on one screen and is not meant to: the view is about three and a
-half metres wide against twenty-nine of track, and the road scrolls past.
+does not fit on one screen and is not meant to: the view is about five metres
+wide against twenty-nine of track, and the road scrolls past.
 Zooming out to the whole circuit is still there for looking at the lap you
 have just driven.
 
@@ -135,7 +135,16 @@ when the whole thing fitted, and it no longer does.
 
 ## The ground
 
-A field of shallow hills described by one function that the wheels, the ground
+The tarmac is one ribbon of triangles following the centreline, and not a run
+of slabs. Slabs were placed at even steps of arc measured on the centreline,
+which is fine on a straight and wrong on a corner — the outer row spreads and
+the inner bunches, so the road broke into scattered paving exactly where the
+track turned. It is lifted 22mm above the terrain, which has to beat the
+difference between two linear interpolations of the same curved surface at
+different spacings: the ground is sampled every 85mm and the ribbon every 90,
+which over the sharpest ramp is about five millimetres either way.
+
+Under it is a field of shallow hills described by one function that the wheels, the ground
 mesh, the tarmac, the posts and the walls all read. Nothing approximates
 anything else, so the truck can never be seen floating over a hill or sunk
 into one.
