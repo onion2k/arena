@@ -275,11 +275,43 @@ async function main() {
    * you have just driven.
    */
   const aim: [number, number, number] = [0, 0, CAMERA_HEIGHT];
+  /**
+   * Chase mode: the camera sits behind the truck instead of at a compass
+   * angle the driver chose. An experiment, on V.
+   *
+   * Kept as a continuous angle rather than one wrapped into a turn, because
+   * the orbit eases toward whatever it is given by simple interpolation: a
+   * truck whose yaw crosses pi would otherwise hand the camera a target 2pi
+   * away and it would swing all the way round the wrong side to reach the
+   * same place.
+   */
+  let chase = false;
+  let chaseAzimuth = 0;
+
   const followShip = (dt: number) => {
     const t = arena.truck;
-    const wantX = t.x + t.vx * LEAD_TIME;
-    const wantY = t.y + t.vy * LEAD_TIME;
-    const k = Math.min(1, dt * 4.5);
+    if (chase) {
+      // behind means opposite the nose: the orbit's azimuth is measured from
+      // the target out to the camera
+      let d = (t.yaw + Math.PI) - chaseAzimuth;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      chaseAzimuth += d;
+      // Only the azimuth, and every frame. The polar and the radius are left
+      // to the wheel and the drag, so the height and the distance of the
+      // chase are still the player's — what the mode takes away is only the
+      // choice of which way round the truck to stand.
+      orbit.setSpherical({ azimuth: chaseAzimuth });
+    }
+    // From behind, the lead that makes the overhead view work throws the
+    // truck off the side of the frame: 0.32 seconds at racing speed is 590mm
+    // of a chase that is only 1500 long, and the camera is already lagging
+    // the yaw through a corner. A third of it, and a target that catches up
+    // twice as fast.
+    const lead = chase ? CHASE_LEAD : LEAD_TIME;
+    const wantX = t.x + t.vx * lead;
+    const wantY = t.y + t.vy * lead;
+    const k = Math.min(1, dt * (chase ? 9 : 4.5));
     aim[0] += (wantX - aim[0]) * k;
     aim[1] += (wantY - aim[1]) * k;
     // up and down with the ground, more slowly than across it: a camera that
@@ -400,6 +432,25 @@ async function main() {
     last = now; t += dt;
 
     if (input.takeRecentre()) { aim[0] = 0; aim[1] = 0; reframe(true); }
+    if (input.takeChaseToggle()) {
+      chase = !chase;
+      if (chase) {
+        // Behind the truck, expressed as the angle nearest where the camera
+        // already is. The orbit eases toward whatever angle it is handed by
+        // plain interpolation and never wraps, so an angle a turn away from
+        // an identical one is a camera that swings four fifths of a circle to
+        // arrive where it could have reached in a fifth. It did: 4.95 radians
+        // the long way round, on a switch that should be barely a movement.
+        const cam = renderer.camera;
+        const now = Math.atan2(cam.position[1] - cam.target[1], cam.position[0] - cam.target[0]);
+        let d = (arena.truck.yaw + Math.PI) - now;
+        while (d > Math.PI) d -= Math.PI * 2;
+        while (d < -Math.PI) d += Math.PI * 2;
+        chaseAzimuth = now + d;
+        orbit.setSpherical({ azimuth: chaseAzimuth, polar: CHASE_POLAR, radius: CHASE_DISTANCE });
+      }
+      touched = true;
+    }
     followShip(dt);
     orbit.update();
     setDepthRange(renderer.camera);
@@ -518,6 +569,15 @@ const LEAD_TIME = 0.32;
 /** How high off the floor the camera looks. The fit solves for this exact
  *  point, so at full zoom-out the guarantee that everything is in frame holds. */
 const CAMERA_HEIGHT = 55;
+/**
+ * Where the chase camera stands: closer than the overhead view and much
+ * lower, which is the whole difference between the two. From above you read
+ * the corner; from behind you read the car.
+ */
+const CHASE_DISTANCE = 1500;
+const CHASE_POLAR = 1.18;
+/** How far ahead the chase camera looks, in seconds of travel. */
+const CHASE_LEAD = 0.1;
 
 
 /** Where the gantry posts stand: one either side of the line. */
@@ -638,11 +698,13 @@ function identity(): Float32Array {
 function watchInput(race: Race) {
   const held = new Set<string>();
   let recentre = false;
+  let chaseToggle = false;
 
   addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
     if (k === 'r') race.reset();
     if (k === 'c') recentre = true;
+    if (k === 'v') chaseToggle = true;
     // the arrows scroll the page otherwise, which in a game that uses them is
     // the page jumping about under the driver
     if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
@@ -656,6 +718,8 @@ function watchInput(race: Race) {
   return {
     /** True once, for the frame the camera should be framed again. */
     takeRecentre() { const r = recentre; recentre = false; return r; },
+    /** True once, for the frame the camera should change where it stands. */
+    takeChaseToggle() { const c = chaseToggle; chaseToggle = false; return c; },
     read(): Input {
       return {
         turn: (down('a', 'arrowleft') ? 1 : 0) - (down('d', 'arrowright') ? 1 : 0),

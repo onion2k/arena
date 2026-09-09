@@ -230,6 +230,38 @@ against the 176 a truck and a post need between them. Off the
 tarmac the grip falls away over 200mm rather than at a line, so running wide
 is a mistake that costs rather than a wall.
 
+### Behind the truck, on V
+
+An experiment, and off by default. The overhead view is the game's own; this
+puts the camera 1500mm behind the truck at 22 degrees above the horizon and
+turns it with the nose.
+
+It is driven through the orbit controller rather than around it — the mode
+writes an azimuth every frame and leaves the polar and the radius to the drag
+and the wheel, so how high and how far back the chase sits is still the
+player's, and only which way round the truck to stand is taken away. The
+controller's own easing is the camera lag, and measures at 5.4 degrees behind
+the nose at 1.24 rad/s of yaw and 8.3 through a handbrake slide, with the
+truck never leaving the middle of the frame by more than 0.03 of its width.
+
+Two things had to be got right, and both were wrong first:
+
+- The azimuth is kept as a **continuous angle, never wrapped into a turn**,
+  and entering the mode picks the value nearest where the camera already is.
+  The orbit eases toward what it is handed by plain interpolation, so an angle
+  a full turn away from an identical one is a camera that swings the long way
+  round to arrive where it could have reached in a fifth of the distance. It
+  did exactly that: 4.95 radians, on a switch that should be barely a
+  movement.
+- The **lead is a third of what the overhead view uses**. 0.32 seconds of
+  travel at racing speed is 590mm, which from 3900mm up and back is a nudge
+  and from 1500mm behind is the truck off the side of the frame.
+
+What it costs is what you would expect: from behind, the posts are in the way
+and the road ahead disappears over every crest, so it is much harder to see
+what the corner does before arriving. That is the trade the overhead view was
+chosen to avoid, and it is why this is on a key rather than instead.
+
 ## The minimap
 
 The whole circuit in the corner, with a dot per car. Two dimensions and no
