@@ -208,19 +208,27 @@ async function main() {
     const before = renderer.camera.position.slice() as [number, number, number];
     const target = renderer.camera.target.slice() as [number, number, number];
     fitted = fitCamera(renderer.camera, aspect);
-    orbit.minDistance = fitted * 0.22;
-    orbit.maxDistance = fitted;
+    // The camera follows the truck at a fixed distance now, and the fit is
+    // only how far out the wheel may go. It used to set the distance too,
+    // which is what a game whose track fits on one screen wants and this no
+    // longer is: the circuit is twenty-nine metres round and the view about
+    // three and a half wide, so the track scrolls past.
+    orbit.minDistance = FOLLOW_MIN;
+    orbit.maxDistance = Math.max(fitted, FOLLOW_DISTANCE * 1.2);
     if (move) {
-      // In closer than the fitted distance, so the ship reads: the whole
-      // arena is what the wheel is for. Moved before the orbit adopts it,
-      // because `setSpherical` eases and a view that drifts into place over
-      // the first second of play looks like something is wrong.
+      // At the follow distance, which is a length and not a fraction of the
+      // arena: how much road you can see should not depend on how big the
+      // circuit happens to be. Moved before the orbit adopts it, because
+      // `setSpherical` eases and a view that drifts into place over the first
+      // second of a race looks like something is wrong.
       const t = renderer.camera.target;
       const pos = renderer.camera.position;
+      const d = Math.hypot(pos[0] - t[0], pos[1] - t[1], pos[2] - t[2]) || 1;
+      const k = FOLLOW_DISTANCE / d;
       renderer.camera.position = [
-        t[0] + (pos[0] - t[0]) * START_ZOOM,
-        t[1] + (pos[1] - t[1]) * START_ZOOM,
-        t[2] + (pos[2] - t[2]) * START_ZOOM,
+        t[0] + (pos[0] - t[0]) * k,
+        t[1] + (pos[1] - t[1]) * k,
+        t[2] + (pos[2] - t[2]) * k,
       ];
       renderer.camera.update();
       orbit.forcePosition();
@@ -232,33 +240,29 @@ async function main() {
   };
 
   /**
-   * Where the camera looks: the ship, held inside the arena by however much
-   * of the arena is off screen.
+   * Where the camera looks: the truck, led a little in the direction it is
+   * going so there is more road ahead of it than behind.
    *
-   * `fitted` is by construction the distance at which the whole arena is in
-   * frame, so at that distance the camera must stay dead centre and nothing
-   * can come in unseen; from there the leash lengthens as you zoom in, in
-   * proportion, until up close it simply follows. That is one behaviour
-   * rather than a follow mode and a whole-arena mode, and zooming all the way
-   * out is the whole-arena mode.
+   * It used to be held on a leash whose length was how much of the arena was
+   * off screen, which kept the whole thing in frame — right when the whole
+   * thing fitted, and this circuit does not. The leash is gone and the view
+   * scrolls. Zooming all the way out is still there for looking at the lap
+   * you have just driven.
    */
   const aim: [number, number, number] = [0, 0, CAMERA_HEIGHT];
   const followShip = (dt: number) => {
-    const slack = Math.max(0, 1 - orbit.distance / fitted);
-    const wantX = clamp(arena.px, -ARENA_X * slack, ARENA_X * slack);
-    const wantY = clamp(arena.py, -ARENA_Y * slack, ARENA_Y * slack);
-    // eased, so a bounce off a wall does not snap the whole scene sideways
-    const k = Math.min(1, dt * 3.4);
+    const t = arena.truck;
+    const wantX = t.x + t.vx * LEAD_TIME;
+    const wantY = t.y + t.vy * LEAD_TIME;
+    const k = Math.min(1, dt * 4.5);
     aim[0] += (wantX - aim[0]) * k;
     aim[1] += (wantY - aim[1]) * k;
-    // and up and down with the ground, more slowly than across it: a camera
-    // that tracked every rise and jump exactly would make the arena the thing
-    // that moves rather than the truck
-    aim[2] += ((CAMERA_HEIGHT + groundAt(arena.px, arena.py) * 0.75) - aim[2]) * Math.min(1, dt * 1.8);
+    // up and down with the ground, more slowly than across it: a camera that
+    // tracked every rise and jump exactly would make the arena the thing that
+    // moves rather than the truck
+    aim[2] += ((CAMERA_HEIGHT + groundAt(t.x, t.y) * 0.75) - aim[2]) * Math.min(1, dt * 1.8);
     renderer.camera.target = [aim[0], aim[1], aim[2]];
   };
-  canvas.addEventListener('pointerdown', () => { touched = true; });
-  canvas.addEventListener('wheel', () => { touched = true; }, { passive: true });
 
   let width = 0, height = 0;
   const resize = () => {
@@ -472,13 +476,19 @@ function fitCamera(cam: GameRenderer['camera'], aspect: number): number {
   return hi;
 }
 
-/** Where the camera starts, as a fraction of the distance that fits the arena. */
-const START_ZOOM = 0.46;
+/**
+ * How far the camera sits from the truck, as a length and not a fraction of
+ * the arena: at a 40 degree lens that is about three and a half metres of road
+ * across the frame, with the truck a fourteenth of its width.
+ */
+const FOLLOW_DISTANCE = 2700;
+const FOLLOW_MIN = 1100;
+/** How far ahead of itself the camera looks, in seconds of travel. */
+const LEAD_TIME = 0.32;
 /** How high off the floor the camera looks. The fit solves for this exact
  *  point, so at full zoom-out the guarantee that everything is in frame holds. */
 const CAMERA_HEIGHT = 55;
 
-const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 
 /** Where the gantry post stands, and where its bulbs hang on it. */
 function gantryPost(): Float32Array {

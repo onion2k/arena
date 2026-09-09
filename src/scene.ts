@@ -89,17 +89,17 @@ export const LAMP_HEIGHT = 84;
  * the camera solves its distance from them, so this is the only place the
  * size lives.
  */
-export const ARENA_X = 2400;
-export const ARENA_Y = 2400;
+export const ARENA_X = 6200;
+export const ARENA_Y = 6200;
 
 export const MESHES = {
   /**
    * The ground: a grid put where the terrain function says, not a plate. It
    * runs 400mm past the walls so that its own edge is never the edge you see.
    */
-  floor: () => groundMesh(ARENA_X + 400, ARENA_Y + 400, 50),
+  floor: () => groundMesh(ARENA_X + 400, ARENA_Y + 400, 85),
   /** A slab of tarmac. Three abreast make the track, laid along it. */
-  tile: () => part('plate(card(width: 224, height: 220, corner: 14), thickness: 7, bevel: 4)', 'base'),
+  tile: () => part('plate(card(width: 226, height: 272, corner: 16), thickness: 7, bevel: 4)', 'base'),
   /** A perimeter block, laid along the wall it belongs to. */
   block: () => part('plate(card(width: 218, height: 74, corner: 12), thickness: 132, bevel: 12)', 'base'),
   /** An eight-sided column, for the corners to reflect things in. */
@@ -160,7 +160,7 @@ export function arenaMatrices(): { tiles: Float32Array; blocks: Float32Array; co
   // hill. Posts and walls stay upright and are sunk instead: a leaning post
   // reads as a mistake where a leaning paving slab reads as ground.
   return {
-    tiles: layOnGround(tarmac(3, 232)),
+    tiles: layOnGround(tarmac(3, 196)),
     blocks: pack(blocks, undefined, true),
     columns: pack(columns, columnScales, true),
   };

@@ -10,17 +10,52 @@
  * accumulating error, and a lap line that cannot be crossed sideways.
  */
 
-const R0 = 1400;
-const WOBBLE = 230;
-const KINK = 90;
+const R0 = 4200;
+const WOBBLE = 700;
+const KINK = 300;
 const KINK_PHASE = 1.1;
+/**
+ * A third, faster term. Scaling a track up scales every corner with it, so a
+ * circuit three times the size is three times easier to drive — this puts
+ * corners back in that are tight against the truck rather than against the
+ * radius of the loop.
+ */
+const TWIST = 440;
+const TWIST_PHASE = 2.3;
 
 /** Half the width of the tarmac. The truck is 128 across, so about five of it. */
-export const TRACK_HALF = 340;
+export const TRACK_HALF = 380;
 
 /** The radius of the centreline at an angle. */
 export function radiusAt(theta: number): number {
-  return R0 + WOBBLE * Math.sin(2 * theta) + KINK * Math.sin(3 * theta + KINK_PHASE);
+  return R0 + WOBBLE * Math.sin(2 * theta) + KINK * Math.sin(3 * theta + KINK_PHASE)
+    + TWIST * Math.sin(5 * theta + TWIST_PHASE);
+}
+
+/** How fast the radius is changing with the angle. */
+function dRadius(theta: number): number {
+  return 2 * WOBBLE * Math.cos(2 * theta)
+    + 3 * KINK * Math.cos(3 * theta + KINK_PHASE)
+    + 5 * TWIST * Math.cos(5 * theta + TWIST_PHASE);
+}
+
+/**
+ * How much of a step along the radius counts as a step across the track.
+ *
+ * Everything here is measured radially, because that is what makes the
+ * progress round the lap free. But the radius is only perpendicular to the
+ * track where the track is a circle, and this one is not: where the radius is
+ * changing fast the two are well apart, and a step outward along the radius
+ * is mostly a step *along* the track rather than across it.
+ *
+ * Ignoring that put the trackside posts far closer to the racing line than
+ * their 640mm said — 437mm of real clearance at the worst corner, against the
+ * 176 a truck and a post need between them — and the first fast lap ended
+ * jammed against one two hundred millimetres after the start.
+ */
+function radialToAcross(theta: number): number {
+  const r = radiusAt(theta);
+  return r / Math.hypot(r, dRadius(theta));
 }
 
 /** A point on the centreline. */
@@ -50,7 +85,7 @@ export function where(x: number, y: number): { lap: number; offset: number } {
   const r = Math.hypot(x, y);
   return {
     lap: (theta + Math.PI) / (Math.PI * 2),
-    offset: r - radiusAt(theta),
+    offset: (r - radiusAt(theta)) * radialToAcross(theta),
   };
 }
 
@@ -79,9 +114,11 @@ export function tarmac(across: number, step: number): number[] {
     const heading = Math.atan2(ty, tx);
     const nx = -Math.sin(theta); const ny = Math.cos(theta);
     void nx; void ny;
+    // a step across the track is a longer step along the radius, by however
+    // much the radius is out of square with the track here
+    const perRadial = 1 / radialToAcross(theta);
     for (let i = 0; i < across; i++) {
-      const d = (i - (across - 1) / 2) * gauge;
-      // offset across the track, which in polar form is along the radius
+      const d = (i - (across - 1) / 2) * gauge * perRadial;
       out.push(
         Math.cos(theta) * (r + d),
         Math.sin(theta) * (r + d),
@@ -97,8 +134,9 @@ export function posts(step: number): [number, number, number][] {
   const out: [number, number, number][] = [];
   let n = 0;
   for (const theta of walk(step)) {
+    const perRadial = 1 / radialToAcross(theta);
     for (const side of [-1, 1]) {
-      const r = radiusAt(theta) + side * (TRACK_HALF + 260);
+      const r = radiusAt(theta) + side * (TRACK_HALF + 260) * perRadial;
       // alternate tall and short, which is what tells the eye it is looking
       // at distance rather than at smaller posts
       out.push([Math.cos(theta) * r, Math.sin(theta) * r, n % 2 === 0 ? 1.35 : 0.95]);

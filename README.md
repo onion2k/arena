@@ -27,7 +27,7 @@ Needs a browser with WebGPU.
 | **S** or ↓ | brake, and reverse once stopped |
 | **R** | back to the line |
 | drag | swing the camera round |
-| wheel | in, or out until the whole arena is in frame |
+| wheel | in, or out until the whole circuit is in frame |
 | **C** | put the camera back |
 
 ## The truck
@@ -79,7 +79,7 @@ that drives it from wandering 295mm off the centreline to 56.
 
 ## The circuit
 
-A closed loop 9.3 metres round, defined in polar form — a radius that varies
+A closed loop 29 metres round, defined in polar form — a radius that varies
 with the angle about the middle of the arena. That is a real constraint on the
 shape, no hairpins and no figure of eight, and it buys something worth more:
 the nearest point on the centreline to anywhere in the arena is the point at
@@ -98,11 +98,40 @@ been round the far side since the last one — so rocking back and forth over
 the line counts nothing, and reversing over it un-arms the next lap rather
 than scoring one.
 
-The tightest corner is 882mm. The truck's steering lock winds off with speed,
-so it can hold 882mm at about 800 mm/s and 1400mm at 1500 — which is to say
-the corner has to be braked for, and a lap is a question about where. Off the
+The tightest corner is 568mm. The truck's steering lock winds off with speed,
+so it turns inside 631mm at 1200 and 1015mm at full speed — which is to say
+that corner has to be braked for, and a lap is a question about where.
+
+Scaling a track up scales every corner with it, so a circuit three times the
+size is three times easier to drive. A third and faster term in the radius
+puts corners back in that are tight against the truck rather than against the
+radius of the loop.
+
+Everything about the track is measured along the radius, because that is what
+makes the progress free — but the radius is only perpendicular to the track
+where the track is a circle, and this one is not. Where the radius changes
+fast the two are well apart, and a step outward along the radius is mostly a
+step *along* the track rather than across it. Correcting for that is one
+cheap factor, and without it the trackside posts sat far closer to the racing
+line than their 640mm claimed: 437mm of real clearance at the worst corner,
+against the 176 a truck and a post need between them. Off the
 tarmac the grip falls away over 200mm rather than at a line, so running wide
 is a mistake that costs rather than a wall.
+
+## The camera
+
+It follows the truck at a fixed distance behind it, leading it a little in the
+direction it is going so there is more road ahead than behind. The circuit
+does not fit on one screen and is not meant to: the view is about three and a
+half metres wide against twenty-nine of track, and the road scrolls past.
+Zooming out to the whole circuit is still there for looking at the lap you
+have just driven.
+
+The distance is a length rather than a fraction of the arena, which is the
+point of the change: how much road you can see should not depend on how big
+the circuit happens to be. It used to be held on a leash whose length was how
+much of the arena was off screen, which kept the whole thing in frame — right
+when the whole thing fitted, and it no longer does.
 
 ## The ground
 
