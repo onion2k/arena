@@ -95,9 +95,12 @@ export function where(x: number, y: number): { lap: number; offset: number } {
 export function gripAt(x: number, y: number): number {
   const off = Math.abs(where(x, y).offset);
   if (off <= TRACK_HALF) return 1;
-  // a shoulder that lets go over 200mm rather than at a line, so running wide
-  // is a mistake that costs rather than a wall
-  return 1 - 0.55 * Math.min(1, (off - TRACK_HALF) / 200);
+  // A shoulder that lets go over 200mm rather than at a line, so running wide
+  // is a mistake that costs rather than a wall. It takes away a third and not
+  // the 55% it was written with: at 55 a car that ran wide could not put its
+  // engine down at all, so a single mistake ended a race rather than costing
+  // a second of it.
+  return 1 - 0.32 * Math.min(1, (off - TRACK_HALF) / 200);
 }
 
 /**
@@ -335,3 +338,49 @@ export function kerbMesh(parity: 0 | 1, step = 90, lift = 30): Mesh {
 const KERB_OUTER = 1.17;
 /** How many ribbon steps make one block of kerb. */
 const BLOCK_RINGS = 2;
+
+/**
+ * The radius of the circle through three points on the centreline spanning
+ * `span` millimetres either side of an angle: how tight the track is there.
+ *
+ * A driver needs this and not the curvature of the tarmac under its own
+ * wheels, because what it has to decide is how fast to be by the time it
+ * arrives. Straight track comes back as a very large number rather than
+ * infinity, which is what a caller wants to divide by.
+ */
+export function curveRadius(theta: number, span: number): number {
+  const dt = span / Math.max(radiusAt(theta), 200);
+  const [ax, ay] = centreline(theta - dt);
+  const [bx, by] = centreline(theta);
+  const [cx, cy] = centreline(theta + dt);
+  const area = Math.abs((bx - ax) * (cy - ay) - (cx - ax) * (by - ay)) / 2;
+  if (area < 1e-9) return 1e9;
+  return (Math.hypot(bx - ax, by - ay) * Math.hypot(cx - bx, cy - by)
+    * Math.hypot(cx - ax, cy - ay)) / (4 * area);
+}
+
+/**
+ * Which way is the outside of the bend at an angle, and how tight it is:
+ * the unit vector pointing away from the centre of the circle the centreline
+ * is following there, and that circle's radius.
+ *
+ * A driver aiming at a point some way up the road drives the chord and not
+ * the arc, and so passes inside the centreline by the sagitta of that chord —
+ * at the tightest corner here, with a normal look-ahead, 178mm of a track
+ * whose half width is 380. This is what a driver needs to put that back.
+ */
+export function curveOutward(theta: number, span: number): [number, number, number] {
+  const dt = span / Math.max(radiusAt(theta), 200);
+  const [ax, ay] = centreline(theta - dt);
+  const [bx, by] = centreline(theta);
+  const [cx, cy] = centreline(theta + dt);
+  // the circumcentre of the three points
+  const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+  if (Math.abs(d) < 1e-9) return [0, 0, 1e9];
+  const a2 = ax * ax + ay * ay, b2 = bx * bx + by * by, c2 = cx * cx + cy * cy;
+  const ux = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / d;
+  const uy = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / d;
+  const ox = bx - ux, oy = by - uy;
+  const r = Math.hypot(ox, oy) || 1;
+  return [ox / r, oy / r, r];
+}

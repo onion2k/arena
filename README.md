@@ -69,7 +69,10 @@ without any of those being written down anywhere.
 It steers rather than turning: the front wheels point, and a stopped car does
 not rotate. Hold the brake once it has stopped and it reverses, which matters
 more than it sounds — a car pushed straight back out of whatever it hits, and
-unable to steer without moving, is wedged there forever otherwise.
+unable to steer without moving, is wedged there forever otherwise. Space is
+the handbrake, which is a different thing: it locks the back wheels and takes
+most of their sideways grip, and is for pointing the truck somewhere other
+than where it is going.
 
 A wheel with no ground under it makes no force at all, so a jump is not a
 special case: the springs run out of travel, the wheels stop pushing, and
@@ -100,6 +103,91 @@ lengths, and where to brake is a question again.
 
 Together those took a lap from 8.65 seconds to 5.60, and the line-follower
 that drives it from wandering 295mm off the centreline to 56.
+
+### Then it turned out none of that was the limit
+
+All of the above is about the car being heavy and precise, and it worked, and
+the game still was not much fun to play. Measuring the thing nobody had
+measured said why. On a full-lock skidpad at every speed the truck can reach,
+it used **between four and fifteen per cent of the grip it had**, peaking at
+0.31g of lateral acceleration against tyres worth 2.15. The tightest corner on
+the circuit asks 0.87g at top speed. So the tyres were never the limit,
+nothing could overdrive a corner, nothing a bump or a throttle did could
+unsettle it, and the radius it turned in was decided by the steering geometry
+alone. It was a slot car with a minimum radius, and the only input that
+mattered was holding the wheel over and waiting.
+
+Four things followed from that.
+
+- **Grip came down to 1.35 and the steering falloff went up to 2600.** Full
+  lock at 2200 mm/s now asks for 1.03g against the 1.35 the tyres have. Peak
+  lateral went from 0.31g to 0.76 and grip use from 4–15% to 26–56%: the
+  driver can ask for more than the car has, which is the only way a limit can
+  be something you drive to. It cannot go much lower while the engine is this
+  strong — the rear tyres have to be able to put 5800 down, and at 1.05 they
+  could not, so a field of four spent 91% of a race stationary and spinning
+  its wheels.
+- **The rear tyres get 92% of the front's grip**, so the back lets go first
+  and lets go progressively, and there is something to catch.
+- **`gripAt` was wired in.** It had been sitting in the track module, fully
+  written, called by nothing: the grass gripped exactly as well as the road. A
+  racing line you are not punished for missing is not a racing line. It takes
+  a third of the grip away over a 200mm shoulder, and off-track rolling
+  resistance takes speed as well — needed because on a track defined as a
+  radius about a middle, cutting the inside makes the lap *shorter*, and the
+  fastest driver in the field was doing exactly that for a fifth of every lap.
+- **A handbrake**, on the space bar, which is the one input that is not a
+  request for more of something.
+
+The measured result, over a two-minute four-car race: every car finishes, best
+laps 14.18 to 14.82 seconds, no spins, no car stationary at any point, and
+10.7% of the time with a wheel off the road. Solo, the four skill levels
+separate by 1.7 seconds a lap.
+
+### The handbrake is not a fast way round anything
+
+It was swept over how much sideways grip it leaves the rear and how hard it
+locks, and it never once turned the truck through more of a corner than
+steering did: cutting the rear's sideways grip cuts the rear's share of the
+cornering with it, so the truck rotates and runs wide at the same time. What
+it buys is 45 degrees of slip angle that comes back the moment you let go,
+for three quarters of the speed carried in. That is what a handbrake turn
+costs a real car too, and it is kept on those terms.
+
+Getting there took three wrong tunings, each of which is recorded in the
+source where it matters:
+
+- Left alone the handbrake took **99% of the speed away in seven tenths of a
+  second** — a parking brake, not a drift. Its longitudinal force is capped
+  now.
+- That was also why it looked random. With the truck nearly stopped, any
+  rotation at all reads as a slip angle of 180 degrees, so the same key gave a
+  tidy 42-degree slide at full lock and an apparent spin at three quarters.
+- Fading it out on the yaw rate rather than the slip angle sounded better and
+  measured worse. It is on the slip angle, with full grip back by 60 degrees —
+  well inside the 90 past which a tyre stops arresting a spin and starts
+  feeding it, because once the truck is travelling sideways the direction its
+  contact patch is sliding is along the truck rather than across it.
+
+### The drivers
+
+An opponent follows the centreline offset by a line of its own, and it now
+does two things it did not. It **steers for a yaw rate** rather than
+multiplying the heading error by a constant: that constant was chosen when
+full lock at speed was 0.23 radians and could not spin anything, and with the
+lock the truck has now it saturated at any error over 22 degrees and put full
+opposite lock on at 2000 mm/s. And it **brakes for the radius ahead** rather
+than for the corner it is already in — it reads how tight the track is far
+enough up the road to stop from here, works out what the tyres will hold
+there, and arrives already slowed. That is the difference between an opponent
+you follow and one you can out-brake.
+
+It also aims at a point corrected outward by the sagitta of the chord it is
+driving. A driver steering straight at a point on an arc passes inside that
+arc — at the tightest corner here, 178mm of a track whose half width is 380 —
+which is why the fastest car in the field spent a fifth of its lap off the
+road on the inside of every corner. Correcting it took that from 20.9% to
+9.7%, and the other three drivers to zero.
 
 ## The circuit
 

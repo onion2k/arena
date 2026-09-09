@@ -661,6 +661,7 @@ function watchInput(race: Race) {
         turn: (down('a', 'arrowleft') ? 1 : 0) - (down('d', 'arrowright') ? 1 : 0),
         throttle: down('w', 'arrowup') ? 1 : 0,
         brake: down('s', 'arrowdown') ? 1 : 0,
+        handbrake: down(' '),
       };
     },
   };

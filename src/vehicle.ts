@@ -34,6 +34,7 @@
  * a torque divided by one gives an angular acceleration directly.
  */
 import { height, normal } from './terrain';
+import { gripAt } from './track';
 
 const G = 9810;                  // mm a second squared
 
@@ -52,6 +53,8 @@ export const WHEELS: [number, number, number][] = [
   [-83, -64, -4], [-83, 64, -4],
 ];
 export const WHEEL_RADIUS = 31;
+/** Front axle to rear axle, which is what sets the turning circle. */
+export const WHEELBASE = WHEELS[0][0] - WHEELS[2][0];
 /** How far the wheel hangs below its mounting when nothing is pushing on it. */
 const REST = 28;
 const TRAVEL = 26;
@@ -79,13 +82,37 @@ const DAMPER = 22;
  */
 const ANTI_ROLL = 120;
 
-/** Grip, as a multiple of the load a tyre is carrying. */
-const MU = 2.15;
+/**
+ * Grip, as a multiple of the load a tyre is carrying.
+ *
+ * It was 2.15, and the tightest corner on the circuit asks for 0.87g at top
+ * speed — so the tyres had five times the grip anything ever wanted from
+ * them. Measured on a full-lock skidpad, the truck used between four and
+ * fifteen per cent of its grip at every speed it can reach, peaking at 0.31g
+ * of lateral acceleration: the radius it turned in was set by the steering
+ * geometry and nothing else. There was no limit to find, no way to overdrive
+ * a corner, and nothing a bump or a throttle could unsettle. It was a slot
+ * car with a minimum radius.
+ *
+ * At 1.35 the limit is inside what the driver can ask for, which is the whole
+ * point: a corner taken too fast runs wide, the back steps out under power,
+ * and holding it near the limit is a thing you can do well or badly. Full
+ * lock now asks for between a third and three quarters of what the tyres
+ * have, depending on speed, and a bump or a throttle spends the rest.
+ *
+ * It cannot go much below that while the engine is this strong. Drive is
+ * shared by two rear wheels carrying about a quarter of the truck each, so
+ * the rear tyres can put down 2·MU·G/4 before they spin: at 1.05 that is
+ * 5150 against an engine of 5800, and the truck stood at every corner exit
+ * spinning its wheels and going nowhere. A field of four spent 91% of a
+ * two-minute race stationary.
+ */
+export const MU = 1.35;
 /**
  * How quickly a tyre tries to kill sideways slip, if it has the grip to.
  * Shorter is a tyre that bites rather than one that takes a moment to decide.
  */
-const LATERAL_TAU = 0.055;
+const LATERAL_TAU = 0.075;
 const BRAKE_TAU = 0.11;
 /**
  * The most the brakes can pull, as body acceleration, whatever grip is
@@ -102,11 +129,91 @@ const BRAKE_TAU = 0.11;
  * a truck is also most of what "heavy" means to drive.
  */
 const BRAKE_MAX = 3600;
+/**
+ * What the rear tyres get of the front's grip.
+ *
+ * A car with the same grip at both ends has no character at the limit: it
+ * washes out at all four corners at once and there is nothing to catch.
+ * Taking a little off the back means the rear lets go first, and lets go
+ * progressively, so the truck rotates into a corner when it is overdriven and
+ * can be held there. Only 8%: much more and it is a car that wants to spin.
+ */
+const REAR_GRIP = 0.92;
+/**
+ * The handbrake: what the rear tyres keep of their sideways grip while it is
+ * pulled, and how hard it locks them.
+ *
+ * This is the one input in the game that is not a request for more of
+ * something. Steering, throttle and brake all ask the car to do what it was
+ * going to do, harder; the handbrake asks it to do something it otherwise
+ * cannot, which is to point somewhere other than where it is going. A car you
+ * can only drive forwards round a corner is a car with one thing to say.
+ *
+ * It is not a fast way round anything, and it was tuned knowing that. Swept
+ * over how much grip it leaves and how hard it locks, it never once turned
+ * the truck through more of a corner than simply steering did — cutting the
+ * rear's sideways grip cuts the rear's share of the cornering with it, so the
+ * truck rotates and runs wide at the same time. What it buys is 45 degrees of
+ * slip angle that comes back when you let go, for three quarters of the speed
+ * carried in. That is what a handbrake turn costs a real car too.
+ */
+const HANDBRAKE_GRIP = 0.15;
+const HANDBRAKE_TAU = 0.05;
+/**
+ * Where the handbrake stops helping: at full effect below this much body
+ * slip, in radians, and doing nothing at all above the second figure.
+ *
+ * Without a fade the input is not a slide, it is a pirouette — held for six
+ * tenths of a second at top speed the truck went round through 171 degrees
+ * and came out at five per cent of the speed it went in at, which is not a
+ * corner taken sideways, it is a race ended by touching a key.
+ *
+ * Past about ninety degrees there is nothing to fade back to: a tyre opposes
+ * the way its own contact patch is sliding, and once the truck is travelling
+ * sideways that direction is along the truck rather than across it, so the
+ * rear tyres stop arresting the rotation and start feeding it. Everything
+ * here is about not arriving there. The fade is well inside it — full grip
+ * back by sixty degrees — which leaves the tyres a wide margin to work in.
+ */
+const HANDBRAKE_FADE = [0.62, 1.05];
+/**
+ * The most the handbrake will pull, per rear wheel, as body acceleration.
+ *
+ * Locked rear wheels carrying half the truck at this much grip stop it at
+ * two thirds of a gravity, which is what the model gives if it is left to
+ * itself — and a handbrake held for seven tenths of a second then takes
+ * ninety-nine per cent of the speed away. That is not a drift, it is a
+ * parking brake, and it was also what made the input look random: with the
+ * truck almost stopped, any rotation at all reads as a slip angle of 180
+ * degrees, so the same key gave a tidy slide at one steering angle and an
+ * apparent spin at another. Capped, the handbrake does the job it is for,
+ * which is to take the back tyres' sideways grip away and leave the truck
+ * still moving.
+ */
+const HANDBRAKE_MAX = 400;
 /** Below this much forward speed, the brake becomes reverse. */
 const REVERSE_BELOW = 60;
 /** How much of the engine reverse gets. Enough to get out of trouble, not to race. */
 const REVERSE_POWER = 0.45;
 const ROLL_RESIST = 0.06;
+/**
+ * Extra rolling resistance off the tarmac, per unit of grip the surface has
+ * lost: dirt and grass drag as well as letting go.
+ *
+ * Grip alone was not enough to keep the field on the road, for a reason
+ * particular to a track defined as a radius about a middle: leaving it on the
+ * inside makes the lap shorter. The fastest driver in the field spent a fifth
+ * of its lap off the road because the distance it saved was worth more than
+ * the grip it gave up, which is a racing line that ignores the circuit. This
+ * is the other half of the shoulder — a car that runs wide is slowed as well
+ * as loosened, and cutting stops paying.
+ *
+ * It was 0.62, which is 0.3g of drag off the tarmac, and at that it was the
+ * loudest thing in the model: every measurement of anything else taken with a
+ * wheel off the road was really a measurement of this. Half of that is still
+ * a second a lap.
+ */
+const ROUGH_DRAG = 0.30;
 const ENGINE = 5800;             // total drive acceleration at full throttle
 /**
  * Aerodynamic drag, and what actually sets the top speed: the engine and this
@@ -127,9 +234,19 @@ export const MAX_SPEED = 2800;
  * the tightest corner on the circuit, so the corner could not be taken at
  * speed however much grip the tyres had. At 850 the same speed keeps 0.23
  * radians and a 710mm circle.
+ *
+ * 850 was still not enough, for a reason that only shows up when the two
+ * limits are compared: a 710mm circle at 1500 mm/s is 0.23g, and the tyres
+ * had 2.15g. Every corner was decided by how far the wheels would turn, and
+ * the driver's only input was to hold the wheel over and wait. A real car's
+ * steering ratio does not change with speed at all; this keeps some falloff
+ * because the keyboard is a switch and full lock arriving instantly at speed
+ * is a spin, but at 2600 the lock at 2200 mm/s asks for 1.03g against the
+ * 1.05 the tyres have. The driver can now ask for more than the car has,
+ * which is the only way a limit can be a thing you drive to.
  */
-const STEER_LOCK = 0.62;
-const STEER_FALLOFF = 850;
+export const STEER_LOCK = 0.62;
+export const STEER_FALLOFF = 2600;
 const STEER_RATE = 4.6;
 
 /**
@@ -182,6 +299,11 @@ export interface Drive {
    * metre a second.
    */
   hold?: boolean;
+  /**
+   * Lock the rear wheels and take most of their sideways grip: a slide you
+   * asked for. Unlike `hold` this is a thing you do while moving fast.
+   */
+  handbrake?: boolean;
 }
 
 export interface Wheel {
@@ -249,6 +371,7 @@ export class Vehicle {
     const wanted = clamp(drive.steer, -1, 1) * (STEER_LOCK / (1 + this.speed / STEER_FALLOFF));
     this.steer += clamp(wanted - this.steer, -STEER_RATE * dt, STEER_RATE * dt);
     this.throttle = drive.hold ? 0 : clamp(drive.throttle, 0, 1);
+    if (drive.handbrake) this.throttle = 0;
     this.braking = drive.hold ? 1 : clamp(drive.brake, 0, 1);
 
     // the body's axes, from its three angles
@@ -266,6 +389,20 @@ export class Vehicle {
     // that should pitch it by rolling instead, which is not subtle.
     const rollAxX = cy, rollAxY = sy;
     const pitchAxX = -sy, pitchAxY = cy;
+
+    // How much of the handbrake is doing anything: all of it until the truck
+    // is properly sideways, then none. See HANDBRAKE_FADE.
+    let hand = 0;
+    if (drive.handbrake) {
+      let slip = 0;
+      if (this.speed > 120) {
+        slip = Math.atan2(this.vy, this.vx) - this.yaw;
+        while (slip > Math.PI) slip -= Math.PI * 2;
+        while (slip < -Math.PI) slip += Math.PI * 2;
+      }
+      const [full, none] = HANDBRAKE_FADE;
+      hand = 1 - clamp((Math.abs(slip) - full) / (none - full), 0, 1);
+    }
 
     let ax = 0; let ay = 0; let az = -G;
     let tRoll = 0; let tPitch = 0; let tYaw = 0;
@@ -336,16 +473,29 @@ export class Vehicle {
       const vFwd = pvx * tfx + pvy * tfy + pvz * tfz;
       const vSide = pvx * tsx + pvy * tsy + pvz * tsz;
 
-      const grip = MU * load;
+      // What the surface gives back, which is the tarmac's grip on the tarmac
+      // and falls away over a shoulder either side of it. `gripAt` existed
+      // and was never called by anything: the grass held exactly as well as
+      // the road, so running wide cost nothing, and a racing line you are not
+      // punished for missing is not a racing line.
+      const rear = i >= 2;
+      const surface = gripAt(mx, my);
+      let grip = MU * load * surface * (rear ? REAR_GRIP : 1);
+      if (hand > 0 && rear) grip *= 1 - (1 - HANDBRAKE_GRIP) * hand;
       let wantSide = -vSide / LATERAL_TAU;
-      let wantFwd = -vFwd * ROLL_RESIST;
+      let wantFwd = -vFwd * (ROLL_RESIST + ROUGH_DRAG * (1 - surface));
       if (drive.hold) {
         // uncapped, unlike the brake pedal: a handbrake locks the wheels and
         // is limited by the tyres rather than by the brakes, which is what
         // makes it hold on a slope instead of creeping down one
         wantFwd += -vFwd / 0.03;
       }
-      if (i >= 2 && !drive.hold) wantFwd += (this.throttle * ENGINE) / 2;   // rear wheel drive
+      if (rear && !drive.hold) wantFwd += (this.throttle * ENGINE) / 2;   // rear wheel drive
+      // the handbrake locks the back wheels, and a locked wheel is spending
+      // its whole circle on stopping and has none left to hold the line with
+      if (hand > 0 && rear) {
+        wantFwd += clamp(-vFwd / HANDBRAKE_TAU, -HANDBRAKE_MAX, HANDBRAKE_MAX) * hand;
+      }
       if (this.braking > 0 && !drive.hold) {
         // Brake, and then reverse once it has stopped. A car cannot steer
         // without moving, and this one is pushed straight back out of

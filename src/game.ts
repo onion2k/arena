@@ -32,6 +32,8 @@ export interface Input {
   turn: number;
   throttle: number;
   brake: number;
+  /** The handbrake: a slide you asked for. */
+  handbrake?: boolean;
 }
 
 /**
@@ -183,7 +185,7 @@ export class Race {
     const all = this.cars.map((c) => c.vehicle);
     for (const c of this.cars) {
       const drive = c.skill === null
-        ? { steer: input.turn, throttle: input.throttle, brake: input.brake }
+        ? { steer: input.turn, throttle: input.throttle, brake: input.brake, handbrake: input.handbrake }
         : driveRound(c.vehicle, c.skill, all);
       c.vehicle.step(dt, drive);
     }
