@@ -222,6 +222,7 @@ async function main() {
       anisotropy: 0.62,
       reach: 9000,
       steps: 28,
+      cones: 1,
     };
 
     const wantDay = sky.day > 0.08;

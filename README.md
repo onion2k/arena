@@ -569,16 +569,22 @@ a hill is being shaken by a washboard.
 
 ## Shadows
 
-The sun casts, and so do the eight street lights nearest the truck. Both
+The sun casts, and so do the fourteen street lights nearest the truck and
+the player's own two headlights. Both
 are the renderer's, from v0.6.0 of `artshape-render`: the game shader's sun
 was a highlight only until then, and a day on it was a bright overcast one
 lit by the environment. It has the same quarter of matte the point lights
 always had now, and one orthographic shadow map fitted round a box the game
 names — the whole arena and its apron, up to the tallest tree — read through
-four hardware-compared taps. Up to eight spotlights carry a perspective map
-each; the game hands the renderer the pool indices of the floods nearest the
-player's truck, nearest the truck rather than the camera because the shadows
-that matter are the ones you drive through.
+four hardware-compared taps. Up to **sixteen** spotlights carry a perspective
+map each, which was eight until the fog started throwing cones and it
+mattered how many lamps could throw one; the game hands the renderer the pool
+indices of the floods nearest the player's truck, nearest the truck rather
+than the camera because the shadows that matter are the ones you drive
+through. The two headlights go in first and the fourteen nearest floods
+after, because a headlight wants a map more than any lamp does: a truck
+lighting the mist in front of it should not be lighting the mist behind the
+tree in front of it.
 
 What it costs, fenced at 1080p, median of three: **1.3ms at night** — the
 sun's map, eight spot maps at 512, and the lookups, on a 2.8ms frame — and
@@ -697,9 +703,19 @@ there: every car ten laps, nothing stalled.
 
 ## The light
 
-Eighty-four floodlights on the trackside posts light the circuit and nothing
-else, which is what makes the track read as a track: the environment
-contributes 0.035 of what it would and the sun is nearly off. They used to
+Fifty floodlights on the trackside posts light the circuit and nothing else,
+which is what makes the track read as a track: the environment contributes
+0.035 of what it would and the sun is nearly off.
+
+There were a hundred, on posts every 640mm of road, and between them they lit
+the whole circuit evenly — which turned out to be the problem. A road lit
+end to end has no dark in it, and the dark is what the headlights are for: a
+truck with its lamps on under a continuous canopy of street light is a truck
+carrying a torch at noon. At every 1280mm there is a pool under each lamp and
+a stretch of road between them that only the headlights reach, which is what
+a road at night actually looks like. It also paid for the rest: half the
+lights is half the light loop, and the frame it bought went on twice as many
+shadow maps and a cone in the air under every one of them. They used to
 sweep, which was right when the game was about finding things in the dark and
 is wrong now — a driver needs to know what a corner does before entering it,
 and a light that will be pointing elsewhere by the time you arrive is worse
@@ -747,6 +763,14 @@ under power and brake lights, all bolted to a body that pitches and rolls, so
 they are placed and aimed in its frame rather than on a plane at zero.
 
 ## The mist
+
+There are two things in the air here: a mist at dawn, and a thin haze for as
+long as the street lights are on. The first is weather. The second is only
+air — a clear night still has enough in it to show a beam, which is what a
+beam is — and it is there so that the lamps and the headlights have something
+to throw a cone through. It is a third of the dawn mist: thin enough to see
+the far side of the circuit through, thick enough that every lamp has a cone
+under it. By day there is neither, and nothing is marched at all.
 
 Ground fog is a dawn thing, and for a reason worth honouring: the ground
 loses heat all night, by the small hours it is colder than the air over it,
@@ -800,16 +824,36 @@ because the march always takes `steps` of them however far it goes, and
 lowering it brings the taper close enough to see as the mist thinning too
 early.
 
-**What it costs: 0.14 to 0.36 ms** at 1920×1080 depending on how much of
-the frame is mist, and 0.52 at 2560×1440, and only between two and half
-nine. At every other hour the density is zero, the
+**What it costs: 1.35 ms** at 1920×1080 with the cones on at night — 0.5 for
+the march and 0.85 for the lamps — on a 3.64 ms frame. At dawn it is the
+same; by day it is nothing at all, because there is nothing in the air and
+both passes are skipped: noon is a 0.66 ms frame. At every other hour the density is zero, the
 passes are skipped, and the frame is exactly what it was.
 
-One thing it does not do: the floodlights do not light it. The mist is lit
-by the sun and the sky and nothing else, so a lamp at dawn has a glow on its
-head and no cone under it. Ninety-two lights sampled at every step of every
-march is a different order of cost from one, and the hour the mist is thick
-is the hour the lamps are going out anyway.
+### Cones
+
+Every lamp that carries a shadow map also lights the air it shines through —
+the fourteen floods nearest the truck and the player's two headlights. Each
+uses the scene's own fall and its own cone, so a beam in the mist ends where
+the beam on the road ends, and each reads its own shadow map, so a tree
+standing in a beam takes a bite out of it. That last part is why only the
+shadowed lamps do it: a cone that shines through a tree is worse than no cone.
+
+**The cost is all in the loop, and none of it in the shadows.** Asking
+sixteen lamps at every one of twenty-eight steps whether they were near cost
+**3.1 ms** a frame. Testing each lamp once against the whole ray, and
+marching only the ones it passes through the light of, costs **0.85**. Eight
+survivors a ray, and which eight matters: the lamps handed in are the ones
+nearest the *truck*, so for a ray that passes near the truck that is nearly
+all of them, and taking the first eight dropped lamps the ray went straight
+through in favour of lamps it merely passed. Each is scored by how far into
+its reach the ray comes and the best eight kept, which costs 0.03 ms and is
+the difference between the right lamps and any eight lamps.
+
+What it does not do: the rivals' headlights have no cones. There are sixteen
+map slots and the fourteen floods and two headlights fill them; a rival's
+beam coming the other way would be worth having and would cost four more
+maps.
 
 ## The picture
 
@@ -865,12 +909,15 @@ slower. `measure(width, height, frames)` is on the console for repeating it.
 
 | | lights | ms a frame |
 | --- | ---: | ---: |
-| the circuit, driving | 31 | 1.18 |
+| night, mist and cones | 50 | 3.64 |
+| dawn, full mist and cones | 50 | 3.64 |
+| noon, nothing in the air | 0 | 0.66 |
 
-Less than half what the shooter cost, which was 2.63 ms: the crowd is gone,
-and with it the tracers, the explosions and the searchlight. A frame at sixty
-is 16.7 ms. Nearly all of the 1.18 is the floodlights, which burn whether the
-truck is moving or not.
+A frame at sixty is 16.7 ms, so the night frame has four times its own cost
+in hand. Of the 3.64: about 2.3 is the scene and its shadow maps — the sun's
+and sixteen spots — 0.5 is the fog march, and 0.85 the cones in it. Noon is
+a twentieth of that because the lamps are out, the shadow maps are one
+instead of seventeen, and there is nothing in the air to march through.
 
 The CPU side is **0.02 ms** a step, almost all of it the vehicle — four
 substeps of a rigid body on four suspension rays.

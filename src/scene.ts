@@ -190,7 +190,16 @@ export function lampAt(post: Post): [number, number, number] {
  * from you is the strongest sense of distance there is.
  */
 export const COLUMN_RADIUS = POLE_RADIUS;
-export const COLUMNS: Post[] = trackPosts(640, POST_CLEARANCE);
+/**
+ * Every 1280mm of road rather than every 640: half as many posts as there
+ * were. Eighty-odd lamps lit the circuit evenly and made it read as a lit
+ * corridor with no dark in it — and the dark is what the headlights are for.
+ * Half of them leaves a pool under each and a stretch between, which is what
+ * a road at night looks like, and it pays for the rest of this: twice the
+ * lamps carrying shadow maps, and every one of them throwing a cone through
+ * the mist.
+ */
+export const COLUMNS: Post[] = trackPosts(1280, POST_CLEARANCE);
 
 export function arenaMatrices(): {
   tiles: Float32Array;

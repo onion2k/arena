@@ -114,8 +114,21 @@ function lampsOn(arena: Race): number {
   return skyAt(arena.hours, SETTINGS.ambient).lampsOn;
 }
 
-/** How many of the street lights cast shadows: the renderer's ceiling. */
-const SHADOWED_LAMPS = 8;
+/**
+ * How many street lights cast shadows. Fourteen of the renderer's sixteen
+ * slots; the other two are the player's own headlights, which want maps more
+ * than any lamp does — a truck lighting the mist ahead of it should not be
+ * lighting the mist behind the tree in front of it.
+ */
+const SHADOWED_LAMPS = 14;
+
+/**
+ * Where the player's two headlights ended up in the pool, recorded as they
+ * are added. They are wanted by index and there is no other way to know it:
+ * the pool is written from scratch every frame and how many lights precede
+ * them depends on how many posts, how many rivals and whether it is day.
+ */
+let playerHeads: number[] = [];
 
 /**
  * Which floods should carry a shadow map this frame: the eight nearest the
@@ -133,7 +146,10 @@ export function shadowedLamps(arena: Race): number[] {
   const t = arena.truck;
   const order = COLUMNS.map((p, i) => ({ i, d: (p.x - t.x) ** 2 + (p.y - t.y) ** 2 }));
   order.sort((a, b) => a.d - b.d);
-  return order.slice(0, SHADOWED_LAMPS).map((o) => o.i);
+  // The headlights first, so that they are never the two that miss out when
+  // the truck is somewhere the posts are close together. The renderer fills
+  // its slots in the order it is given them.
+  return [...playerHeads, ...order.slice(0, SHADOWED_LAMPS).map((o) => o.i)];
 }
 
 export function lightsFor(pool: LightPool, arena: Race) {
@@ -211,7 +227,9 @@ export function lightsFor(pool: LightPool, arena: Race) {
   // So a few degrees of splay each, which is what a real pair has, and a wide
   // cone — a wash over the road rather than a beam at a thing. The narrow
   // beam at a thing is the searchlight, and it is cold where these are warm.
+  playerHeads = [];
   for (const side of [-1, 1]) {
+    playerHeads.push(pool.count);
     pool.add({
       position: at(LAMP_AHEAD, side * LAMP_ACROSS, LAMP_HEIGHT),
       radius: 2400,

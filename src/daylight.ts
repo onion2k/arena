@@ -27,8 +27,9 @@ export interface Sky {
   /** How far into day it is, 0 at night to 1 in full daylight. */
   day: number;
   /**
-   * How much mist is lying on the ground, 0 to 1. Dawn, and only dawn: see
-   * `mistAt`.
+   * How much there is in the air, 0 to 1: the dawn mist where there is one,
+   * and otherwise a thin haze for as long as the lamps are on, so that they
+   * have something to throw a cone through. See `mistAt` and `NIGHT_HAZE`.
    */
   mist: number;
 }
@@ -49,6 +50,19 @@ export interface Sky {
  * ground is still warm and it is a fraction of what dawn gives you; two
  * mists a lap would make the effect ordinary.
  */
+/**
+ * How much haze there is whenever the street lights are on, as a fraction of
+ * the dawn mist.
+ *
+ * Not weather: air. A clear night still has enough in it to show a beam —
+ * that is what a beam is, light bouncing off what is there — and without it
+ * every lamp in the arena is a bright head over a lit patch of road with
+ * nothing in between. A third of the dawn mist is thin enough that you can
+ * see the far side of the circuit through it and thick enough that the lamps
+ * and the headlights have cones.
+ */
+const NIGHT_HAZE = 0.3;
+
 export function mistAt(hours: number): number {
   const h = ((hours % 24) + 24) % 24;
   // up from two o'clock, full from half four to seven, gone by half nine
@@ -168,7 +182,7 @@ export function skyAt(hours: number, nightAmbient: number): Sky {
   // go out in the golden hour; and come on again as the sun goes down
   // rather than waiting for the dark. Above a fifth of the way up, off.
   const lampsOn = 1 - smooth(0.04, 0.22, e);
-  return { sunDir: dir, sunColour: sun, ambient, background: sky, lampsOn, day, mist: mistAt(h) };
+  return { sunDir: dir, sunColour: sun, ambient, background: sky, lampsOn, day, mist: Math.max(mistAt(h), lampsOn * NIGHT_HAZE) };
 }
 
 /** The clock as a label: "22:00", "06:15". */
