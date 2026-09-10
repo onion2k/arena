@@ -91,7 +91,26 @@ const WAVES: Wave[] = [
   // 1716 mm/s and at 2300 it did not lift a wheel. Nine (amplitude, length)
   // pairs were measured across the whole range that keeps the slope under 25
   // degrees, and not one of them got all four wheels off the ground at a
-  // speed the truck can reach. Two or three lift over a crest, for a fifth of
+  // speed the truck can reach.
+  //
+  // The reason given here for that used to be the suspension travel, and that
+  // was wrong. `TRAVEL` is the clamp on how far a spring may be squashed, not
+  // how far the wheel can reach down: contact is `REST + WHEEL_RADIUS` below
+  // the mounting point and `TRAVEL` does not appear in it. Measured at 26, 45
+  // and 70, it changes the outcome of a run over the sharpest crest not at
+  // all — the three are identical frame for frame. Droop is the quantity that
+  // does matter and it works the wrong way round: more of it keeps the wheels
+  // down, and even at a droop of 10 the truck got all four off for a single
+  // frame.
+  //
+  // What actually stops it is its own length. A wheel lifts easily, because
+  // the truck carries 8mm of static sag and the body need only rise that far.
+  // For all four to lift, the ground has to fall away from the whole 250mm of
+  // it at once, and over any crest gentle enough to be safe the truck instead
+  // pitches through: nose up on the way in, which plants the rear, then nose
+  // down over the top, which plants the front. Logged over a purpose-built
+  // ramp, the front wheels read zero compression while the rear read nine,
+  // and by the time the rear reached zero the front was back down. Two or three lift over a crest, for a fifth of
   // a second, and that is what is left of it: the ground unsettles the truck
   // where it used to launch it.
   //

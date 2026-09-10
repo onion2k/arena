@@ -348,10 +348,11 @@ four-car race runs 12 to 13 laps a car with best laps of 13.40 to 13.90 and
 
 The jump is the price, and it was not recoverable:
 
-- The amplitude cannot simply be dropped to buy the curvature back. A crest no
-  taller than the suspension's 26mm of travel is one the springs absorb
-  without the body ever leaving: at 26 of amplitude the crest condition said
-  the truck should fly at 1716 mm/s, and at 2300 it did not lift a wheel.
+- The amplitude cannot simply be dropped to buy the curvature back: at 26 of
+  amplitude the crest condition said the truck should fly at 1716 mm/s, and at
+  2300 it did not lift a wheel. (The reason first given here was that the
+  springs absorb a crest no taller than their travel. That was wrong — see
+  below.)
 - Nine (amplitude, length) pairs were measured across the whole range that
   keeps the slope under 25 degrees. Not one got all four wheels off the ground
   at a speed the truck can reach.
@@ -360,6 +361,31 @@ The jump is the price, and it was not recoverable:
   back, seven of the thirty steepest spots beside the road still held a
   stopped car. The limit is the engine against the truck's weight on a slope,
   not the surface.
+
+#### Why it cannot jump, corrected
+
+It is not the suspension travel, which is what this file said first. `TRAVEL`
+is the clamp on how far a spring may be *squashed*; the reach that decides
+whether a wheel is touching is `REST + WHEEL_RADIUS` below the mounting point,
+and `TRAVEL` does not appear in it. Measured at 26, 45 and 70 over the sharpest
+crest on the circuit, the three runs are identical frame for frame. Droop is
+the quantity that matters and it works the wrong way round — more of it holds
+the wheels down, and even at a droop of 10mm, which is a very harsh truck, all
+four came off for a single frame.
+
+What stops it is the truck's own length. One wheel lifts easily: there is 8mm
+of static sag, so the body need only rise that far. For all four to lift, the
+ground has to fall away from the whole 250mm of it at once, and over any crest
+gentle enough to be safe the truck pitches through instead — nose up on the way
+in, which plants the rear, then nose down over the top, which plants the front.
+Logged over a purpose-built ramp: front wheels at zero compression while the
+rear read nine, and by the time the rear reached zero the front was back down.
+
+Purpose-built ramps were tried, on the tarmac only, where the surface allows 31
+degrees rather than the shoulder's 23.5 — twelve shapes, including asymmetric
+ones ending in a lip. The lip does get all four wheels off. For one frame. That
+is a flick, not a jump, and it costs 27 to 32 degrees of slope on the racing
+line, so it was taken out again.
 
 And the thing that makes the trade easy: **that same race, measured on the old
 steep terrain, never got all four wheels off either.** The jump only existed in
