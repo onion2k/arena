@@ -539,31 +539,79 @@ function turnStartToStraight(s: Shape, steps = 360): Shape {
 /**
  * A circuit for a seed. Always drivable: see the note above about proposing
  * and measuring. Seed zero is the circuit the game shipped with.
+ *
+ * The repair is aimed rather than blanket. Scaling every amplitude down
+ * fixes anything, but it fixes the shape as well as the fault: a circuit
+ * with one corner too tight came back as a gentler version of itself all
+ * over, and forty seeds in a row produced the same rounded blob at
+ * different rotations. Curvature goes as `amp * k^2`, so a corner that is
+ * too tight is nearly always the highest harmonic's doing and taking it out
+ * of that one leaves the low harmonics — which are the shape of the circuit —
+ * alone. The radius bounds move `r0`, which is what sets them. Only when a
+ * fault will not come out any other way does everything come down together.
  */
 export function generateTrack(seed: number): Shape {
   if (seed === 0) return CLASSIC;
   const rnd = random(seed);
   const pick = <T>(a: T[]): T => a[Math.floor(rnd() * a.length)];
 
-  // One low harmonic for the shape of the circuit, one middle, one high for
-  // the corners. Two twos would make a shape with two lobes and no detail;
-  // two sixes would make a scalloped circle.
-  const low = pick([2, 2, 3]);
-  const mid = pick([3, 4, 4, 5]);
-  const high = pick([5, 6, 7]);
-  const r0 = 3900 + rnd() * 500;
+  // One low harmonic for the shape of the circuit and two or three above it
+  // for what happens round it. A first harmonic pushes the whole loop off
+  // centre, which is what makes a circuit with one long side; sevens and
+  // eights are the ones that put a corner between two corners.
+  const low = pick([1, 2, 2, 2, 3]);
+  const mid = pick([3, 3, 4, 4, 5]);
+  const high = pick([5, 6, 6, 7, 8]);
+  const extra = rnd() < 0.45 ? pick([2, 3, 4, 5, 9]) : 0;
+  const r0 = 3700 + rnd() * 800;
+  // A power rather than a flat range, so most circuits have one term that
+  // dominates and the rest decorate it — which is what a circuit with a
+  // character is. Flat ranges gave three terms of much the same size every
+  // time, and three harmonics of equal weight average out into a circle.
+  const amp = (lo: number, hi: number) => lo + (hi - lo) * Math.pow(rnd(), 0.7);
   let terms: [number, number, number][] = [
-    [low, 420 + rnd() * 520, rnd() * Math.PI * 2],
-    [mid, 180 + rnd() * 300, rnd() * Math.PI * 2],
-    [high, 150 + rnd() * 330, rnd() * Math.PI * 2],
+    [low, amp(350, 1150), rnd() * Math.PI * 2],
+    [mid, amp(120, 620), rnd() * Math.PI * 2],
+    [high, amp(90, 430), rnd() * Math.PI * 2],
   ];
+  if (extra) terms.push([extra, amp(60, 280), rnd() * Math.PI * 2]);
 
-  // Propose, measure, tame, repeat. Twelve rounds of 0.86 is a factor of six,
-  // by which point the wildest draw is a gentle oval.
-  for (let i = 0; i < 12; i++) {
-    const s = turnStartToStraight({ r0, terms });
-    if (passes(measureShape(s))) return s;
-    terms = terms.map(([k, amp, phase]) => [k, amp * 0.86, phase]);
+  let base = r0;
+  for (let i = 0; i < 24; i++) {
+    const s = turnStartToStraight({ r0: base, terms });
+    const m = measureShape(s);
+    if (passes(m)) return s;
+
+    // Aim the repair at whatever failed.
+    if (m.minRadius < LIMITS.minRadius || m.maxRadius > LIMITS.maxRadius) {
+      const span = (m.maxRadius - m.minRadius) / 2;
+      const room = (LIMITS.maxRadius - LIMITS.minRadius) / 2;
+      if (span > room) {
+        // the loop is wider than the arena however it is centred
+        terms = terms.map(([k, a, p]) => [k, a * 0.9, p]);
+      } else {
+        // it only needs centring
+        base = (LIMITS.minRadius + LIMITS.maxRadius) / 2 + (base - (m.minRadius + m.maxRadius) / 2);
+      }
+    } else if (m.curve < LIMITS.curve) {
+      // take it out of the sharpest term, which is the one bending the road
+      let worst = 0;
+      for (let j = 1; j < terms.length; j++) {
+        if (terms[j][1] * terms[j][0] ** 2 > terms[worst][1] * terms[worst][0] ** 2) worst = j;
+      }
+      terms[worst] = [terms[worst][0], terms[worst][1] * 0.78, terms[worst][2]];
+    } else if (m.across < LIMITS.across) {
+      // the radius is running along the road rather than across it, which is
+      // a first derivative and so goes as amp * k
+      let worst = 0;
+      for (let j = 1; j < terms.length; j++) {
+        if (terms[j][1] * terms[j][0] > terms[worst][1] * terms[worst][0]) worst = j;
+      }
+      terms[worst] = [terms[worst][0], terms[worst][1] * 0.82, terms[worst][2]];
+    } else {
+      // the lap is the wrong length, which is mostly how big the loop is
+      base *= m.length < LIMITS.minLength ? 1.06 : 0.95;
+    }
   }
   return CLASSIC;
 }
@@ -611,4 +659,106 @@ export function shapePreview(s: Shape, steps = 400): {
     length: m.length,
     curve: m.curve,
   };
+}
+
+/**
+ * How hard a circuit is to drive, and how long a lap of it should take.
+ *
+ * The honest way to rate a circuit is to drive it, and the screen that wants
+ * the rating cannot wait for that. So this drives an ideal point mass round
+ * the centreline instead: a speed limit at every step from how tight the
+ * road is there, then a pass backwards for what braking allows into each
+ * corner and a pass forwards for what the engine can put back on the way
+ * out. The time that falls out is what a lap costs when nothing is wasted.
+ *
+ * The cornering limit is measured, not derived. Ackermann on a 220mm
+ * wheelbase says the truck can turn a 547mm radius at top speed, which would
+ * make every corner on every circuit here flat out; the tyre model says
+ * otherwise, and what it actually does at full lock is a circle of 450 to
+ * 570mm at 1130 to 1630 mm/s. That is `v = CORNER * sqrt(R)` with CORNER at
+ * 61, and it puts the tightest corner on the original circuit at 1541 mm/s
+ * against a top speed of 2300 — which is why circuits differ at all.
+ */
+const CORNER = 61;
+/** Mid-range, measured: the engine gives less the faster it is already going. */
+const ACCEL = 700;
+/** What the brakes take off, measured on the flat between 1500 and 500 mm/s. */
+const BRAKE = 2400;
+
+/**
+ * What an ideal point mass beats a real truck by. The estimate below is a
+ * lap with no bumps, no slip and no line to get wrong; a driver braking for
+ * the same corners on the same circuits came in at 1.08 to 1.16 times it
+ * over twenty of them, tight enough round 1.13 to quote as a lap time rather
+ * than as a physics result.
+ */
+const REAL = 1.13;
+
+/**
+ * The five bands, on the quantiles of three hundred generated circuits, so
+ * each is about a fifth of what the generator makes. The original circuit
+ * scores 0.024, which is the second band: it is a friendly circuit, and
+ * saying otherwise on a screen the player is about to check against their
+ * own lap times would not survive the first lap.
+ */
+const BANDS: [number, string][] = [
+  [0.019, 'flowing'],
+  [0.031, 'open'],
+  [0.042, 'mixed'],
+  [0.058, 'technical'],
+  [Infinity, 'relentless'],
+];
+
+/** A difficulty as a level of one to five and the word for it. */
+export function difficultyBand(d: number): { level: number; name: string } {
+  for (let i = 0; i < BANDS.length; i++) {
+    if (d < BANDS[i][0]) return { level: i + 1, name: BANDS[i][1] };
+  }
+  return { level: 5, name: BANDS[4][1] };
+}
+
+export function rateTrack(s: Shape, topSpeed: number, steps = 720): {
+  /** Seconds for a lap driven perfectly. */
+  lap: number;
+  /** What a good lap actually comes out at: the above and a bit. */
+  par: number;
+  /** 0 for a circuit you never lift on, 1 for one you are never flat out on. */
+  difficulty: number;
+} {
+  const was = shape;
+  shape = s;
+  const ds: number[] = [];
+  const lim: number[] = [];
+  let prev = centreline(-Math.PI);
+  for (let i = 0; i < steps; i++) {
+    const t = -Math.PI + ((i + 1) / steps) * Math.PI * 2;
+    const p = centreline(t);
+    ds.push(Math.hypot(p[0] - prev[0], p[1] - prev[1]));
+    lim.push(Math.min(topSpeed, CORNER * Math.sqrt(curveRadius(t, 200))));
+    prev = p;
+  }
+  shape = was;
+
+  const v = lim.slice();
+  // Twice round each way, because the lap wraps: a corner can be slow enough
+  // that the braking zone for it starts before the line.
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = steps - 1; i >= 0; i--) {
+      const next = v[(i + 1) % steps];
+      v[i] = Math.min(v[i], Math.sqrt(next * next + 2 * BRAKE * ds[i]));
+    }
+    for (let i = 0; i < steps; i++) {
+      const back = v[(i - 1 + steps) % steps];
+      v[i] = Math.min(v[i], Math.sqrt(back * back + 2 * ACCEL * ds[i]));
+    }
+  }
+
+  let lap = 0, length = 0;
+  for (let i = 0; i < steps; i++) {
+    const mean = (v[i] + v[(i + 1) % steps]) / 2;
+    lap += ds[i] / Math.max(mean, 1);
+    length += ds[i];
+  }
+  const flatOut = length / topSpeed;
+  return { lap, par: lap * REAL, difficulty: Math.max(0, Math.min(1, 1 - flatOut / lap)) };
 }

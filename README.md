@@ -293,10 +293,29 @@ the trackside posts on the racing line — the same geometry that once had a
 post 437mm from the centreline when its clearance said 640.
 
 So the generator proposes and then measures, and if the measurement fails it
-tames the proposal and measures again. Taming is scaling every amplitude
-down; in the limit that is a circle, and a circle passes everything, so the
-loop always terminates with a drivable track. It cannot hand back something
-broken — the worst case is a duller circuit.
+repairs the proposal and measures again. Repair always terminates — every
+route out of a fault ends at a circle, and a circle passes everything — so it
+cannot hand back something broken.
+
+**The repair is aimed, and that is most of where the variety comes from.**
+Scaling every amplitude down fixes anything, but it fixes the shape as well
+as the fault: a circuit with one corner too tight came back as a gentler
+version of itself all over, and forty seeds in a row produced the same
+rounded blob at different rotations. Curvature goes as `amp * k²`, so a
+corner that is too tight is nearly always the highest harmonic's doing, and
+taking it out of that one term leaves the low harmonics — which are the shape
+of the circuit — alone. A radius out of bounds moves `r0`, which is what sets
+them. A radius running along the road rather than across it is a first
+derivative, `amp * k`, so that comes out of whichever term is worst by that
+measure. Only a loop wider than the arena however it is centred brings
+everything down together.
+
+The proposal got bolder to match: a first harmonic in the draw, which pushes
+the whole loop off centre and gives a circuit one long side; harmonics up to
+eight, which put a corner between two corners; a fourth term 45% of the time;
+and amplitudes drawn through a power rather than flat, so most circuits have
+one term that dominates and the rest decorate it. Three harmonics of equal
+weight average out into a circle, which is what a flat draw kept producing.
 
 What it measures, and the bar, which is `CLASSIC` — the circuit the game
 shipped with — at 29,099mm a lap, a radius from 2,775 to 5,148, a tightest
@@ -309,11 +328,58 @@ corner of 638 and a worst radial-to-across of 0.672:
 | radial-to-across | 0.62 | under this the posts stand nearer the road than their clearance says |
 | lap length | 24–34m | so a lap stays within a few seconds of the ones before it |
 
-Measured over 200 seeds: every one passed without falling back, laps from
-25,319 to 30,501mm, tightest corners from 605 to a median of 860, radius
-within 2,601–5,298. Driven rather than measured, 30 circuits each got a lap
-in under thirty seconds with nothing stuck, best laps from 15.68 to 18.10
-against the original's 17.03.
+Measured over 300 seeds: every one passed without falling back. Tightest
+corners run from 609 at the fifth percentile through a median of **683** to
+1,177 at the ninety-fifth — against 860 median before the repair was aimed,
+which is the difference the aiming makes. Laps 25.7 to 28.7m, radius spans
+1.7 to 2.7m, 127 of the 300 with a fourth term, and low harmonics split 63
+ones, 187 twos and 50 threes. Driven rather than measured, 30 circuits each
+got a lap in under thirty seconds with nothing stuck.
+
+### How hard is it
+
+The preview rates the circuit, and the rating is a lap rather than a formula.
+An ideal point mass is driven round the centreline: a speed limit at every
+step from how tight the road is there, a pass backwards for what braking
+allows into each corner, a pass forwards for what the engine can put back on
+the way out. **Difficulty is the fraction of that lap not spent flat out** —
+0 for a circuit you never lift on, and it climbs from there.
+
+**The cornering limit is measured, not derived, and the derivation would have
+been wrong.** Ackermann on a 220mm wheelbase says the truck can turn a 547mm
+radius at top speed, which is tighter than any corner the generator makes and
+would have rated every circuit identically flat out. What the truck actually
+does at full lock is a circle of 450 to 570mm at 1,130 to 1,630 mm/s — that
+is `v = 61·√R`, and it puts the original's tightest corner at 1,541 mm/s
+against a top speed of 2,300. The tyre model, not the geometry, is what makes
+circuits differ.
+
+It is rated against the top speed *in force*, because that is what decides
+which corners are corners. Turn the truck down and the circuit really is
+easier.
+
+Two things this is worth, and one it is not:
+
+- **The lap estimate is good.** Against a driver that brakes for the same
+  corners, over twenty circuits, the estimate correlates at **r = 0.85** and
+  comes in a consistent 1.08 to 1.16 times fast — tight enough round 1.13 to
+  multiply through and quote as a lap time. The original is rated 14.6s and
+  drives 14.57.
+- **The bands are evenly spread.** Over 401 seeds: 66 flowing, 97 open, 83
+  mixed, 79 technical, 76 relentless, on quantile boundaries so each is about
+  a fifth of what the generator makes. The original is *open*, which is
+  honest — it is a friendly circuit, and saying otherwise on a screen the
+  player is about to check against their own lap times would not survive the
+  first lap.
+- **The difficulty is a weaker signal than the lap time.** It correlates
+  **0.44** with driven seconds per metre — right sign, real, and not
+  something to trust between two adjacent circuits. Over five circuits picked
+  one per band the ordering came out 0.501, 0.501, 0.517, 0.502, 0.521
+  seconds a metre: the trend is there and the middle is noise. It says how
+  much of the lap is corner-limited, which is exactly what it computes; it
+  does not promise that a *relentless* one will beat you and a *flowing* one
+  will not. Worth saying because the tightest corner on its own correlates
+  0.03, which is no signal at all — the profile is what earns the number.
 
 **The start line is put on a straight.** The grid sits at an angle of -pi
 whatever the circuit does there, and on a random one that is as likely to be

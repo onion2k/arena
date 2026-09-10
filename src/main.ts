@@ -22,7 +22,7 @@ import { WATER_LEVEL, refloodArena, underWater, waterMesh } from './water';
 import { wheelEffects } from './particles';
 import { Skids, markMesh } from './skids';
 import { WHEELS } from './vehicle';
-import { START_BULBS, TRACK_HALF, centreline, gantry, generateTrack, setTrack, shapePreview, tangentAt } from './track';
+import { START_BULBS, TRACK_HALF, centreline, difficultyBand, gantry, generateTrack, rateTrack, setTrack, shapePreview, tangentAt } from './track';
 import { height as groundAt, seedTerrain } from './terrain';
 import { ARENA_X, ARENA_Y, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices, restandColumns } from './scene';
 import { placeOnSlope, placeVehicleFacing, placeVehiclePart, placeVehicleWheel, project } from './matrix';
@@ -37,6 +37,7 @@ const boot = document.getElementById('boot')!;
 const pregame = document.getElementById('pregame')!;
 const pregameMap = document.getElementById('pregameMap')!;
 const pregameFacts = document.getElementById('pregameFacts')!;
+const pregameRating = document.getElementById('pregameRating')!;
 const pregameSeed = document.getElementById('pregameSeed') as HTMLInputElement;
 const pregameAnother = document.getElementById('pregameAnother')!;
 const pregameGo = document.getElementById('pregameGo')!;
@@ -340,10 +341,19 @@ async function main() {
     startLine.setAttribute('x1', String(p.start[0])); startLine.setAttribute('y1', String(p.start[1]));
     startLine.setAttribute('x2', String(p.start[2])); startLine.setAttribute('y2', String(p.start[3]));
     if (document.activeElement !== pregameSeed) pregameSeed.value = String(seed);
+    // Rated against the top speed in force, because that is what decides
+    // which corners are corners: turn the truck down and a circuit really
+    // does get easier, and a rating that ignored the setting would be
+    // describing somebody else's car.
+    const r = rateTrack(generateTrack(seed), SETTINGS.topSpeed);
+    const band = difficultyBand(r.difficulty);
     pregameFacts.innerHTML =
       `${seed === 0 ? 'the original circuit' : `circuit <span>#${seed}</span>`}`
-      + ` · <span>${(p.length / 1000).toFixed(1)}</span> m a lap`
+      + ` · <span>${(p.length / 1000).toFixed(1)}</span> m`
+      + ` · about <span>${r.par.toFixed(1)}</span> s a lap`
       + ` · tightest corner <span>${Math.round(p.curve)}</span> mm`;
+    pregameRating.innerHTML =
+      `<b>${'\u25cf'.repeat(band.level)}${'\u25cb'.repeat(5 - band.level)}</b> ${band.name}`;
   }
 
   function openPregame() {
