@@ -16,7 +16,7 @@ import { LightPool } from 'artshape-render/game/lights';
 import { MAX_FIELD, PAINT, Race, type Input } from './game';
 import { CONTROLS, SETTINGS, restoreDefaults, save } from './settings';
 import { TREES, forestBuffers, treeMesh } from './forest';
-import { skyAt } from './daylight';
+import { clockLabel, skyAt } from './daylight';
 import { WHEELS } from './vehicle';
 import { START_BULBS, TRACK_HALF, centreline, gantry, tangentAt } from './track';
 import { height as groundAt } from './terrain';
@@ -154,6 +154,7 @@ async function main() {
   ];
   renderer.setDynamic(dynamic);
 
+  const arena = new Race();
   bootMsg.textContent = 'baking the environment…';
   // Two of them, night and day, baked once and swapped as the sun comes up.
   // The environment is what lights the ground by day — the renderer's sun is
@@ -166,7 +167,7 @@ async function main() {
   let envIsDay = false;
   renderer.setEnvironment(nightEnv.specular, nightEnv.brdf, nightEnv.mips);
   const applySky = () => {
-    const sky = skyAt(SETTINGS.time, SETTINGS.ambient);
+    const sky = skyAt(arena.hours, SETTINGS.ambient);
     renderer.look.sunDir = sky.sunDir;
     renderer.look.sunColour = sky.sunColour;
     renderer.look.ambient = sky.ambient;
@@ -182,7 +183,6 @@ async function main() {
   renderer.camera.fov = FOV;
   setProjectionScale(FOV);
 
-  const arena = new Race();
   const lights = new LightPool(LIGHT_CAPACITY);
   const quads = new Float32Array(EFFECT_CAPACITY * EFFECT_STRIDE);
   const input = watchInput(arena);
@@ -499,6 +499,8 @@ async function main() {
       }
       touched = true;
     }
+    // the sky follows the clock and the clock follows the truck, every frame
+    applySky();
     followShip(dt);
     orbit.update();
     setDepthRange(renderer.camera);
@@ -525,7 +527,7 @@ async function main() {
       statsPanel.innerHTML =
         `<span>${smoothed.toFixed(1)}</span> ms · <span>${Math.round(1000 / smoothed)}</span> fps<br>`
         + `<span>${lights.count}</span> lights · <span>${effects}</span> glows<br>`
-        + `<span>${Math.round(arena.speed)}</span> speed`
+        + `<span>${Math.round(arena.speed)}</span> speed · <span>${clockLabel(arena.hours)}</span>`
         + `${arena.airborne ? ' · <span>airborne</span>' : ''}`
         + `${Math.abs(arena.offset) > TRACK_HALF ? ' · <span>off track</span>' : ''}<br>`
         + `<span>${width}×${height}</span>`;

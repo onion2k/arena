@@ -110,8 +110,8 @@ function starter(pool: LightPool, arena: Race) {
 }
 
 /** How far on the street lights and headlights are, 1 by night to 0 by day. */
-function lampsOn(): number {
-  return skyAt(SETTINGS.time, SETTINGS.ambient).lampsOn;
+function lampsOn(arena: Race): number {
+  return skyAt(arena.hours, SETTINGS.ambient).lampsOn;
 }
 
 export function lightsFor(pool: LightPool, arena: Race) {
@@ -120,7 +120,7 @@ export function lightsFor(pool: LightPool, arena: Race) {
   // the lamp heads all go with the clock. The starting lights do not — they
   // are a signal, not an illumination, and a red light at noon still means
   // wait.
-  const on = lampsOn();
+  const on = lampsOn(arena);
   if (on > 0) floods(pool, on);
   starter(pool, arena);
   if (on <= 0) return;
@@ -283,7 +283,7 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
    * being lit here, only seen, and a glow costs a screen-space quad against
    * a light's whole shading loop.
    */
-  const on = lampsOn();
+  const on = lampsOn(arena);
   if (on > 0) {
     for (const post of COLUMNS) {
       const [hx, hy, hz] = lampAt(post);

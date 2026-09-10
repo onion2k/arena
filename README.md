@@ -299,8 +299,18 @@ Each one is the constant it stands in for, made a lookup:
   every frame, so it is written straight into the look.
 - **Floodlights** is the intensity every trackside lamp is given when the
   light list is rebuilt, which is every frame anyway.
-- **Time of day** is a clock, and `daylight.ts` turns it into everything the
-  sky does: where the sun is, what colour, how much the environment lights
+- **Time of day** is when the race starts. The clock runs on from there
+  with the player's own progress, three hours a lap — not with the wall
+  clock, so a driver who stops to look at the forest does not watch it dawn.
+  A lap is about fourteen seconds, so a race of eight is a full day, and a
+  field that sets off at 22:00 under the street lights sees them go out
+  during lap three and finishes under the sun. Measured: 22:00 on the grid,
+  01:03 after a lap, 04:02, 07:02 with the lamps off and the sky up, 10:03,
+  13:02. Progress for this is a continuous count of the road covered, not the
+  lap counter plus the lap fraction — the grid sits just short of the line,
+  so that sum starts near one and *falls* as the car crosses, and a clock
+  wants something that only runs on. `daylight.ts` turns the hour into
+  everything the sky does: where the sun is, what colour, how much the environment lights
   the arena, what the sky looks like, and whether the lamps are on. The sun
   rises at six and sets at eighteen, comes up warm and goes white a fifth of
   the way up, and swings from east through the moon's quarter at noon to

@@ -56,9 +56,18 @@ export class Progress {
 
   /** Laps plus the part-lap, which is what the running order is sorted on. */
   get total(): number { return this.laps + this.at; }
+  /**
+   * How far it has driven since the grid, in laps, continuously: the sum of
+   * every step round the loop, forwards counting up and backwards down. Not
+   * `total`, which is an angle plus a count and dips at the line — the grid
+   * sits just short of it, so `total` starts near one and falls to nothing
+   * as the car crosses — and the clock wants something that only ever runs
+   * on.
+   */
+  driven = 0;
 
   reset(x: number, y: number) {
-    this.laps = 0; this.lapTime = 0;
+    this.laps = 0; this.lapTime = 0; this.driven = 0;
     this.lastLap = null; this.bestLap = null;
     this.wentHalfway = false;
     this.at = where(x, y).lap;
@@ -70,6 +79,10 @@ export class Progress {
     this.at = w.lap; this.offset = w.offset;
     if (!running) { this.last = w.lap; return; }
     this.lapTime += dt;
+    // the step round the loop this frame, taken the short way round
+    let step = w.lap - this.last;
+    if (step > 0.5) step -= 1; else if (step < -0.5) step += 1;
+    this.driven += step;
     if (w.lap > 0.35 && w.lap < 0.65) this.wentHalfway = true;
     // a crossing is a jump between the ends of the range rather than a step
     // through it: the progress is an angle, and it wraps
@@ -115,6 +128,13 @@ export const PAINT: [number, number, number][] = [
   [0.90, 0.90, 0.95],
 ];
 
+/**
+ * How fast the day goes by: three hours of sky for every lap of the road.
+ * A lap is fourteen seconds, so a race of eight is a full day, and the field
+ * that sets off under street lights finishes under the sun.
+ */
+export const HOURS_PER_LAP = 3;
+
 export class Race {
   /**
    * The player first, then the drivers. The array keeps its identity when the
@@ -142,6 +162,16 @@ export class Race {
 
   /** The player's, which is the first of them. */
   get truck() { return this.cars[0].vehicle; }
+
+  /**
+   * What time it is: the setting is when the race starts, and the clock runs
+   * on from there with the player's own progress — not with the wall clock,
+   * so a driver who stops to look at the forest does not watch it dawn.
+   */
+  get hours(): number {
+    const driven = Math.max(0, this.cars[0].lap.driven);
+    return (SETTINGS.time + driven * HOURS_PER_LAP) % 24;
+  }
 
   get px() { return this.truck.x; }
   get py() { return this.truck.y; }
