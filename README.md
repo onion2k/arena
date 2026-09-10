@@ -156,6 +156,56 @@ laps 14.18 to 14.82 seconds, no spins, no car stationary at any point, and
 10.7% of the time with a wheel off the road. Solo, the four skill levels
 separate by 1.7 seconds a lap.
 
+### Drifting
+
+Brake while turning, at speed, and the back steps out; keep the wheel
+turned and the throttle on and it stays out until the wheel centres. That
+is the whole input. Underneath it is the handbrake's mechanism — the rear
+tyres give up grip, faded out with the slip angle so an angle cannot become
+a spin — with a latch that outlives the tap, and one thing that is not
+tyres at all: a servo on the slip angle, a yaw torque in the steering's
+direction that runs out at an angle the steering sets, with damping against
+the yaw rate. It is the one arcade assist in the physics, and measuring is
+what made it necessary.
+
+With the wheel held at full lock into the corner — the only way a keyboard
+holds it — the truck rotates until its front tyres point along the way it
+is going, and then they stop pushing: the body's slip settles at the lock
+less the yaw's share, about 13 degrees, however little grip the rear has.
+Cutting the rear from a fifth of its grip to a twentieth moved that by one
+degree. A driver goes past it on opposite lock, and a keyboard cannot, so
+the servo does the rotating instead and the fronts, pointing into a corner
+the truck is going out of, hold it there. A fixed torque was tried first
+and was either too little — the fronts are stiff, three degrees of slip is
+force enough to cancel a kick of 24 — or too much, and the momentum carried
+the truck through 150 degrees before the fade could catch it. Full torque at
+no slip, none at the target, capped at 110 so a tap is a flick and not a
+slam.
+
+Measured, a brake tap of a quarter second at full lock then throttle with
+the wheel held: peak slip **22 degrees** against 11 without the tap, held
+between 10 and 19 under the throttle, no spin at 1200, 1700 or 2200 mm/s,
+back straight in under a tenth of a second when the wheel centres, and the
+drivers never trigger it — zero drift frames and zero marks from the field
+in ninety seconds. It costs speed: the tap and the sideways scrub take the
+truck down to 330 to 500 mm/s before the throttle brings it back, which is
+what drifting costs a real car and is why nobody drifts to win. Nine
+tunings got here, and the thing they kept finding was that the truck's
+speed, not its angle, was what ended a drift: sideways at 38 degrees it
+fell through its own speed gate in half a second, so a drift that is
+going holds down to 300 where one may only start above 900.
+
+### Rubber on the road
+
+A sliding tyre on the tarmac leaves a mark: a thin dark quad from where the
+wheel was to where it is, in a ring of two thousand — thirty-odd seconds of
+sliding — with the oldest overwritten. They are an ordinary instanced group
+with the darkest matte material in the arena, so they take the floods and
+the shadows like everything else. Only on the tarmac, and never wet: a tyre
+on the shoulder throws dust, and a tyre in a ford throws spray. A drift
+round one corner lays about eighty. The smoke that goes with them was
+already there, since the particles: a sliding tyre smokes.
+
 ### The handbrake is not a fast way round anything
 
 It was swept over how much sideways grip it leaves the rear and how hard it
@@ -362,7 +412,7 @@ Each one is the constant it stands in for, made a lookup:
   the yaw rate they want into an input using the lock in force, so they keep
   driving the same line whatever it is set to. The circle at 1200 mm/s is
   486mm at one, 754 at 0.6 and 358 at 1.5.
-- **Opponents** rebuilds the grid. Every pool that holds a car is sized to
+- **Opponents** rebuilds the grid — only when the count actually changes; the defaults button applies every control at once, and restarted the race for nothing until it checked. Every pool that holds a car is sized to
   eight once, and how many of it are live is the length of the car list,
   which is emptied and refilled rather than replaced so anything holding it
   keeps seeing the race. Seven drivers ran forty seconds with none stalled.

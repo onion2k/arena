@@ -193,6 +193,125 @@ const HANDBRAKE_TAU = 0.05;
  */
 const HANDBRAKE_FADE = [0.62, 1.05];
 /**
+ * The drift: braking while turning, at speed, takes grip off the rear
+ * tyres — to this fraction at full brake and full lock — so the back steps
+ * out and the truck rotates into the corner, the way a rally car is thrown
+ * into one. It is the handbrake's mechanism, nearly as deep, under the
+ * driver's foot rather than a switch: how much brake and how much steering
+ * is how much drift, it fades out as the slip angle grows the way the
+ * handbrake does so it sets an angle rather than starting a spin, and it
+ * does nothing below 500 mm/s, where turning while braking is parking.
+ *
+ * The brake force itself is doing half the work. A braked rear wheel spends
+ * up to 900 of its friction circle stopping, and that is capacity it no
+ * longer has for holding the line; taking the rest of the grip down is what
+ * turns "understeers less" into "goes sideways".
+ */
+// 0.3. It went down to 0.06 chasing the angle, when the angle was the
+// front tyres' doing and not the rear's — see the servo below — and at
+// 0.06 the rear could not push the truck along either: a drift is rear
+// wheel drive on a sliding tyre, and a tyre with no grip drives nothing.
+// Traced, the truck went sideways at 38 degrees and scrubbed from 1700 to
+// 480 in half a second, and fell out of the speed gate. At 0.3 the rear
+// still slides — the servo sees to the angle — and still pushes.
+// 0.45, from 0.3, for the speed: the servo sets the angle now, so the
+// rear's grip is only what the truck has to push itself along with, and
+// at 0.3 a drift bottomed out at 330 mm/s from 1700 before the throttle
+// caught it.
+const DRIFT_GRIP = 0.45;
+const DRIFT_FROM = 500;
+const DRIFT_FULL = 900;
+/** A drift already going is held down to a lower speed than one may start
+ *  at: sideways, the truck loses speed fast, and a gate that let go at the
+ *  speed it started from ended every drift a second in. */
+const DRIFT_KEEP = 300;
+/**
+ * A drift holds once it is going. The brake starts it, but a driver does
+ * not drift with a foot on the brake — the brake comes off and the throttle
+ * goes on, and the truck stays sideways because the driver is still asking
+ * it to turn. So past this much slip, with the steering still on, the
+ * rear's grip stays down at this fraction of the starting strength until
+ * the steering centres or the slip runs out; and the whole thing eases on
+ * and off over a tenth of a second rather than switching, because a grip
+ * that switches is a truck that twitches.
+ */
+const DRIFT_HOLD = 0.85;
+const DRIFT_EASE = 12;
+/**
+ * A drift can only be held once it has been started: below this much drift
+ * the hold does nothing, so hard cornering on its own — which passes eight
+ * degrees of slip at full lock without any brake — is cornering and not a
+ * drift. It was, for one build: every corner taken at the limit latched.
+ */
+const DRIFT_HOLD_ON = 0.35;
+/**
+ * The one thing in the drift that is not tyres: a yaw torque in the
+ * steering's direction while the drift is on, in radians a second squared
+ * at full strength.
+ *
+ * Taking the rear's grip away is not enough on its own, and measuring said
+ * why. With the wheel held at full lock into the corner — which is the only
+ * way a keyboard holds it — the truck rotates until its front tyres point
+ * along the way it is going, at which point they stop pushing and the
+ * rotation stops: the body's slip settles at the lock less the yaw's share,
+ * about 13 degrees, however little grip the rear has. Cutting the rear from
+ * a fifth to a twentieth moved it by one degree. A real driver goes past
+ * that by steering out of the corner; a real drift is held on opposite
+ * lock. This is that, done for the driver: the kick turns the body past the
+ * front's equilibrium, the front tyres then resist it — they are pointing
+ * into the corner and the truck is going out of it — and the two settle at
+ * an angle the steering sets. Less steering, less kick, less angle. The slip
+ * fade above sits over all of it so the angle cannot become a spin.
+ *
+ * It is a servo on the slip angle and not a fixed torque, and it took both
+ * wrong versions to see why. The front tyres are stiff: three degrees of
+ * slip at the front is force enough to cancel a kick of 24, and their hold
+ * is about 63 radians a second squared, both at full grip on the 110mm
+ * lever to the centre of mass. A kick under that moved the drift by three
+ * degrees — 11 against 12 without it. A kick over it, at 90, rotated the
+ * truck through the fronts and the momentum carried it through 150 degrees
+ * before the slip fade could take the kick off: a spin, and a race ended by
+ * touching the brake in a corner. So: full torque at no slip, falling to
+ * nothing at an angle the steering sets, and a damping term against the
+ * yaw rate that spends the momentum on the way — the truck arrives at its
+ * angle and stays there, and less steering is a smaller angle.
+ *
+ * DRIFT_ANGLE is where the torque runs out, in radians at full lock; the
+ * fronts' hold at that slip pulls the settled angle back some way inside
+ * it. DRIFT_GAIN is torque per radian of shortfall; DRIFT_DAMP is torque
+ * per radian a second of yaw.
+ */
+// 0.55, from 0.66: the target has to sit under the slip fade's 0.62, or the
+// servo pushes the truck into the band that takes the servo away and the
+// two chatter. The fronts' hold pulls the settled angle inside it anyway.
+const DRIFT_ANGLE = 0.45;
+/**
+ * How much of the steering lock is taken off the front wheels while the
+ * drift is on. A drift is held on opposite lock, with the front tyres
+ * rolling roughly the way the truck is going; a keyboard holds full lock
+ * into the corner, and front tyres dragged sideways through the whole slide
+ * are a brake — traced, the truck scrubbed from 1700 to 330 in a second of
+ * drift. The servo is doing the turning anyway, so the fronts can be let
+ * off: at 0.6 a full-lock drift steers the fronts at four tenths of lock,
+ * near enough where the truck is going for them to roll.
+ */
+const DRIFT_RELIEF = 0.6;
+// 500, from 300: at 300 the balance against the fronts' hold settled the
+// drift at twelve degrees under throttle, which is inside the hold's own
+// threshold and so let go of itself; the peak was right and the hold was
+// not. The gain is what sets the held angle, and at 500 it is about 25.
+const DRIFT_GAIN = 500;
+/** The most the servo will put in, so a tap is a flick and not a slam:
+ *  enough over the fronts' 63 to move the truck through them, not enough
+ *  to throw it through the fade band and out the far side. */
+const DRIFT_TORQUE = 110;
+// 4, from 9: the damping is against all yaw, and a truck holding a drift
+// round a corner is yawing at three radians a second just to follow it, so
+// at 9 the damping alone cost seventeen degrees of the held angle and the
+// drift settled at eleven — a flick, not a hold. At 4 it still spends the
+// overshoot: no run at any speed spun.
+const DRIFT_DAMP = 5;
+/**
  * The most the handbrake will pull, per rear wheel, as body acceleration.
  *
  * Locked rear wheels carrying half the truck at this much grip stop it at
@@ -372,6 +491,15 @@ export class Vehicle {
   wYaw = 0; wPitch = 0; wRoll = 0;
   /** Where the steering is now, which lags where it is being asked to be. */
   steer = 0;
+  /** How much of the drift is on, 0 to 1: brake and steering together, at speed. */
+  drift = 0;
+  /**
+   * Whether a drift is in progress, which outlives `drift` itself: the slip
+   * fade takes the strength to nothing past sixty degrees, and if that also
+   * ended the drift the hold could never come back once the angle did. It
+   * did, for one build — every tap was a flick and then plain cornering.
+   */
+  private drifting = false;
   throttle = 0; braking = 0;
 
   readonly wheels: Wheel[] = WHEELS.map(() => ({
@@ -409,7 +537,8 @@ export class Vehicle {
   }
 
   private substep(dt: number, drive: Drive) {
-    const wanted = clamp(drive.steer, -1, 1) * (steerLock() / (1 + this.speed / STEER_FALLOFF));
+    // the fronts, let off in a drift: see DRIFT_RELIEF
+    const wanted = clamp(drive.steer, -1, 1) * (steerLock() / (1 + this.speed / STEER_FALLOFF)) * (1 - DRIFT_RELIEF * this.drift);
     this.steer += clamp(wanted - this.steer, -STEER_RATE * dt, STEER_RATE * dt);
     this.throttle = drive.hold ? 0 : clamp(drive.throttle, 0, 1);
     if (drive.handbrake) this.throttle = 0;
@@ -431,19 +560,39 @@ export class Vehicle {
     const rollAxX = cy, rollAxY = sy;
     const pitchAxX = -sy, pitchAxY = cy;
 
-    // How much of the handbrake is doing anything: all of it until the truck
-    // is properly sideways, then none. See HANDBRAKE_FADE.
-    let hand = 0;
-    if (drive.handbrake) {
-      let slip = 0;
-      if (this.speed > 120) {
-        slip = Math.atan2(this.vy, this.vx) - this.yaw;
-        while (slip > Math.PI) slip -= Math.PI * 2;
-        while (slip < -Math.PI) slip += Math.PI * 2;
-      }
-      const [full, none] = HANDBRAKE_FADE;
-      hand = 1 - clamp((Math.abs(slip) - full) / (none - full), 0, 1);
+    // How far the truck is already sideways, and how much of anything that
+    // takes the rear's grip away should still be doing so: all of it until
+    // it is properly sideways, then none. See HANDBRAKE_FADE.
+    let slip = 0;
+    if (this.speed > 120) {
+      slip = Math.atan2(this.vy, this.vx) - this.yaw;
+      while (slip > Math.PI) slip -= Math.PI * 2;
+      while (slip < -Math.PI) slip += Math.PI * 2;
     }
+    const [full, none] = HANDBRAKE_FADE;
+    const fade = 1 - clamp((Math.abs(slip) - full) / (none - full), 0, 1);
+    const hand = drive.handbrake ? fade : 0;
+    // And the drift: started by brake and steering together above a speed,
+    // held by slip and steering together, faded the same way as the
+    // handbrake so it sets an angle rather than starting a spin.
+    let want = 0;
+    if (drive.handbrake || drive.hold) this.drifting = false;
+    if (!drive.handbrake && !drive.hold) {
+      const gate = clamp((this.speed - DRIFT_FROM) / (DRIFT_FULL - DRIFT_FROM), 0, 1);
+      const keep = clamp((this.speed - DRIFT_KEEP) / (DRIFT_FROM - DRIFT_KEEP), 0, 1);
+      const steering = clamp(Math.abs(drive.steer), 0, 1);
+      const start = this.braking * steering * gate;
+      // A tap starts it; centring the wheel or slowing right down ends it,
+      // and nothing else does. A release on the truck straightening up was
+      // tried and fired in the dip after the flick's overshoot, when the
+      // angle passes through eight degrees on its way back to being held.
+      if (start > DRIFT_HOLD_ON) this.drifting = true;
+      if (steering < 0.3 || keep <= 0) this.drifting = false;
+      const hold = this.drifting ? DRIFT_HOLD * keep : 0;
+      want = fade * Math.max(start, hold);
+    }
+    this.drift += (want - this.drift) * Math.min(1, DRIFT_EASE * dt);
+    const drift = this.drift;
 
     let ax = 0; let ay = 0; let az = -G;
     let tRoll = 0; let tPitch = 0; let tYaw = 0;
@@ -524,6 +673,7 @@ export class Vehicle {
       const surface = gripAt(mx, my);
       let grip = MU * load * surface * (rear ? REAR_GRIP : 1);
       if (hand > 0 && rear) grip *= 1 - (1 - HANDBRAKE_GRIP) * hand;
+      if (drift > 0 && rear) grip *= 1 - (1 - DRIFT_GRIP) * drift;
       let wantSide = -vSide / LATERAL_TAU;
       // Rolling resistance, more off the tarmac, and more again with the
       // wheel in the water: a ford is felt, not just seen. The wheel rides
@@ -588,6 +738,20 @@ export class Vehicle {
 
       // the wheel rolls by how far its contact patch travelled along itself
       w.spin += (vFwd * dt) / WHEEL_RADIUS;
+    }
+
+    // The drift's servo. Slip is the way the truck is going less the way it
+    // is pointing, so in a left turn (positive steer) a truck rotating past
+    // its velocity has a negative slip: the slip in the turn's own direction
+    // is -slip times the steer's sign, and the torque closes the gap to the
+    // angle the steering asks for.
+    if (drift > 0) {
+      const steerIn = clamp(drive.steer, -1, 1);
+      const sign = steerIn < 0 ? -1 : 1;
+      const target = DRIFT_ANGLE * Math.abs(steerIn);
+      const turned = -slip * sign;
+      const servo = clamp(DRIFT_GAIN * (target - turned), -DRIFT_TORQUE, DRIFT_TORQUE) * sign;
+      tYaw += drift * (servo - DRIFT_DAMP * this.wYaw);
     }
 
     // air resistance, which is what sets the top speed

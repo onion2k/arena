@@ -19,6 +19,7 @@ import { TREES, forestBuffers, treeMesh } from './forest';
 import { clockLabel, skyAt } from './daylight';
 import { underWater, waterMesh } from './water';
 import { wheelEffects } from './particles';
+import { Skids, markMesh } from './skids';
 import { WHEELS } from './vehicle';
 import { START_BULBS, TRACK_HALF, centreline, gantry, tangentAt } from './track';
 import { height as groundAt } from './terrain';
@@ -28,7 +29,7 @@ import { EFFECT_CAPACITY, LIGHT_CAPACITY, effectsFor, lightsFor, setProjectionSc
 
 const FOV = 40;
 /** Where the dynamic groups sit, in the order they are handed over. */
-const CHASSIS = 0, CAB = 1, WHEELS_GROUP = 2, LAMPS = 3, START_LAMPS = 4;
+const CHASSIS = 0, CAB = 1, WHEELS_GROUP = 2, LAMPS = 3, START_LAMPS = 4, SKIDS = 5;
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
@@ -147,6 +148,7 @@ async function main() {
   const wheelM = new Float32Array(MAX_FIELD * 4 * 16);
   const lampM = new Float32Array(MAX_FIELD * 2 * 16);
   const startMat = new Float32Array(2 * START_BULBS * 4);
+  const skids = new Skids();
   const dynamic: GameGroup[] = [
     // not a mirror: a polished metal under a near-black sky has nothing to
     // reflect and reads as a dark shape. A little roughness gives the point
@@ -160,6 +162,8 @@ async function main() {
     { mesh: mesh.lamp, matrices: lampM, count: MAX_FIELD * 2, albedo: [1.0, 0.97, 0.9], roughness: 0.06 },
     // the starting bulbs, which never move and are recoloured every frame
     { mesh: mesh.lamp, matrices: startBulbs(), count: 2 * START_BULBS, albedo: [0.2, 0.04, 0.03], roughness: 0.12 },
+    // the skid marks: a ring of dark quads on the road, laid by sliding tyres
+    { mesh: markMesh(), matrices: skids.matrices, count: 0, albedo: [0.028, 0.028, 0.032], roughness: 0.92 },
   ];
   renderer.setDynamic(dynamic);
 
@@ -215,7 +219,9 @@ async function main() {
   // grid, so those are applied.
   buildConfig((key) => {
     if (key === 'ambient' || key === 'time') applySky();
-    if (key === 'opponents') arena.setField(SETTINGS.opponents);
+    // only when the count actually changed: applying every control at once,
+    // as the defaults button does, was restarting the race for nothing
+    if (key === 'opponents' && arena.cars.length !== 1 + SETTINGS.opponents) arena.setField(SETTINGS.opponents);
   });
   applySky();
   // Drag to swing the camera round, wheel to come in and out, shift-drag to
@@ -288,7 +294,7 @@ async function main() {
     await fetch('/__shot', { method: 'POST', body: png });
     return png.length;
   };
-  Object.assign(globalThis as Record<string, unknown>, { arena, renderer, orbit, input, lights, measure, shoot });
+  Object.assign(globalThis as Record<string, unknown>, { arena, renderer, orbit, input, lights, measure, shoot, skids });
 
   /**
    * Frame the arena, and set how far in and out the wheel may go from there.
@@ -454,6 +460,11 @@ async function main() {
         const hub = on(lx, ly, lz - w.drop);
         placeVehicleWheel(wheelM, ci * 4 + i, hub[0], hub[1], hub[2], yaw, pitch, roll, w.steer, w.spin);
         wheelEffects(renderer, truck, w, hub, sky.day);
+        // rubber on the road: a sliding, loaded, dry wheel lays a mark from
+        // where it was to where it is; anything else lifts the streak
+        const key = `${ci}:${i}`;
+        if (w.onGround && !w.wet && w.slide > 0.35 && truck.speed > 300) skids.mark(key, hub[0], hub[1], w.ground);
+        else skids.lift(key);
       }
 
       let lamp = 0;
@@ -470,6 +481,7 @@ async function main() {
     renderer.move(CAB, cabM, field);
     renderer.move(WHEELS_GROUP, wheelM, field * 4);
     renderer.move(LAMPS, lampM, field * 2);
+    if (skids.dirty) { renderer.move(SKIDS, skids.matrices, skids.count); skids.dirty = false; }
 
     // the starting lights: dark until lit, then a hot red, all out on the go
     for (let i = 0; i < 2 * START_BULBS; i++) {
