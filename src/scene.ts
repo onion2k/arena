@@ -109,8 +109,6 @@ export const MESHES = {
    */
   kerbA: () => kerbMesh(0, 90, 30),
   kerbB: () => kerbMesh(1, 90, 30),
-  /** A perimeter block, laid along the wall it belongs to. */
-  block: () => part('plate(card(width: 218, height: 74, corner: 12), thickness: 132, bevel: 12)', 'base'),
   /**
    * A lamp post, in three pieces: the pole it stands on, the arm that reaches
    * out over the road, and the head on the end of the arm.
@@ -122,10 +120,16 @@ export const MESHES = {
    * mesh because material belongs to a draw here and the head wants to be a
    * different thing from the pole: this way the head can be near-white and
    * glossy, and read as the thing the light comes out of.
+   *
+   * Built by hand and not by the parts library, since the shadows: a
+   * bevelled part from the library is a jewellery part, and a lamp post made
+   * of three of them was 1,930 triangles, which across 84 posts was 162,000
+   * — 42% of everything the shadow maps had to draw, every frame, for
+   * bevels nobody could see from the road. A prism and two boxes are 44.
    */
-  pole: () => part(`disc(radius: ${POLE_RADIUS}, thickness: ${COLUMN_HEIGHT}, sides: 10, bevel: 5)`, 'base'),
-  arm: () => part(`plate(card(width: ${LAMP_ARM}, height: 21, corner: 9), thickness: 17, bevel: 4)`),
-  head: () => part('plate(card(width: 78, height: 50, corner: 19), thickness: 27, bevel: 8)'),
+  pole: () => prism(POLE_RADIUS, COLUMN_HEIGHT, 8),
+  arm: () => box(LAMP_ARM, 21, 17),
+  head: () => box(78, 50, 27),
   /**
    * The player is a technical: a flatbed with a gun on the back that aims
    * where it likes, not where the truck is pointing. It is five parts rather
@@ -165,7 +169,7 @@ export const LAMP_ARM = 210;
 /** How far a post's foot stands from the edge of the tarmac. */
 export const POST_CLEARANCE = 470;
 
-/** How far a post or a wall block is sunk, so no slope opens a gap under it. */
+/** How far a post is sunk, so no slope opens a gap under it. */
 const SINK = 48;
 
 /** Where a post's lamp head hangs: out along its arm, at the top of its pole. */
@@ -189,16 +193,9 @@ export const COLUMN_RADIUS = POLE_RADIUS;
 export const COLUMNS: Post[] = trackPosts(640, POST_CLEARANCE);
 
 export function arenaMatrices(): {
-  tiles: Float32Array; blocks: Float32Array;
+  tiles: Float32Array;
   poles: Float32Array; arms: Float32Array; heads: Float32Array;
 } {
-  const blocks: number[] = [];
-  for (let x = -ARENA_X + 115; x <= ARENA_X - 115; x += 232) {
-    blocks.push(x, -ARENA_Y, 0, x, ARENA_Y, 0);
-  }
-  for (let y = -ARENA_Y + 125; y <= ARENA_Y - 125; y += 245) {
-    blocks.push(-ARENA_X, y, Math.PI / 2, ARENA_X, y, Math.PI / 2);
-  }
   // The pole stands on the ground; the arm and the head hang off the top of
   // it, turned to face the road. All three are worked out from the same post
   // and the same `lampAt`, so a head is never anywhere but on the end of its
@@ -219,7 +216,57 @@ export function arenaMatrices(): {
   // The tarmac lies on the ground and tips with it, like slabs laid over a
   // hill. Posts and walls stay upright and are sunk instead: a leaning post
   // reads as a mistake where a leaning paving slab reads as ground.
-  return { tiles: identityPlacement(), blocks: pack(blocks, undefined, true), poles, arms, heads };
+  return { tiles: identityPlacement(), poles, arms, heads };
+}
+
+/**
+ * A right prism standing on z = 0: `sides` flat faces and a flat top, each
+ * face with its own vertices so it shades as a facet. No bottom — it stands
+ * on the ground.
+ */
+export function prism(radius: number, height: number, sides: number): Mesh {
+  const faces = sides * 2 + sides;               // two triangles a side, one a top wedge
+  const positions = new Float32Array(faces * 9);
+  const normals = new Float32Array(faces * 9);
+  const uvs = new Float32Array(faces * 6);
+  const indices = new Uint32Array(faces * 3);
+  let v = 0;
+  const put = (p: number[], n: number[]) => {
+    positions.set(p, v * 3); normals.set(n, v * 3); uvs.set([0, 0], v * 2); indices[v] = v; v++;
+  };
+  for (let i = 0; i < sides; i++) {
+    const a0 = (i / sides) * Math.PI * 2, a1 = ((i + 1) / sides) * Math.PI * 2;
+    const x0 = Math.cos(a0) * radius, y0 = Math.sin(a0) * radius;
+    const x1 = Math.cos(a1) * radius, y1 = Math.sin(a1) * radius;
+    const am = (a0 + a1) / 2;
+    const n = [Math.cos(am), Math.sin(am), 0];
+    put([x0, y0, 0], n); put([x1, y1, 0], n); put([x1, y1, height], n);
+    put([x0, y0, 0], n); put([x1, y1, height], n); put([x0, y0, height], n);
+    put([0, 0, height], [0, 0, 1]); put([x0, y0, height], [0, 0, 1]); put([x1, y1, height], [0, 0, 1]);
+  }
+  return { positions, normals, uvs, indices };
+}
+
+/** A box about its own centre, flat shaded: twelve triangles. */
+export function box(width: number, depth: number, height: number): Mesh {
+  const hx = width / 2, hy = depth / 2, hz = height / 2;
+  const positions = new Float32Array(12 * 9);
+  const normals = new Float32Array(12 * 9);
+  const uvs = new Float32Array(12 * 6);
+  const indices = new Uint32Array(12 * 3);
+  let v = 0;
+  const quad = (a: number[], b: number[], c: number[], d: number[], n: number[]) => {
+    for (const p of [a, b, c, a, c, d]) {
+      positions.set(p, v * 3); normals.set(n, v * 3); uvs.set([0, 0], v * 2); indices[v] = v; v++;
+    }
+  };
+  quad([-hx, -hy, hz], [hx, -hy, hz], [hx, hy, hz], [-hx, hy, hz], [0, 0, 1]);
+  quad([-hx, hy, -hz], [hx, hy, -hz], [hx, -hy, -hz], [-hx, -hy, -hz], [0, 0, -1]);
+  quad([hx, -hy, -hz], [hx, hy, -hz], [hx, hy, hz], [hx, -hy, hz], [1, 0, 0]);
+  quad([-hx, hy, -hz], [-hx, -hy, -hz], [-hx, -hy, hz], [-hx, hy, hz], [-1, 0, 0]);
+  quad([-hx, hy, -hz], [-hx, hy, hz], [hx, hy, hz], [hx, hy, -hz], [0, 1, 0]);
+  quad([-hx, -hy, -hz], [hx, -hy, -hz], [hx, -hy, hz], [-hx, -hy, hz], [0, -1, 0]);
+  return { positions, normals, uvs, indices };
 }
 
 /** One placement written into a pool: a turn about z, a uniform scale, a spot. */
@@ -231,26 +278,6 @@ function place(out: Float32Array, i: number, x: number, y: number, z: number, tu
   out[o + 10] = k;
   out[o + 12] = x; out[o + 13] = y; out[o + 14] = z;
   out[o + 15] = 1;
-}
-
-/** Triples of x, y, turn into column-major placements, optionally scaled. */
-function pack(triples: number[], scales?: number[], onGround = false): Float32Array {
-  const n = triples.length / 3;
-  const out = new Float32Array(n * 16);
-  for (let i = 0; i < n; i++) {
-    const x = triples[i * 3]; const y = triples[i * 3 + 1];
-    const a = triples[i * 3 + 2];
-    const k = scales ? scales[i] : 1;
-    const c = Math.cos(a) * k; const s = Math.sin(a) * k;
-    const o = i * 16;
-    out[o] = c; out[o + 1] = s;
-    out[o + 4] = -s; out[o + 5] = c;
-    out[o + 10] = k;
-    out[o + 12] = x; out[o + 13] = y;
-    out[o + 14] = onGround ? height(x, y) - SINK : 0;
-    out[o + 15] = 1;
-  }
-  return out;
 }
 
 /** The ribbon is already in world coordinates, so it needs no placement. */

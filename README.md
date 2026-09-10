@@ -526,8 +526,15 @@ that matter are the ones you drive through.
 What it costs, fenced at 1080p, median of three: **1.3ms at night** — the
 sun's map, eight spot maps at 512, and the lookups, on a 2.8ms frame — and
 **0.16ms by day**, when only the sun's map is rendered, on a 0.25ms frame.
-The maps are rendered every frame over all 390k triangles; if that ever
-needs trimming, the bevelled lamp posts and wall blocks are 72% of them.
+The maps are rendered every frame over every triangle in the arena, which
+was 390k when they arrived and is 115k now: the lamp posts were three
+bevelled parts from the jewellery library each — 1,930 triangles a post,
+162,000 across the circuit, 42% of everything the maps drew, for bevels
+nobody could see from the road — and are a prism and two boxes now, 48 a
+post. The wall of blocks round the arena, 119,000 more, is gone; the forest
+is the edge, planted straight out to the apron, and the trucks are still
+held inside by the clamp that always held them. Night went 4.09ms to 3.64,
+noon 0.40 to 0.30.
 
 What it looks like is measured too. At noon the shadows shift the frame's
 mean brightness by under one per cent — the sun is nearly overhead and every

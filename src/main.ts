@@ -85,7 +85,7 @@ async function main() {
   await new Promise((r) => { requestAnimationFrame(r); setTimeout(r, 50); });
 
   const mesh = {
-    floor: MESHES.floor(), tile: MESHES.tile(), block: MESHES.block(),
+    floor: MESHES.floor(), tile: MESHES.tile(),
     kerbA: MESHES.kerbA(), kerbB: MESHES.kerbB(),
     pole: MESHES.pole(), arm: MESHES.arm(), head: MESHES.head(),
     chassis: MESHES.chassis(), cab: MESHES.cab(), wheel: MESHES.wheel(),
@@ -113,7 +113,6 @@ async function main() {
     // are on the one thing the driver has to see.
     { mesh: mesh.kerbA, matrices: at.tiles, albedo: [0.62, 0.075, 0.055], roughness: 0.55 },
     { mesh: mesh.kerbB, matrices: at.tiles, albedo: [0.80, 0.80, 0.82], roughness: 0.55 },
-    { mesh: mesh.block, matrices: at.blocks, albedo: [0.58, 0.61, 0.68], roughness: 0.26 },
     // The lamp posts. Pole and arm are a dark painted metal that the beam
     // never falls on — a street light stands outside its own pool — and the
     // head is near white and glossy, so what you see of a post at a distance

@@ -30,16 +30,15 @@ import { height } from './terrain';
  * most of what there was: the forest read as a hedge in the distance.
  */
 export const FOREST_FROM = TRACK_HALF + 650;
-/** Trees are kept this far in from the walls, so none stands in a block. */
-const WALL_MARGIN = 260;
 /**
- * And planted again beyond the wall, on the ground that runs 400 past it. A
- * truck can never reach them, so they cost nothing to drive against; what
- * they buy is a treeline above the wall from every angle the camera takes,
- * so the edge of the arena is the edge of a wood and not of the world.
+ * How far past the arena's bounds the planting runs: onto the apron the
+ * ground extends 400 past them. There was a wall of blocks on the bounds
+ * once, with a gap in the trees either side of it; the forest is the edge
+ * now, and the trucks are still kept inside the bounds by the invisible
+ * clamp that always held them — a tree at the edge is a tree you may hit,
+ * and a truck against one is pushed back the way it is off any other.
  */
-const BEYOND_FROM = 120;
-const BEYOND_TO = 380;
+const APRON = 380;
 /** Nominal spacing of the planting grid, before jitter. Dense: a truck is 300. */
 const SPACING = 230;
 /** The unit tree, before its own scale: a cone this wide at the foot and this tall. */
@@ -117,18 +116,13 @@ function rng(seed: number): () => number {
 export function plant(seed = 7): Tree[] {
   const rand = rng(seed);
   const out: Tree[] = [];
-  const x1 = ARENA_X + BEYOND_TO, y1 = ARENA_Y + BEYOND_TO;
+  const x1 = ARENA_X + APRON, y1 = ARENA_Y + APRON;
   for (let gy = -y1; gy <= y1; gy += SPACING) {
     for (let gx = -x1; gx <= x1; gx += SPACING) {
       const x = gx + (rand() - 0.5) * SPACING;
       const y = gy + (rand() - 0.5) * SPACING;
-      // inside the arena but clear of the wall, or outside it on the apron
-      const ex = Math.abs(x) - ARENA_X, ey = Math.abs(y) - ARENA_Y;
-      const edge = Math.max(ex, ey);
-      const inside = edge < -WALL_MARGIN;
-      const beyond = edge > BEYOND_FROM && ex < BEYOND_TO && ey < BEYOND_TO;
-      if (!inside && !beyond) continue;
-      if (inside && Math.abs(where(x, y).offset) < FOREST_FROM) continue;
+      if (Math.abs(x) > x1 || Math.abs(y) > y1) continue;
+      if (Math.abs(where(x, y).offset) < FOREST_FROM) continue;
       const scale = 0.72 + rand() * 0.66;
       out.push({ x, y, scale, r: BASE_RADIUS * scale * 0.42 });
     }
