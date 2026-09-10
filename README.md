@@ -334,10 +334,10 @@ chosen to avoid, and it is why this is on a key rather than instead.
 
 ## The settings
 
-Escape opens a panel of nine sliders: the ambient light, the floodlights,
+Escape opens a panel of ten sliders: the ambient light, the floodlights,
 the time of day, the top speed, the steering, how many drivers line up
-against you, and three for the picture rather than the scene — the bloom,
-the vignette and the grain. They are
+against you, three for the picture rather than the scene — the bloom, the
+vignette and the grain — and the dawn mist. They are
 kept in one table in `settings.ts`, which is what the panel is built from —
 adding a knob is one line there and none in the page — and they are read
 live, every frame, by whoever uses them, so a slider moved mid-race takes
@@ -417,6 +417,9 @@ Each one is the constant it stands in for, made a lookup:
   eight once, and how many of it are live is the length of the car list,
   which is emptied and refilled rather than replaced so anything holding it
   keeps seeing the race. Seven drivers ran forty seconds with none stalled.
+- **Dawn mist** scales the fog the clock decides on: see
+  [The mist](#the-mist). At zero there is no mist at any hour, and it costs
+  nothing.
 - **Bloom**, **vignette** and **grain** are written into the renderer's
   `post` when they move. They change nothing in the arena, only the picture
   of it: see [The picture](#the-picture).
@@ -742,6 +745,58 @@ five.
 The truck carries two headlamps that wash the road ahead, an exhaust glow
 under power and brake lights, all bolted to a body that pitches and rolls, so
 they are placed and aimed in its frame rather than on a plane at zero.
+
+## The mist
+
+Ground fog is a dawn thing, and for a reason worth honouring: the ground
+loses heat all night, by the small hours it is colder than the air over it,
+the air against it cools past its dew point, and the water comes out as mist
+— which lies in the low ground, because cold air is heavy and runs downhill.
+Then the sun comes up and burns it off. So the arena's mist thickens from
+two o'clock, is at its worst from half four to seven, and is gone by half
+nine, which is `mistAt` in `daylight.ts` and is the only thing that decides
+whether any fog is marched at all. The evening is deliberately clear: mist
+does form at dusk over water, but the ground is still warm and it is a
+fraction of what dawn gives you, and two mists a lap would make the whole
+thing ordinary.
+
+It is the renderer's volumetric fog, which marches the view ray rather than
+fading things toward grey by distance, and the two things that buys are the
+two things worth having. It **lies in the hollows**: the density falls off
+over a height above a base, and the base is the water level, so the mist is
+thickest on the lakes and in the fords and thins out over the rises. And it
+**takes the shape of what stands in the light**: every step of the march
+asks the sun's shadow map, which the arena already draws for the ground, so
+the forest lays shafts across the road instead of a wash over it.
+
+The layer is **300 deep**, and that number is the whole difference between a
+haze and a wood with the sun coming through it. A tree here is 300 tall,
+and the first version put the layer at 520: two thirds of the mist stood
+above the canopy in permanent sunlight, and the forest held **9%** of the
+light out of it. Dropped under the tree line, the same forest holds **22%**.
+Measured with the fog's own ambient and its forward scattering turned off,
+so that what is being compared is the sun's light alone, with the shadow
+maps on and off.
+
+The rest of the numbers: density 2.6e-4 a millimetre at the base, which is a
+beam down to half over about 2700 — a truck two corners away is a shape and
+not a truck. Forward scattering at 0.62, so the mist glows where you look
+into the sun and stays flat where you look away from it, which is why the
+frame at six o'clock is warm on one side and cold on the other. An ambient
+term of 0.16 plus half the sky's, standing in for the light the mist gets
+from the sky rather than the sun, and the thing that keeps the shadowed half
+of it a cold blue rather than black. A reach of 9000 and 28 steps, dithered
+per pixel and per frame, marched at half size.
+
+**What it costs: 0.36 ms** at 1920×1080 and 0.52 at 2560×1440, and only
+between two and half nine. At every other hour the density is zero, the
+passes are skipped, and the frame is exactly what it was.
+
+One thing it does not do: the floodlights do not light it. The mist is lit
+by the sun and the sky and nothing else, so a lamp at dawn has a glow on its
+head and no cone under it. Ninety-two lights sampled at every step of every
+march is a different order of cost from one, and the hour the mist is thick
+is the hour the lamps are going out anyway.
 
 ## The picture
 

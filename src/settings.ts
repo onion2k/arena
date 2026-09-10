@@ -41,6 +41,11 @@ export interface Settings {
   bloom: number;
   vignette: number;
   grain: number;
+  /**
+   * How thick the dawn mist gets at its worst. The clock decides when there
+   * is any: see `mistAt`. Zero is a clear morning, and costs nothing.
+   */
+  mist: number;
 }
 
 export const DEFAULTS: Readonly<Settings> = {
@@ -53,6 +58,7 @@ export const DEFAULTS: Readonly<Settings> = {
   bloom: 0.35,
   vignette: 0.3,
   grain: 0.03,
+  mist: 1,
 };
 
 /** One row of the panel: which setting, what to call it, how far it goes. */
@@ -76,6 +82,7 @@ export const CONTROLS: Control[] = [
   { key: 'bloom', label: 'bloom', min: 0, max: 1.5, step: 0.05, show: (v) => v.toFixed(2) },
   { key: 'vignette', label: 'vignette', min: 0, max: 0.8, step: 0.05, show: (v) => v.toFixed(2) },
   { key: 'grain', label: 'grain', min: 0, max: 0.15, step: 0.005, show: (v) => v.toFixed(3) },
+  { key: 'mist', label: 'dawn mist', min: 0, max: 2, step: 0.05, show: (v) => `×${v.toFixed(2)}` },
 ];
 
 const KEY = 'arena.settings';

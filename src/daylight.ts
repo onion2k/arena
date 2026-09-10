@@ -26,6 +26,33 @@ export interface Sky {
   lampsOn: number;
   /** How far into day it is, 0 at night to 1 in full daylight. */
   day: number;
+  /**
+   * How much mist is lying on the ground, 0 to 1. Dawn, and only dawn: see
+   * `mistAt`.
+   */
+  mist: number;
+}
+
+/**
+ * Mist at dawn.
+ *
+ * Ground fog is a dawn thing for a reason. The ground loses heat all night
+ * and by the small hours it is colder than the air over it; the air against
+ * it cools to its dew point and the water in it comes out as mist, which
+ * lies in the low ground because cold air is heavy and runs downhill. Then
+ * the sun comes up and burns it off within an hour or two. So it thickens
+ * through the last of the night, is at its worst just as the sun clears the
+ * horizon — which is also when the light is nearly horizontal and rakes
+ * through the trees — and is gone by the middle of the morning.
+ *
+ * Evening is deliberately clear. Mist does form at dusk over water, but the
+ * ground is still warm and it is a fraction of what dawn gives you; two
+ * mists a lap would make the effect ordinary.
+ */
+export function mistAt(hours: number): number {
+  const h = ((hours % 24) + 24) % 24;
+  // up from two o'clock, full from half four to seven, gone by half nine
+  return smooth(2, 4.5, h) * (1 - smooth(7, 9.5, h));
 }
 
 /**
@@ -141,7 +168,7 @@ export function skyAt(hours: number, nightAmbient: number): Sky {
   // go out in the golden hour; and come on again as the sun goes down
   // rather than waiting for the dark. Above a fifth of the way up, off.
   const lampsOn = 1 - smooth(0.04, 0.22, e);
-  return { sunDir: dir, sunColour: sun, ambient, background: sky, lampsOn, day };
+  return { sunDir: dir, sunColour: sun, ambient, background: sky, lampsOn, day, mist: mistAt(h) };
 }
 
 /** The clock as a label: "22:00", "06:15". */

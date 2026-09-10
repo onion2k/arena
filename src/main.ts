@@ -17,7 +17,7 @@ import { MAX_FIELD, PAINT, Race, type Input } from './game';
 import { CONTROLS, SETTINGS, restoreDefaults, save } from './settings';
 import { TREES, forestBuffers, treeMesh } from './forest';
 import { clockLabel, skyAt } from './daylight';
-import { underWater, waterMesh } from './water';
+import { WATER_LEVEL, underWater, waterMesh } from './water';
 import { wheelEffects } from './particles';
 import { Skids, markMesh } from './skids';
 import { WHEELS } from './vehicle';
@@ -198,6 +198,32 @@ async function main() {
     // Swapped early, while the sky is still nearly black: the two bakes do
     // not match and a cut between them is visible at any ambient above a
     // tenth. At this height of the sun the ambient is 0.09.
+    // The mist. It lies on the water — the lakes and the fords are the
+    // lowest ground there is — and it is 300 deep, which is under the trees
+    // and about the height of a truck's cab: a driver is in it, the lamp
+    // heads are out in the clear, and the forest is tall enough to stand in
+    // its light. That last one is the whole reason for the number. At 520
+    // the layer stood above a 300mm tree and two thirds of it was in
+    // permanent sun; the forest held 9% of the light out of the mist. At 300
+    // it holds 22%, which is the difference between a haze and a wood with
+    // the sun coming through it. What lights it is the sun — level with it
+    // and orange at dawn — through the shadow map the arena already draws.
+    // Everything scales with the hour: nothing is marched at all away from
+    // dawn.
+    const mist = sky.mist * SETTINGS.mist;
+    renderer.fog = {
+      density: 2.6e-4 * mist,
+      base: WATER_LEVEL,
+      height: 300,
+      colour: [0.86, 0.89, 0.95],
+      // the sky's own light on the mist, which is what keeps the shadowed
+      // half of it a cold blue rather than black
+      ambient: 0.16 + 0.5 * sky.ambient,
+      anisotropy: 0.62,
+      reach: 9000,
+      steps: 28,
+    };
+
     const wantDay = sky.day > 0.08;
     if (wantDay !== envIsDay) {
       envIsDay = wantDay;
@@ -224,6 +250,7 @@ async function main() {
   buildConfig((key) => {
     if (key === 'ambient' || key === 'time') applySky();
     if (key === 'bloom' || key === 'vignette' || key === 'grain') applyPost();
+    if (key === 'mist') applySky();
     // only when the count actually changed: applying every control at once,
     // as the defaults button does, was restarting the race for nothing
     if (key === 'opponents' && arena.cars.length !== 1 + SETTINGS.opponents) arena.setField(SETTINGS.opponents);
