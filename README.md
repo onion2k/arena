@@ -284,8 +284,9 @@ chosen to avoid, and it is why this is on a key rather than instead.
 
 ## The settings
 
-Escape opens a panel of five sliders: the ambient light, the floodlights, the
-top speed, the steering, and how many drivers line up against you. They are
+Escape opens a panel of six sliders: the ambient light, the floodlights, the
+moonlight, the top speed, the steering, and how many drivers line up against
+you. They are
 kept in one table in `settings.ts`, which is what the panel is built from —
 adding a knob is one line there and none in the page — and they are read
 live, every frame, by whoever uses them, so a slider moved mid-race takes
@@ -298,6 +299,14 @@ Each one is the constant it stands in for, made a lookup:
   every frame, so it is written straight into the look.
 - **Floodlights** is the intensity every trackside lamp is given when the
   light list is rebuilt, which is every frame anyway.
+- **Moonlight** scales the sun's colour, keeping its hue. It is there because
+  with the floodlights and the ambient both at zero the track was still
+  plainly visible, and measuring what was left found the sun: it is the one
+  light the ambient does not scale, and alone it is worth a frame-wide mean of
+  12.9 against 2.3 with every light off — more than the floods once they are
+  gone, because at the grazing angle a following camera looks along a road
+  at, the road throws it straight back. Zero is the only way to a dark arena;
+  what remains then is your own headlights, the glows, and a sky of 5 in 255.
 - **Top speed** sets the drag. The engine and the drag balance at the top, so
   `AERO = ENGINE / v²`; at the default 2300 that is the 1.1e-3 it was as a
   constant, and the acceleration feel is left alone. Measured over six

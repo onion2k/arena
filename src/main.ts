@@ -36,6 +36,17 @@ const mapPanel = document.getElementById('map')!;
 const mapSvg = document.getElementById('mapSvg') as unknown as SVGSVGElement;
 const configPanel = document.getElementById('config')!;
 
+/**
+ * The sun's colour at a strength of one: cold, and dim. The settings scale
+ * it, keeping the hue, so the slider is how bright the night is and not what
+ * colour. This is also the light that is left when the floodlights and the
+ * ambient are both at zero — measured at a frame-wide mean of 12.9 on its
+ * own against 2.3 with every light off — which is why it has a slider.
+ */
+const MOONLIGHT: [number, number, number] = [0.040, 0.052, 0.092];
+const moonlightAt = (k: number): [number, number, number] =>
+  [MOONLIGHT[0] * k, MOONLIGHT[1] * k, MOONLIGHT[2] * k];
+
 main().catch((err) => { bootMsg.textContent = String(err?.message ?? err); console.error(err); });
 
 async function main() {
@@ -57,7 +68,7 @@ async function main() {
     // and the floods are warm, so making it moonlight rather than grey is
     // what puts the arena at night instead of in an unlit room: the track is
     // a warm ribbon through cold ground, and the two read apart at a glance.
-    sunColour: [0.040, 0.052, 0.092],
+    sunColour: MOONLIGHT,
     exposure: 1.05,
     // Half brightness at 900mm rather than the library's 50. The arena is
     // 4800 across; at fifty a light was a coin of brightness under whatever
@@ -158,14 +169,17 @@ async function main() {
   const quads = new Float32Array(EFFECT_CAPACITY * EFFECT_STRIDE);
   const input = watchInput(arena);
   const minimap = buildMinimap(arena);
-  // The settings panel. Two of the five are read live by whoever uses them
-  // and need nothing done here; the ambient is a field on the renderer's
-  // look, and the field size rebuilds the grid, so those two are applied.
+  // The settings panel. Three of the six are read live by whoever uses them
+  // and need nothing done here; the ambient and the sun are fields on the
+  // renderer's look, and the field size rebuilds the grid, so those are
+  // applied.
   buildConfig((key) => {
     if (key === 'ambient') renderer.look.ambient = SETTINGS.ambient;
+    if (key === 'sun') renderer.look.sunColour = moonlightAt(SETTINGS.sun);
     if (key === 'opponents') arena.setField(SETTINGS.opponents);
   });
   renderer.look.ambient = SETTINGS.ambient;
+  renderer.look.sunColour = moonlightAt(SETTINGS.sun);
   // Drag to swing the camera round, wheel to come in and out, shift-drag to
   // slide it. The floor is opaque from below and the arena is meant to be
   // looked into, so the polar range stops short of the horizon and of

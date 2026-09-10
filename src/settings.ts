@@ -18,6 +18,12 @@ export interface Settings {
   ambient: number;
   /** The trackside floodlights, as the intensity each one is given. */
   flood: number;
+  /**
+   * The sun — the moonlight, here — as a multiple of its tuned colour. One is
+   * the night as designed; zero is the only way to a dark arena, because the
+   * sun is the one light the ambient does not scale.
+   */
+  sun: number;
   /** Where the engine and the drag balance, in mm/s. */
   topSpeed: number;
   /** A multiplier on the steering lock: under one turns wider, over tighter. */
@@ -29,6 +35,7 @@ export interface Settings {
 export const DEFAULTS: Readonly<Settings> = {
   ambient: 0.035,
   flood: 5.8,
+  sun: 1,
   topSpeed: 2300,
   steering: 1,
   opponents: 3,
@@ -48,6 +55,7 @@ export interface Control {
 export const CONTROLS: Control[] = [
   { key: 'ambient', label: 'ambient light', min: 0, max: 0.3, step: 0.005, show: (v) => v.toFixed(3) },
   { key: 'flood', label: 'floodlights', min: 0, max: 14, step: 0.2, show: (v) => v.toFixed(1) },
+  { key: 'sun', label: 'moonlight', min: 0, max: 4, step: 0.05, show: (v) => `×${v.toFixed(2)}` },
   { key: 'topSpeed', label: 'top speed', min: 1200, max: 3400, step: 50, show: (v) => `${v} mm/s` },
   { key: 'steering', label: 'steering', min: 0.5, max: 1.6, step: 0.05, show: (v) => `×${v.toFixed(2)}` },
   { key: 'opponents', label: 'opponents', min: 0, max: 7, step: 1, show: (v) => String(v) },
