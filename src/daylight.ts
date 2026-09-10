@@ -10,9 +10,9 @@
  * The sun in the renderer is a specular light only: it puts a highlight on
  * things and does not otherwise light them. What lights the ground by day is
  * the environment, through `ambient`, and the environment is baked once for
- * the day and once for the night and swapped at dawn and dusk. So "daylight"
- * here is mostly a large ambient against a bright sky, with the sun on top
- * for the glints, and that is what a bright overcast-to-clear day is.
+ * the day and once for the night and swapped while the sky is still dark.
+ * So "daylight" here is mostly a large ambient against a bright sky, with
+ * the sun on top for the glints, and that is what a bright day is.
  */
 
 export interface Sky {
@@ -29,29 +29,50 @@ export interface Sky {
 }
 
 /**
- * The moon: dim and cold, from a fixed place in the sky. This was the sun
- * before there was a day — see the settings, where it was "moonlight" — and
- * it is what the night is lit by when the floods and the ambient are off.
+ * The sky as keyframes over the sun's height, -1 at midnight to 1 at noon.
+ *
+ * It was two states with an hour of blend between them, and it looked like
+ * a switch: noon was 09:00 was 16:00, 22:00 was 03:00, and the whole of
+ * dawn was over in a third of a lap. A day is not two states. It is a deep
+ * night that lifts before the sun, a horizon that goes orange while the
+ * lamps are still on, a golden hour, a cool bright morning, a noon, and all
+ * of that again backwards and redder in the evening — so it is a table, and
+ * the hour reads along it.
+ *
+ * Each row is a height of the sun, and the values are blended between rows
+ * with a smoothstep so nothing kinks. The moon is in here too: below the
+ * horizon the "sun" is the moon, dim and cold, and it crosses the sky
+ * opposite the sun so the glint on the road moves through the night.
  */
-const MOON_DIR: [number, number, number] = [0.34, 0.52, 0.78];
-const MOONLIGHT: [number, number, number] = [0.040, 0.052, 0.092];
+interface Key {
+  e: number;
+  sun: [number, number, number];
+  ambient: number;
+  sky: [number, number, number];
+}
 
-/** The sun at noon: from the same quarter as the moon, higher. */
-const NOON_AZIMUTH = Math.atan2(MOON_DIR[1], MOON_DIR[0]);
+const KEYS: Key[] = [
+  { e: -1.00, sun: [0.040, 0.052, 0.092], ambient: 0.035, sky: [0.006, 0.011, 0.026] },   // midnight
+  { e: -0.45, sun: [0.040, 0.052, 0.092], ambient: 0.040, sky: [0.008, 0.013, 0.032] },   // small hours
+  { e: -0.18, sun: [0.055, 0.070, 0.140], ambient: 0.090, sky: [0.030, 0.045, 0.110] },   // the sky lifts
+  { e: -0.06, sun: [0.30, 0.20, 0.22], ambient: 0.20, sky: [0.16, 0.14, 0.26] },          // first light
+  { e: 0.00, sun: [1.50, 0.52, 0.18], ambient: 0.32, sky: [0.60, 0.33, 0.20] },           // the sun on the horizon
+  { e: 0.12, sun: [1.85, 0.95, 0.42], ambient: 0.50, sky: [0.62, 0.50, 0.46] },           // golden
+  { e: 0.30, sun: [1.90, 1.45, 0.95], ambient: 0.72, sky: [0.50, 0.58, 0.76] },           // morning
+  { e: 0.60, sun: [1.90, 1.72, 1.40], ambient: 0.88, sky: [0.42, 0.57, 0.84] },           // late morning
+  { e: 1.00, sun: [1.90, 1.80, 1.55], ambient: 1.00, sky: [0.36, 0.55, 0.88] },           // noon
+];
+
+/** The evening is the morning played backwards, but redder and a touch
+ *  darker: dust and a long day. Applied to the sun and the sky by how far
+ *  through the afternoon it is, most at the horizon. */
+const EVENING_TINT: [number, number, number] = [1.06, 0.88, 0.80];
+
+/** How far the sun is up, in radians, at the top of its arc. */
 const NOON_ELEVATION = 1.15;
-/** Full daylight, and the warm version of it at the horizon. */
-const DAY_SUN: [number, number, number] = [1.9, 1.75, 1.45];
-const DAWN_SUN: [number, number, number] = [1.8, 0.85, 0.40];
-/**
- * How much the environment lights everything at noon. It is most of what
- * daylight is here, because the renderer's sun is a highlight and not a
- * lamp: at 0.62 the arena at noon measured a frame-wide mean of 59 against
- * 54 at night, an overcast afternoon at best. 1.0 is a day.
- */
-const DAY_AMBIENT = 1.0;
-const DAY_SKY: [number, number, number] = [0.40, 0.56, 0.84];
-const DAWN_SKY: [number, number, number] = [0.46, 0.34, 0.30];
-const NIGHT_SKY: [number, number, number] = [0.006, 0.011, 0.026];
+/** The sun and the moon both cross through this quarter of the sky at their
+ *  highest — the quarter the fixed moon used to sit in. */
+const NOON_AZIMUTH = Math.atan2(0.52, 0.34);
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const smooth = (a: number, b: number, v: number) => {
@@ -69,34 +90,58 @@ export function elevationAt(hours: number): number {
   return Math.sin((Math.PI * (hours - 6)) / 12);
 }
 
-export function skyAt(hours: number, nightAmbient: number): Sky {
-  const e = elevationAt(hours);
-  // Day comes in as the sun clears the horizon and is full by the time it is
-  // a fifth of the way up. Below the horizon it is night, and the sun's
-  // colour is the moon's.
-  const day = smooth(-0.04, 0.22, e);
-  // The lamps go off a little after the sun is up and come on a little
-  // before it is down: a street light that was still on at noon would be
-  // wrong, and one that waited for full dark would be too.
-  const lampsOn = 1 - smooth(0.0, 0.14, e);
-  // warm near the horizon, white once it is up
-  const warm = 1 - smooth(0.02, 0.35, e);
+/** The row above and below a height of the sun, and how far between them. */
+function keyed(e: number): { a: Key; b: Key; t: number } {
+  let i = 0;
+  while (i < KEYS.length - 2 && KEYS[i + 1].e <= e) i++;
+  const a = KEYS[i], b = KEYS[i + 1];
+  return { a, b, t: smooth(a.e, b.e, e) };
+}
 
-  let sunDir: [number, number, number];
-  if (e > 0) {
-    // east at six, through the moon's quarter at noon, to west at eighteen
-    const az = NOON_AZIMUTH + (Math.PI / 2) * ((12 - hours) / 6);
-    const el = NOON_ELEVATION * e;
-    sunDir = [Math.cos(az) * Math.cos(el), Math.sin(az) * Math.cos(el), Math.sin(el)];
-  } else {
-    sunDir = MOON_DIR;
+/** A light's direction at an hour: east at six, up through NOON_AZIMUTH at
+ *  twelve, west at eighteen — for the sun, or for the moon twelve hours on. */
+function arc(hours: number, e: number): [number, number, number] {
+  const az = NOON_AZIMUTH + (Math.PI / 2) * ((12 - hours) / 6);
+  const el = NOON_ELEVATION * Math.max(0.05, e);
+  return [Math.cos(az) * Math.cos(el), Math.sin(az) * Math.cos(el), Math.sin(el)];
+}
+
+export function skyAt(hours: number, nightAmbient: number): Sky {
+  const h = ((hours % 24) + 24) % 24;
+  const e = elevationAt(h);
+  const { a, b, t } = keyed(e);
+  let sun = mix(a.sun, b.sun, t);
+  let sky = mix(a.sky, b.sky, t);
+  let ambient = a.ambient + (b.ambient - a.ambient) * t;
+  const day = smooth(-0.06, 0.30, e);
+  // the table's night floor is 0.035; the slider moves it, and its say
+  // fades out as the day comes in
+  ambient += (nightAmbient - KEYS[0].ambient) * (1 - day);
+
+  // the evening, redder than the morning, most so near the horizon
+  if (h > 12) {
+    const near = 1 - smooth(0.05, 0.6, e);
+    const k = 0.35 + 0.65 * near;
+    const tint: [number, number, number] = [1 + (EVENING_TINT[0] - 1) * k, 1 + (EVENING_TINT[1] - 1) * k, 1 + (EVENING_TINT[2] - 1) * k];
+    sun = [sun[0] * tint[0], sun[1] * tint[1], sun[2] * tint[2]];
+    sky = [sky[0] * tint[0], sky[1] * tint[1], sky[2] * tint[2]];
   }
-  const daySun = mix(DAY_SUN, DAWN_SUN, warm);
-  const sunColour = mix(MOONLIGHT, daySun, day);
-  const daySky = mix(DAY_SKY, DAWN_SKY, warm);
-  const background = mix(NIGHT_SKY, daySky, day);
-  const ambient = nightAmbient + (DAY_AMBIENT - nightAmbient) * day;
-  return { sunDir, sunColour, ambient, background, lampsOn, day };
+
+  // The sun by day and the moon by night, each crossing the sky; through the
+  // horizon the direction is blended so the glint on the road slides from
+  // one to the other rather than jumping.
+  const sunDir = arc(h, e);
+  const moonDir = arc((h + 12) % 24, -e);
+  const toSun = smooth(-0.08, 0.04, e);
+  const d = mix(moonDir, sunDir, toSun);
+  const len = Math.hypot(d[0], d[1], d[2]) || 1;
+  const dir: [number, number, number] = [d[0] / len, d[1] / len, d[2] / len];
+
+  // The lamps stay on through the sunrise, while the horizon is orange, and
+  // go out in the golden hour; and come on again as the sun goes down
+  // rather than waiting for the dark. Above a fifth of the way up, off.
+  const lampsOn = 1 - smooth(0.04, 0.22, e);
+  return { sunDir: dir, sunColour: sun, ambient, background: sky, lampsOn, day };
 }
 
 /** The clock as a label: "22:00", "06:15". */

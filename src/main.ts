@@ -172,7 +172,10 @@ async function main() {
     renderer.look.sunColour = sky.sunColour;
     renderer.look.ambient = sky.ambient;
     renderer.look.background = sky.background;
-    const wantDay = sky.day > 0.5;
+    // Swapped early, while the sky is still nearly black: the two bakes do
+    // not match and a cut between them is visible at any ambient above a
+    // tenth. At this height of the sun the ambient is 0.09.
+    const wantDay = sky.day > 0.08;
     if (wantDay !== envIsDay) {
       envIsDay = wantDay;
       const e = wantDay ? dayEnv : nightEnv;

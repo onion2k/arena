@@ -326,6 +326,21 @@ Each one is the constant it stands in for, made a lookup:
   light at noon still means wait. Measured: 92 lights at 22:00, 0 at 09:00
   and noon, 92 again by 18:30, with the dawn and dusk fades between.
 
+  The sky is a table of keyframes over the sun's height, blended with a
+  smoothstep between rows, because the first version was two states with an
+  hour of blend between them and it looked like a switch: noon was 09:00 was
+  16:00, 22:00 was 03:00, and the whole of dawn was over in a third of a lap.
+  Now there is a deep night that lifts before the sun (ambient 0.04 to 0.12
+  by 05:30), a horizon that goes orange while the lamps are still on
+  (sunrise at 06:00: sun 1.4/0.5/0.2, sky 0.55/0.31/0.21, 92 lamps), a golden
+  hour in which they go out (06:30, lamps at 0.6), a cool bright morning
+  (ambient 0.83 at 08:00), a noon (1.0), and the same played backwards and
+  redder through the evening, with the lamps coming on at 17:30 while the
+  sky is still pink. The moon crosses the sky opposite the sun, so the glint
+  on the road moves through the night too. The environment is swapped while
+  the sky is still nearly black, at an ambient of 0.09: the two bakes do not
+  match and a cut between them shows at anything brighter.
+
   Daylight here is mostly the environment. The renderer's sun is a highlight
   and not a lamp — it puts a glint on things and does not otherwise light
   them — so what lights the ground by day is the baked environment through
