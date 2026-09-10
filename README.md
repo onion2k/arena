@@ -328,6 +328,44 @@ to; a banded strip that catches the floodlights is legible far enough ahead to
 plan a corner. They stand 8mm proud of the road and nothing collides with
 them.
 
+### Then they turned out to be steep enough to strand a car
+
+The ramps' flanks reached 29 degrees and the tarmac 32. A car on the shoulder
+either side of the road cannot climb past **23.5** from a standstill — the
+reduced grip out there leaves the rear tyres unable to put the engine down —
+so a car that ran a little wide onto a ramp flank and stopped, stayed, wheels
+spinning. The drivers found it reliably.
+
+A sine's steepest gradient is A·2pi/L and its curvature at the crest is
+A(2pi/L)². One is what strands a car and the other is what throws it, and they
+are not the same number, so shortening the wave and taking the amplitude down
+with it moves them apart. At 36 by 720 the steepest ground within a truck's
+width of the road is 21.9 degrees against 32, the arena's worst anywhere is
+22.1 against 32.9, and none of the thirty steepest spots beside the road holds
+a car that stops on one — the slowest climbs away to 1467 mm/s. A three-minute
+four-car race runs 12 to 13 laps a car with best laps of 13.40 to 13.90 and
+**nothing stationary at any point**, against 14.15 to 14.82 before.
+
+The jump is the price, and it was not recoverable:
+
+- The amplitude cannot simply be dropped to buy the curvature back. A crest no
+  taller than the suspension's 26mm of travel is one the springs absorb
+  without the body ever leaving: at 26 of amplitude the crest condition said
+  the truck should fly at 1716 mm/s, and at 2300 it did not lift a wheel.
+- Nine (amplitude, length) pairs were measured across the whole range that
+  keeps the slope under 25 degrees. Not one got all four wheels off the ground
+  at a speed the truck can reach.
+- Making the shoulder climbable instead does not work either. With it softened
+  from taking a third of the grip to taking a seventh, and the old ramps put
+  back, seven of the thirty steepest spots beside the road still held a
+  stopped car. The limit is the engine against the truck's weight on a slope,
+  not the surface.
+
+And the thing that makes the trade easy: **that same race, measured on the old
+steep terrain, never got all four wheels off either.** The jump only existed in
+a straight line at 2400 mm/s in a test, never in a lap. What this gives up is
+very nearly nothing that was being had; what it buys is a race-ending bug.
+
 The ramps in it are sized against the truck rather than for the look. A wheel
 leaves a crest when v²·κ exceeds gravity, but the climb is paid for out of the
 same speed, so for each wavelength there is a best height and a lowest

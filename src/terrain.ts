@@ -67,7 +67,43 @@ const WAVES: Wave[] = [
   // barely a roll now: enough to load the suspension, not enough to see
   { amp: 11, len: 2100, angle: 0.95, phase: 2.1 },
   { amp: 9, len: 1600, angle: 1.98, phase: 3.4 },
-  // and the ramps, which are the jumps and are meant to be obvious
+  // The ramps, which are the jumps and are meant to be obvious.
+  //
+  // A sine's steepest gradient is A·2pi/L on its flanks and its curvature at
+  // the crest is A·(2pi/L)² — one is what throws the truck, the other is what
+  // strands it, and they are not the same number. At 58 by 650 the flanks
+  // reached 29 degrees and the tarmac 32, while a car on the shoulder either
+  // side of the road cannot climb past 24: the reduced grip out there leaves
+  // the rear tyres unable to put the engine down, so a car that ran a little
+  // wide onto a ramp flank stopped there and stayed, wheels spinning. The
+  // drivers found this reliably.
+  //
+  // 36 by 720 puts the steepest ground within a truck's width of the road at
+  // 21 degrees, against 32 before and the 23.5 a car on the shoulder can
+  // climb from a standstill. Nothing on the circuit strands anything now.
+  //
+  // The jump is the price, and it was not recoverable. Slope is A·2pi/L and
+  // crest curvature is A(2pi/L)², so for a fixed slope the curvature is
+  // slope²/A — and the amplitude cannot simply be dropped to buy curvature
+  // back, because a crest no taller than the suspension's 26mm of travel is
+  // one the springs absorb without the body ever leaving. At 26 of amplitude
+  // it did exactly that: the crest condition said the truck should fly at
+  // 1716 mm/s and at 2300 it did not lift a wheel. Nine (amplitude, length)
+  // pairs were measured across the whole range that keeps the slope under 25
+  // degrees, and not one of them got all four wheels off the ground at a
+  // speed the truck can reach. Two or three lift over a crest, for a fifth of
+  // a second, and that is what is left of it: the ground unsettles the truck
+  // where it used to launch it.
+  //
+  // The obvious objection — make the shoulder climbable instead of the ramps
+  // shallow — was measured rather than argued about, and it does not work:
+  // with the shoulder softened from taking a third of the grip to taking a
+  // seventh, and the old 58-by-650 ramps put back, seven of the thirty
+  // steepest spots beside the road still held a car that stopped on them. The
+  // limit is the engine against the weight of the truck on a slope, not the
+  // surface. And a three-minute race measured on that same steep terrain
+  // never got all four wheels off the ground either: the jump only ever
+  // existed in a straight line at 2400 mm/s in a test, never in a lap.
   // The envelope is longer and moved along because sharpening it narrowed the
   // bands, and the band the circuit used to cross moved off it: the speed
   // needed to leave the ground anywhere on the racing line went from 1559 to
@@ -75,7 +111,7 @@ const WAVES: Wave[] = [
   // over length, phase and amplitude for a band that lands back under the
   // road without the floor going rough again — 1443 mm/s now, over 4.8% of
   // the lap, with the median slope of the arena unchanged at 5 degrees.
-  { amp: 58, len: 650, angle: 0.18, phase: 1.9, env: { len: 9600, angle: 1.75, phase: 2.5, sharp: 3 } },
+  { amp: 36, len: 720, angle: 0.18, phase: 1.9, env: { len: 9600, angle: 1.75, phase: 2.5, sharp: 3 } },
 ];
 /** How much a wave's envelope is letting through at a point, 0 to 1. */
 function envelopeAt(w: Wave, x: number, y: number): number {
