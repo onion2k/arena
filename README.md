@@ -334,9 +334,10 @@ chosen to avoid, and it is why this is on a key rather than instead.
 
 ## The settings
 
-Escape opens a panel of six sliders: the ambient light, the floodlights, the
-time of day, the top speed, the steering, and how many drivers line up against
-you. They are
+Escape opens a panel of nine sliders: the ambient light, the floodlights,
+the time of day, the top speed, the steering, how many drivers line up
+against you, and three for the picture rather than the scene — the bloom,
+the vignette and the grain. They are
 kept in one table in `settings.ts`, which is what the panel is built from —
 adding a knob is one line there and none in the page — and they are read
 live, every frame, by whoever uses them, so a slider moved mid-race takes
@@ -416,6 +417,9 @@ Each one is the constant it stands in for, made a lookup:
   eight once, and how many of it are live is the length of the car list,
   which is emptied and refilled rather than replaced so anything holding it
   keeps seeing the race. Seven drivers ran forty seconds with none stalled.
+- **Bloom**, **vignette** and **grain** are written into the renderer's
+  `post` when they move. They change nothing in the arena, only the picture
+  of it: see [The picture](#the-picture).
 
 A slider with the focus owns the arrow keys, and the truck does not: the
 same keystroke steering the car and nudging the ambient light is a panel
@@ -738,6 +742,51 @@ five.
 The truck carries two headlamps that wash the road ahead, an exhaust glow
 under power and brake lights, all bolted to a body that pitches and rolls, so
 they are placed and aimed in its frame rather than on a plane at zero.
+
+## The picture
+
+The frame is not shown as it is rendered. The renderer's composite pass —
+the one that always turned the HDR frame into a displayable one — now has
+a chain in front of it, and the arena turns three of its knobs.
+
+**Bloom.** A bright pass reads the frame at a quarter of its size and keeps
+what is over a threshold of 1.0 in HDR, with a soft knee under it so a light
+does not switch its halo on as it crosses a line; two passes blur that each
+way through a nine-tap Gaussian; and the composite adds the result back
+onto the frame *before* the tonemap, so a light clipped to white in the
+frame spills its colour rather than a grey. Quarter size because bloom is
+by definition soft, and a blur at full size is sixteen times the work for
+an edge nobody can see. What it does here is what it is for on a night
+circuit: the lamp heads, the headlights and the glint of the lamps on the
+water all carry a halo that falls off past their own edge. Measured on the
+headlight pool at the grid, in rings six pixels wide out from its brightest
+pixel, at 0.35: 200 to 234 at 18 pixels out, 166 to 209 at 24, 136 to 164
+at 30, 113 to 123 at 36, and the same by 48 — the halo is about a tenth of
+the glow's brightness spread over thirty pixels, which is the number that
+sets the default. The lamp heads, being a dozen pixels across, get a few
+levels each; at 1.5 the picture is haze, and at a threshold of nothing the
+road blooms too (frame mean 55 to 82), which is what the threshold is for.
+
+**Vignette.** The corners darkened, after the tonemap and before the
+gamma, by a smoothstep on the distance from the middle over the
+half-diagonal, so a corner is one whatever the frame's shape. At 0.3 the
+top-left sixty pixels go from 33.7 to 28.7, which is the picture drawn
+toward the truck and not a thing you would point at.
+
+**Grain.** A hash of the pixel and a time that rolls, added to the
+*displayed* value and weighted by four times the luminance times one minus
+it, so it is strongest in the midtones and nothing in the black and the
+white, like film. It was added under the gamma first, and every black pixel
+it landed on came up a grey: a night sky at 0.03 read as a haze of 13
+levels, and the library's particle tests, which take a black frame as their
+zero, failed on it. The weighting is why the sky is still black.
+
+All three are the library's defaults (0.35, 0.3, 0.03); the sliders are
+there because they are taste, and the ranges go to where the taste runs
+out. The chain costs **0.1 ms** at 1920×1080 (2.83 to 2.96 ms a frame at
+night, twice), and at 2560×1440 it is inside the run-to-run noise of that
+frame (4.5–5.0 off, 4.6–4.7 on). Bloom at nothing skips its three passes;
+the renderer's `economy.post` turns the whole chain off.
 
 ## What it costs
 

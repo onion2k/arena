@@ -32,6 +32,15 @@ export interface Settings {
   steering: number;
   /** How many trucks have a driver, not counting yours. */
   opponents: number;
+  /**
+   * The post chain, on the renderer: how much of the blurred bright pass is
+   * added back over the frame, how dark the corners go, and how much grain
+   * rolls over the displayed picture. Nothing about the scene: what is done
+   * to the picture of it.
+   */
+  bloom: number;
+  vignette: number;
+  grain: number;
 }
 
 export const DEFAULTS: Readonly<Settings> = {
@@ -41,6 +50,9 @@ export const DEFAULTS: Readonly<Settings> = {
   topSpeed: 2300,
   steering: 1,
   opponents: 3,
+  bloom: 0.35,
+  vignette: 0.3,
+  grain: 0.03,
 };
 
 /** One row of the panel: which setting, what to call it, how far it goes. */
@@ -61,6 +73,9 @@ export const CONTROLS: Control[] = [
   { key: 'topSpeed', label: 'top speed', min: 1200, max: 3400, step: 50, show: (v) => `${v} mm/s` },
   { key: 'steering', label: 'steering', min: 0.5, max: 1.6, step: 0.05, show: (v) => `×${v.toFixed(2)}` },
   { key: 'opponents', label: 'opponents', min: 0, max: 7, step: 1, show: (v) => String(v) },
+  { key: 'bloom', label: 'bloom', min: 0, max: 1.5, step: 0.05, show: (v) => v.toFixed(2) },
+  { key: 'vignette', label: 'vignette', min: 0, max: 0.8, step: 0.05, show: (v) => v.toFixed(2) },
+  { key: 'grain', label: 'grain', min: 0, max: 0.15, step: 0.005, show: (v) => v.toFixed(3) },
 ];
 
 const KEY = 'arena.settings';

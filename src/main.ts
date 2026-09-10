@@ -213,17 +213,23 @@ async function main() {
   const quads = new Float32Array(EFFECT_CAPACITY * EFFECT_STRIDE);
   const input = watchInput(arena);
   const minimap = buildMinimap(arena);
-  // The settings panel. Three of the six are read live by whoever uses them
-  // and need nothing done here; the clock and the night ambient are turned
-  // into the renderer's look by `applySky`, and the field size rebuilds the
-  // grid, so those are applied.
+  // The settings panel. Three of the nine are read live by whoever uses
+  // them and need nothing done here; the clock and the night ambient are
+  // turned into the renderer's look by `applySky`, the three post knobs
+  // into the renderer's post chain, and the field size rebuilds the grid,
+  // so those are applied.
+  const applyPost = () => {
+    renderer.post = { ...renderer.post, bloom: SETTINGS.bloom, vignette: SETTINGS.vignette, grain: SETTINGS.grain };
+  };
   buildConfig((key) => {
     if (key === 'ambient' || key === 'time') applySky();
+    if (key === 'bloom' || key === 'vignette' || key === 'grain') applyPost();
     // only when the count actually changed: applying every control at once,
     // as the defaults button does, was restarting the race for nothing
     if (key === 'opponents' && arena.cars.length !== 1 + SETTINGS.opponents) arena.setField(SETTINGS.opponents);
   });
   applySky();
+  applyPost();
   // Drag to swing the camera round, wheel to come in and out, shift-drag to
   // slide it. The floor is opaque from below and the arena is meant to be
   // looked into, so the polar range stops short of the horizon and of
