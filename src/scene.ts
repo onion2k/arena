@@ -17,6 +17,7 @@ import type { Post } from './track';
 import { groupByMesh } from 'artshape-render/assembly/groups';
 import type { Mesh } from 'artshape-render/mesh/types';
 import { groundMesh, height } from './terrain';
+import { BODY_LENGTH } from './vehicle';
 
 /** Where a compiled part's origin should end up. */
 type Anchor =
@@ -70,7 +71,7 @@ export function part(source: string, anchor: Anchor = 'centre'): Mesh {
  * either side, at bumper height. The model is placed from these and so is the
  * beam, so a beam always comes out of a lamp you can see.
  */
-export const LAMP_AHEAD = 118;
+export const LAMP_AHEAD = 142;
 export const LAMP_ACROSS = 46;
 export const LAMP_HEIGHT = 84;
 
@@ -132,7 +133,7 @@ export const MESHES = {
    * leans into a turn, wheels that actually roll, and a turret that swings
    * independently of all of it.
    */
-  chassis: () => part('plate(card(width: 250, height: 128, corner: 18), thickness: 40, bevel: 7)'),
+  chassis: () => part(`plate(card(width: ${BODY_LENGTH}, height: 128, corner: 18), thickness: 40, bevel: 7)`),
   cab: () => part('plate(card(width: 96, height: 116, corner: 16), thickness: 64, bevel: 8)'),
   /** Bolts on the face, so that the spin is visible on a shape that is a circle. */
   wheel: () => part('disc(radius: 31, thickness: 24, sides: 16, bolts: 5, boltCircle: 17, boltBore: 5, bevel: 5)'),

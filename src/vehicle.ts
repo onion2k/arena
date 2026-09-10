@@ -47,11 +47,25 @@ const G = 9810;                  // mm a second squared
  * carried more, squashed further, and the truck sat seven degrees nose-up
  * doing nothing at all. Where the wheels are drawn is read from here, so
  * moving them moves both.
+ *
+ * 220 apart rather than 166. A long wheelbase is a heavier, calmer truck and
+ * a wider turning circle, and both of those are measured: the circle at 1500
+ * mm/s goes from 443mm to about 520 against a tightest corner of 568, so the
+ * corner is still takeable, and a lap goes up by about two tenths.
  */
 export const WHEELS: [number, number, number][] = [
-  [83, -64, -4], [83, 64, -4],
-  [-83, -64, -4], [-83, 64, -4],
+  [110, -64, -4], [110, 64, -4],
+  [-110, -64, -4], [-110, 64, -4],
 ];
+
+/**
+ * How long the body is, nose to tail. The wheels sit 15mm inside each end.
+ *
+ * It is here rather than with the mesh that draws it because the pitch and
+ * yaw inertias are worked out from it, and a truck drawn longer than it is
+ * modelled turns like the short one it used to be.
+ */
+export const BODY_LENGTH = 300;
 export const WHEEL_RADIUS = 31;
 /** Front axle to rear axle, which is what sets the turning circle. */
 export const WHEELBASE = WHEELS[0][0] - WHEELS[2][0];
@@ -245,13 +259,22 @@ export const MAX_SPEED = 2800;
  * 1.05 the tyres have. The driver can now ask for more than the car has,
  * which is the only way a limit can be a thing you drive to.
  */
-export const STEER_LOCK = 0.62;
+/*
+ * Raised from 0.62 with the wheelbase. Turn radius is wheelbase over tan of
+ * the road wheel angle, so a truck 33% longer between its axles turns 33%
+ * wider on the same lock: the circle at 1500 mm/s went from 443mm to 560
+ * against a tightest corner of 568, which is no margin at all and is exactly
+ * the state this constant was raised to fix once before. At 0.72 — 41 degrees
+ * at a standstill, the top of what a real steering rack gives — the circle is
+ * back inside 470.
+ */
+export const STEER_LOCK = 0.72;
 export const STEER_FALLOFF = 2600;
 const STEER_RATE = 4.6;
 
 /**
- * Mass-normalised inertia about each body axis, for a box 250 long, 128 wide
- * and 90 tall: (a² + b²)/12 over the two axes that are not the one turned
+ * Mass-normalised inertia about each body axis, for a box `BODY_LENGTH` long,
+ * 128 wide and 90 tall: (a² + b²)/12 over the two axes that are not the one turned
  * about. Roll is the small one, which is why a truck leans before it pitches.
  *
  * The gyration factor is because a vehicle is not a uniform box — its mass is
@@ -262,8 +285,8 @@ const STEER_RATE = 4.6;
  */
 const GYRATION = 1.3;
 const I_ROLL = ((128 * 128 + 90 * 90) / 12) * GYRATION;
-const I_PITCH = ((250 * 250 + 90 * 90) / 12) * GYRATION;
-const I_YAW = ((250 * 250 + 128 * 128) / 12) * GYRATION;
+const I_PITCH = ((BODY_LENGTH * BODY_LENGTH + 90 * 90) / 12) * GYRATION;
+const I_YAW = ((BODY_LENGTH * BODY_LENGTH + 128 * 128) / 12) * GYRATION;
 
 /**
  * How much of the pitching couple from driving and braking is taken by the

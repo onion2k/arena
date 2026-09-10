@@ -195,7 +195,7 @@ export function lightsFor(pool: LightPool, arena: Race) {
   // a small pool under the truck itself, so it is not a silhouette in its own
   // headlights
   pool.add({
-    position: at(-10, 0, 190),
+    position: at(-12, 0, 190),
     radius: 620,
     colour: hurt ? [1, 0.4, 0.35] : [0.9, 0.86, 0.8],
     intensity: 1.1,
@@ -203,14 +203,14 @@ export function lightsFor(pool: LightPool, arena: Race) {
 
   if (arena.thrusting > 0) {
     pool.add({
-      position: at(-150, 0, 40), radius: 700,
+      position: at(-180, 0, 40), radius: 700,
       colour: [1, 0.62, 0.3], intensity: 1.6 * arena.thrusting,
     });
   }
   if (arena.braking > 0) {
     for (const side of [-1, 1]) {
       pool.add({
-        position: at(-140, side * 48, 58), radius: 620,
+        position: at(-168, side * 48, 58), radius: 620,
         colour: [1, 0.12, 0.07], intensity: 1.4 * arena.braking,
       });
     }
@@ -259,12 +259,12 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
   const cy = Math.cos(t.yaw); const sy = Math.sin(t.yaw);
   const at = (lx: number, ly: number) => [t.x + lx * cy - ly * sy, t.y + lx * sy + ly * cy];
   if (arena.thrusting > 0) {
-    const [ex, ey] = at(-150, 0);
+    const [ex, ey] = at(-180, 0);
     n = glow(out, n, vp, ex, ey, t.z - 10, 34 * arena.thrusting, 1.3 * arena.thrusting, [1, 0.6, 0.28], 2.2);
   }
   if (arena.braking > 0) {
     for (const side of [-1, 1]) {
-      const [bx, by] = at(-140, side * 48);
+      const [bx, by] = at(-168, side * 48);
       n = glow(out, n, vp, bx, by, t.z + 6, 22, 1.6 * arena.braking, [1, 0.15, 0.08], 2.6);
     }
   }
@@ -312,7 +312,7 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
       const [lx, ly] = put(LAMP_AHEAD + 6, side * LAMP_ACROSS);
       n = glow(out, n, vp, lx, ly, v.z + LAMP_HEIGHT - 52, 24, 2.2, [1, 0.9, 0.7], 2.8);
       if (v.braking > 0) {
-        const [bx2, by2] = put(-140, side * 48);
+        const [bx2, by2] = put(-168, side * 48);
         n = glow(out, n, vp, bx2, by2, v.z + 6, 22, 1.6 * v.braking, [1, 0.15, 0.08], 2.6);
       }
     }

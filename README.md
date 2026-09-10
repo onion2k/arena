@@ -89,6 +89,18 @@ It was too light, too slidy and too wide in a corner. What fixed each:
   direction is most of what tells you it is heavy.
 - **Slidy** was the tyres taking 90ms to decide, and not a shortage of grip.
   At 55ms they bite. Grip went up too, which mattered less than it sounds.
+- **Short** it stayed until later. The wheelbase is 220 now and the body 300,
+  a third longer between the axles than the 166 it was built with. A long
+  wheelbase is a calmer truck and a wider turning circle, and the circle is
+  the thing to watch: turn radius is wheelbase over tan of the road wheel
+  angle, so 33% more wheelbase is 33% more radius on the same lock, and the
+  circle at 1500 mm/s went straight from 443mm to 560 against a tightest
+  corner of 568. That is no margin at all, and it is exactly the state the
+  steering lock was raised to fix once before. Taking the lock from 0.62 to
+  0.72 — 41 degrees at a standstill, the top of what a real rack gives — puts
+  it back to 458/482/506mm at 900/1500/2100. The inertias are worked out from
+  the body length, so lengthening it makes the truck slower to pitch and to
+  change direction, which is most of what the extra length is for.
 - **The turning circle** was the steering lock winding off too hard with
   speed. At 1500 mm/s it was leaving 0.116 radians, a 1426mm circle — wider
   than the tightest corner on the track, so that corner could not be taken at
@@ -179,8 +191,16 @@ lock the truck has now it saturated at any error over 22 degrees and put full
 opposite lock on at 2000 mm/s. And it **brakes for the radius ahead** rather
 than for the corner it is already in — it reads how tight the track is far
 enough up the road to stop from here, works out what the tyres will hold
-there, and arrives already slowed. That is the difference between an opponent
-you follow and one you can out-brake.
+there, and arrives already slowed.
+
+That rule does not currently fire, and it is worth saying so rather than
+leaving the claim standing. Measured over a lap since the wheelbase went up:
+the driver is at **full throttle 100% of the time**, and its speed never gets
+past 79% of the limit it works out, median 56%. The truck's top speed is below
+what the tyres would hold in every corner on this circuit, so what limits a
+lap is the engine against the drag, not the road. The rule stays because it is
+the right one and because more power or a tighter corner would make it bite —
+but nothing out there is being out-braked today.
 
 It also aims at a point corrected outward by the sagitta of the chord it is
 driving. A driver steering straight at a point on an arc passes inside that

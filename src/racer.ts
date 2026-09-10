@@ -163,10 +163,17 @@ function steerFor(car: Vehicle, headingError: number): number {
  * The old rule was to lift whenever the heading error was large, which is a
  * driver reacting to a corner it is already in. This one reads the radius of
  * the track ahead — far enough ahead to stop from here — works out what speed
- * the tyres will hold there, and brakes if it is going faster than that. It
- * is the difference between a car that scrubs round a corner and one that
- * arrives at it already slowed, and it is what makes an opponent something
- * you can out-brake rather than something you follow.
+ * the tyres will hold there, and brakes if it is going faster than that.
+ *
+ * As of the longer wheelbase it does not fire. Measured over a lap: the
+ * driver is at full throttle 100% of the time, and its speed never gets past
+ * 79% of the limit this works out, with a median of 56%. The truck's top
+ * speed is simply below what the tyres would hold in every corner on the
+ * circuit, so the binding constraint is the engine against the drag and not
+ * the road. The rule is kept because it is the correct one and because the
+ * moment the truck is given more power, or the circuit a tighter corner, it
+ * is what stops the field arriving at it too fast — but nothing here should
+ * be described as out-braking anybody today.
  */
 function pedals(car: Vehicle, theta: number, skill: Skill): { throttle: number; brake: number } {
   // how far it can see, in track it could stop in from here

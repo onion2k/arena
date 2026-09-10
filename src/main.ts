@@ -383,7 +383,7 @@ async function main() {
       const chassis = on(0, 0, 0);
       placeVehiclePart(chassisM, ci, chassis[0], chassis[1], chassis[2], yaw, pitch, roll);
       chassisMat.set([...car.colour, 0.24], ci * 4);
-      const cab = on(62, 0, 40);
+      const cab = on(74, 0, 40);
       placeVehiclePart(cabM, ci, cab[0], cab[1], cab[2], yaw, pitch, roll);
 
       for (let i = 0; i < WHEELS.length; i++) {
