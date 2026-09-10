@@ -788,8 +788,21 @@ from the sky rather than the sun, and the thing that keeps the shadowed half
 of it a cold blue rather than black. A reach of 9000 and 28 steps, dithered
 per pixel and per frame, marched at half size.
 
-**What it costs: 0.36 ms** at 1920×1080 and 0.52 at 2560×1440, and only
-between two and half nine. At every other hour the density is zero, the
+The reach used to show. A march that ends because it ran out of reach rather
+than because it ran into something stopped dead, so the mist reached full
+strength nine metres out and went no further — and the set of points nine
+metres from the eye is a sphere, which is an arc ruled across the frame,
+straight enough from a high camera to look drawn on. The renderer now ramps
+the density down over the last third of the reach; in a still test scene that
+takes the sharpest step in the fog from 8.2 levels to 5.1 against a range of
+40. Worth knowing if the mist is ever retuned: raising `reach` costs steps,
+because the march always takes `steps` of them however far it goes, and
+lowering it brings the taper close enough to see as the mist thinning too
+early.
+
+**What it costs: 0.14 to 0.36 ms** at 1920×1080 depending on how much of
+the frame is mist, and 0.52 at 2560×1440, and only between two and half
+nine. At every other hour the density is zero, the
 passes are skipped, and the frame is exactly what it was.
 
 One thing it does not do: the floodlights do not light it. The mist is lit

@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "artshape-render": "github:onion2k/artshape-render#v0.9.0"
+    "artshape-render": "github:onion2k/artshape-render#v0.9.1"
   },
   "devDependencies": {
     "@webgpu/types": "^0.1.44",
