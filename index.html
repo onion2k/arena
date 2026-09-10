@@ -14,6 +14,9 @@
            backdrop-filter: blur(6px); pointer-events: none; }
   #score { top: 16px; left: 16px; font-size: 15px; letter-spacing: 0.06em; }
   #score b { font-size: 26px; font-weight: 600; display: block; letter-spacing: 0.02em; }
+  /* the gap to the ghost: green when you are up on it, red when you are down */
+  #score .up { color: #6ee7a8; }
+  #score .down { color: #ff8d7a; }
   #stats { top: 16px; right: 16px; text-align: right; color: #9a97ab; }
   #stats span { color: var(--ink); }
   #help { bottom: 16px; left: 16px; color: #9a97ab; }
@@ -37,7 +40,7 @@
   #boot p { margin: 0; color: #9a97ab; }
 </style>
 <div id="stage"><canvas id="view"></canvas></div>
-<div class="panel" id="score" hidden><b>3…</b>lap <span>1</span></div>
+<div class="panel" id="score" hidden><b>4…</b>lap <span>1</span></div>
 <div class="panel" id="stats" hidden></div>
 <div class="panel" id="map" hidden><svg id="mapSvg" aria-hidden="true"></svg></div>
 <div class="panel" id="config" hidden></div>

@@ -6,10 +6,17 @@
  * turned out to be the interesting part: a vehicle with suspension and tyres
  * on ground that is not flat. So the drones went and the lap counter arrived,
  * and this file is a tenth of what it was.
+ *
+ * There were three rivals here after that, with a driving model of their own
+ * to work them. They were competent and they did not add much: a driver who
+ * is always about as quick as you gives you something to bump into, and the
+ * question a circuit this size actually asks is whether you took the last
+ * corner better than you took it last time. Both are gone, and what runs
+ * beside you is your own best lap: see `ghost.ts`.
  */
 import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS } from './scene';
 import { Vehicle } from './vehicle';
-import { SKILLS, driveRound, type Skill } from './racer';
+import { Ghost } from './ghost';
 import { SETTINGS } from './settings';
 import { TREES } from './forest';
 import { START_BULBS, radiusAt, tangentAt, where } from './track';
@@ -38,11 +45,7 @@ export interface Input {
   handbrake?: boolean;
 }
 
-/**
- * Where a car has got to, and how long its laps took. One of these per car,
- * so the running order is a question about numbers rather than about which
- * one happens to be the player.
- */
+/** Where the truck has got to, and how long its laps have taken. */
 export class Progress {
   laps = 0;
   lapTime = 0;
@@ -101,31 +104,21 @@ export class Progress {
   }
 }
 
-/** One car in the race. The player is the first; the rest have a driver. */
-export interface Car {
-  vehicle: Vehicle;
-  lap: Progress;
-  colour: [number, number, number];
-  skill: Skill | null;
-}
-
 /**
- * The most cars that can line up, the player included. Every pool that holds
- * a car — matrices, lamps, dots on the map — is sized to this once, and how
- * many of it are live is `cars.length`, which the settings change.
+ * How many trucks can be on the road at once: you and your ghost. Every pool
+ * that holds one — matrices, lamps, dots on the map — is sized to this, and
+ * the second is only drawn once there is a lap to draw it from.
  */
-export const MAX_FIELD = 8;
+export const TRUCKS = 2;
 
-/** The paint for each slot in the field, the player's first. */
+/** The paint: yours, and the ghost's. */
 export const PAINT: [number, number, number][] = [
   [1.0, 0.79, 0.36],   // the player: gold, as it always was
-  [0.35, 0.62, 1.0],
-  [1.0, 0.30, 0.26],
-  [0.42, 0.95, 0.55],
-  [0.95, 0.55, 1.0],
-  [1.0, 0.62, 0.20],
-  [0.55, 0.92, 0.95],
-  [0.90, 0.90, 0.95],
+  // The ghost is a cold pale blue and deliberately not a colour a truck is
+  // painted. There is no transparency in this renderer, so it cannot be the
+  // see-through thing a ghost usually is; what makes it read as a recording
+  // rather than as a rival is that it is lit like ice and carries no lamps.
+  [0.62, 0.78, 0.95],
 ];
 
 /**
@@ -136,32 +129,12 @@ export const PAINT: [number, number, number][] = [
 export const HOURS_PER_LAP = 3;
 
 export class Race {
-  /**
-   * The player first, then the drivers. The array keeps its identity when the
-   * field changes size — it is emptied and refilled rather than replaced — so
-   * anything holding a reference to it keeps seeing the race.
-   */
-  readonly cars: Car[] = [];
+  readonly truck = new Vehicle(0, 0);
+  readonly lap = new Progress();
+  /** Your best lap, kept and replayed: see `ghost.ts`. */
+  readonly ghost = new Ghost();
 
-  constructor() { this.setField(SETTINGS.opponents); }
-
-  /** Put this many drivers on the grid beside the player, and restart. */
-  setField(opponents: number) {
-    const n = 1 + Math.max(0, Math.min(MAX_FIELD - 1, Math.round(opponents)));
-    this.cars.length = 0;
-    for (let i = 0; i < n; i++) {
-      this.cars.push({
-        vehicle: new Vehicle(0, 0),
-        lap: new Progress(),
-        colour: PAINT[i],
-        skill: i === 0 ? null : SKILLS[(i - 1) % SKILLS.length],
-      });
-    }
-    this.reset();
-  }
-
-  /** The player's, which is the first of them. */
-  get truck() { return this.cars[0].vehicle; }
+  constructor() { this.reset(); }
 
   /**
    * What time it is: the setting is when the race starts, and the clock runs
@@ -169,7 +142,7 @@ export class Race {
    * so a driver who stops to look at the forest does not watch it dawn.
    */
   get hours(): number {
-    const driven = Math.max(0, this.cars[0].lap.driven);
+    const driven = Math.max(0, this.lap.driven);
     return (SETTINGS.time + driven * HOURS_PER_LAP) % 24;
   }
 
@@ -184,20 +157,20 @@ export class Race {
   get braking() { return this.truck.braking; }
   get wheelSpin() { return this.truck.wheels[0].spin; }
 
-  get laps() { return this.cars[0].lap.laps; }
-  get lapTime() { return this.cars[0].lap.lapTime; }
-  get lastLap() { return this.cars[0].lap.lastLap; }
-  get bestLap() { return this.cars[0].lap.bestLap; }
-  get progress() { return this.cars[0].lap.at; }
-  get offset() { return this.cars[0].lap.offset; }
+  get laps() { return this.lap.laps; }
+  get lapTime() { return this.lap.lapTime; }
+  get lastLap() { return this.lap.lastLap; }
+  get bestLap() { return this.lap.bestLap; }
+  get progress() { return this.lap.at; }
+  get offset() { return this.lap.offset; }
 
   /**
-   * Where the player is running, counting from one. Sorted on laps plus the
-   * part lap, so it is right the moment anyone crosses anything.
+   * How far behind your own best lap you are at this point of the circuit,
+   * in seconds, or null until there is one to be behind.
    */
-  get position(): number {
-    const mine = this.cars[0].lap.total;
-    return 1 + this.cars.filter((c) => c.lap.total > mine).length;
+  get delta(): number | null {
+    if (!this.running) return null;
+    return this.ghost.deltaAt(this.lap.at, this.lap.lapTime);
   }
   /** True once the lights have gone out and the clock is running. */
   running = false;
@@ -223,30 +196,33 @@ export class Race {
   }
   step(dt: number, input: Input) {
     if (this.countdown > 0) {
-      // Everyone is held on the line, the player and the field alike: the
-      // wheels are still driven by the same code, with the handbrake on, so
-      // each car settles on its springs where it stands rather than being
-      // frozen and dropped at the go.
+      // Held on the line: the wheels are still driven by the same code, with
+      // the handbrake on, so the truck settles on its springs where it
+      // stands rather than being frozen and dropped at the go.
       this.countdown -= dt;
-      for (const c of this.cars) {
-        c.vehicle.step(dt, { steer: 0, throttle: 0, brake: 0, hold: true });
-        c.lap.update(dt, c.vehicle.x, c.vehicle.y, false);
-      }
+      this.truck.step(dt, { steer: 0, throttle: 0, brake: 0, hold: true });
+      this.lap.update(dt, this.truck.x, this.truck.y, false);
       this.keepInside();
       if (this.countdown <= 0) { this.countdown = 0; this.running = true; }
       return;
     }
     this.sinceStart += dt;
 
-    const all = this.cars.map((c) => c.vehicle);
-    for (const c of this.cars) {
-      const drive = c.skill === null
-        ? { steer: input.turn, throttle: input.throttle, brake: input.brake, handbrake: input.handbrake }
-        : driveRound(c.vehicle, c.skill, all);
-      c.vehicle.step(dt, drive);
-    }
+    this.truck.step(dt, {
+      steer: input.turn, throttle: input.throttle, brake: input.brake, handbrake: input.handbrake,
+    });
     this.keepInside();
-    for (const c of this.cars) c.lap.update(dt, c.vehicle.x, c.vehicle.y, true);
+
+    const was = this.lap.laps;
+    this.lap.update(dt, this.truck.x, this.truck.y, true);
+    if (this.lap.laps > was) {
+      // A lap ended on the line. Offer it to the ghost, which keeps it only
+      // if it beats what it holds, and start recording the next one — from
+      // the line, which is the only place a comparable lap can start.
+      if (this.lap.lastLap !== null) this.ghost.finish(this.lap.lastLap);
+      this.ghost.begin();
+    }
+    this.ghost.record(dt, this.truck, this.lap.at);
   }
 
   /**
@@ -258,40 +234,13 @@ export class Race {
    * than a dot, so a glancing hit turns it.
    */
   private keepInside() {
-    for (const c of this.cars) this.keepOneInside(c.vehicle);
-    this.keepApart();
+    this.keepOneInside(this.truck);
   }
 
-  /**
-   * Cars against each other: pushed apart and their closing speed exchanged.
-   *
-   * Not a real impulse — no spin, no mass, nothing conserved — but it is
-   * enough that a car cannot be driven through, and being leaned on in a
-   * corner costs you the corner.
-   */
-  private keepApart() {
-    for (let i = 0; i < this.cars.length; i++) {
-      for (let j = i + 1; j < this.cars.length; j++) {
-        const a = this.cars[i].vehicle, b = this.cars[j].vehicle;
-        const dx = b.x - a.x, dy = b.y - a.y;
-        const d2 = dx * dx + dy * dy;
-        const reach = TRUCK_RADIUS * 1.6;
-        if (d2 >= reach * reach || d2 < 1e-6) continue;
-        const d = Math.sqrt(d2);
-        const nx = dx / d, ny = dy / d;
-        const overlap = (reach - d) / 2;
-        a.x -= nx * overlap; a.y -= ny * overlap;
-        b.x += nx * overlap; b.y += ny * overlap;
-        const closing = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
-        if (closing < 0) {
-          const push = closing * 0.55;
-          a.vx += push * nx; a.vy += push * ny;
-          b.vx -= push * nx; b.vy -= push * ny;
-          a.wYaw -= 3e-4 * closing; b.wYaw += 3e-4 * closing;
-        }
-      }
-    }
-  }
+  // Cars used to be pushed apart here, and their closing speed exchanged.
+  // There is one car now, and the ghost is a recording: it has no momentum
+  // to trade and nothing to be leaned on with, which is the one way it is an
+  // easier opponent than the drivers were.
 
   private keepOneInside(t: Vehicle) {
     const limX = ARENA_X - 110;
@@ -334,8 +283,10 @@ export class Race {
   }
 
   /**
-   * Everyone back to the grid, in a staggered pair of columns behind the
-   * line, with the clock stopped and the lights counting again.
+   * Back to the grid just short of the line, with the clock stopped and the
+   * lights counting again. The ghost is left alone: a restart is another go
+   * at the same circuit, and throwing your best lap away because you pressed
+   * R is not what R is for.
    */
   reset() {
     // Facing along the tangent, and not along a guess. The line is at the
@@ -343,15 +294,11 @@ export class Race {
     // truck on the grid pointing the wrong way down the circuit.
     const [tx, ty] = tangentAt(-Math.PI);
     const yaw = Math.atan2(ty, tx);
-    this.cars.forEach((c, i) => {
-      // back down the road in pairs, alternating sides, the player at the front
-      const back = Math.floor(i / 2) * 460 + 90;
-      const side = (i % 2 === 0 ? -1 : 1) * 150;
-      const x = Math.cos(-Math.PI) * radiusAt(-Math.PI) - tx * back - ty * side;
-      const y = Math.sin(-Math.PI) * radiusAt(-Math.PI) - ty * back + tx * side;
-      c.vehicle.reset(x, y, yaw);
-      c.lap.reset(x, y);
-    });
+    const x = Math.cos(-Math.PI) * radiusAt(-Math.PI) - tx * 90;
+    const y = Math.sin(-Math.PI) * radiusAt(-Math.PI) - ty * 90;
+    this.truck.reset(x, y, yaw);
+    this.lap.reset(x, y);
+    this.ghost.begin();
     this.running = false;
     this.countdown = COUNTDOWN; this.sinceStart = 0;
   }

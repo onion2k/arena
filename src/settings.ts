@@ -30,8 +30,6 @@ export interface Settings {
   topSpeed: number;
   /** A multiplier on the steering lock: under one turns wider, over tighter. */
   steering: number;
-  /** How many trucks have a driver, not counting yours. */
-  opponents: number;
   /**
    * The post chain, on the renderer: how much of the blurred bright pass is
    * added back over the frame, how dark the corners go, and how much grain
@@ -54,7 +52,6 @@ export const DEFAULTS: Readonly<Settings> = {
   time: 22,
   topSpeed: 2300,
   steering: 1,
-  opponents: 3,
   bloom: 0.35,
   vignette: 0.3,
   grain: 0.03,
@@ -78,7 +75,6 @@ export const CONTROLS: Control[] = [
   { key: 'time', label: 'time of day', min: 0, max: 24, step: 0.25, show: clockLabel },
   { key: 'topSpeed', label: 'top speed', min: 1200, max: 3400, step: 50, show: (v) => `${v} mm/s` },
   { key: 'steering', label: 'steering', min: 0.5, max: 1.6, step: 0.05, show: (v) => `×${v.toFixed(2)}` },
-  { key: 'opponents', label: 'opponents', min: 0, max: 7, step: 1, show: (v) => String(v) },
   { key: 'bloom', label: 'bloom', min: 0, max: 1.5, step: 0.05, show: (v) => v.toFixed(2) },
   { key: 'vignette', label: 'vignette', min: 0, max: 0.8, step: 0.05, show: (v) => v.toFixed(2) },
   { key: 'grain', label: 'grain', min: 0, max: 0.15, step: 0.005, show: (v) => v.toFixed(3) },

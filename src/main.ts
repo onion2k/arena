@@ -13,7 +13,8 @@ import { Orbit } from 'artshape-render/gpu/camera';
 import { bakeEnvironment } from 'artshape-render/render/env';
 import { GameRenderer, EFFECT_STRIDE, type GameGroup } from 'artshape-render/game/renderer';
 import { LightPool } from 'artshape-render/game/lights';
-import { MAX_FIELD, PAINT, Race, type Input } from './game';
+import { PAINT, Race, TRUCKS, type Input } from './game';
+import type { Pose } from './ghost';
 import { CONTROLS, SETTINGS, restoreDefaults, save } from './settings';
 import { TREES, forestBuffers, treeMesh } from './forest';
 import { clockLabel, skyAt } from './daylight';
@@ -142,24 +143,26 @@ async function main() {
 
   // The pools. Their size is fixed here and never changes again: what moves
   // each frame is the live count, and the matrices written into the prefix.
-  const chassisM = new Float32Array(MAX_FIELD * 16);
-  const chassisMat = new Float32Array(MAX_FIELD * 4);
-  const cabM = new Float32Array(MAX_FIELD * 16);
-  const wheelM = new Float32Array(MAX_FIELD * 4 * 16);
-  const lampM = new Float32Array(MAX_FIELD * 2 * 16);
+  const chassisM = new Float32Array(TRUCKS * 16);
+  const chassisMat = new Float32Array(TRUCKS * 4);
+  const cabM = new Float32Array(TRUCKS * 16);
+  const wheelM = new Float32Array(TRUCKS * 4 * 16);
+  const lampM = new Float32Array(TRUCKS * 2 * 16);
+  /** What is on the road this frame: the truck, and the ghost when there is one. */
+  const drawn: Pose[] = [];
   const startMat = new Float32Array(2 * START_BULBS * 4);
   const skids = new Skids();
   const dynamic: GameGroup[] = [
     // not a mirror: a polished metal under a near-black sky has nothing to
     // reflect and reads as a dark shape. A little roughness gives the point
     // lights a highlight wide enough to see the colour in.
-    { mesh: mesh.chassis, matrices: chassisM, count: MAX_FIELD, albedo: [1.0, 0.79, 0.36], roughness: 0.24 },
-    { mesh: mesh.cab, matrices: cabM, count: MAX_FIELD, albedo: [0.86, 0.90, 0.97], roughness: 0.12 },
+    { mesh: mesh.chassis, matrices: chassisM, count: TRUCKS, albedo: [1.0, 0.79, 0.36], roughness: 0.24 },
+    { mesh: mesh.cab, matrices: cabM, count: TRUCKS, albedo: [0.86, 0.90, 0.97], roughness: 0.12 },
     // tyres: dark and rough, the one thing out here that is not a mirror
-    { mesh: mesh.wheel, matrices: wheelM, count: MAX_FIELD * 4, albedo: [0.07, 0.07, 0.08], roughness: 0.62 },
+    { mesh: mesh.wheel, matrices: wheelM, count: TRUCKS * 4, albedo: [0.07, 0.07, 0.08], roughness: 0.62 },
     // near white and glossy, so the lamps read as lit glass rather than as
     // two more lumps of the same metal the truck is made of
-    { mesh: mesh.lamp, matrices: lampM, count: MAX_FIELD * 2, albedo: [1.0, 0.97, 0.9], roughness: 0.06 },
+    { mesh: mesh.lamp, matrices: lampM, count: TRUCKS * 2, albedo: [1.0, 0.97, 0.9], roughness: 0.06 },
     // the starting bulbs, which never move and are recoloured every frame
     { mesh: mesh.lamp, matrices: startBulbs(), count: 2 * START_BULBS, albedo: [0.2, 0.04, 0.03], roughness: 0.12 },
     // the skid marks: a ring of dark quads on the road, laid by sliding tyres
@@ -221,7 +224,13 @@ async function main() {
       ambient: 0.16 + 0.5 * sky.ambient,
       anisotropy: 0.62,
       reach: 9000,
-      steps: 28,
+      // Steps with the thickness, because what they are for is hiding the
+      // steps. A thin haze scatters little per step, so the noise a short
+      // march leaves is small too, and eighteen of them at night is
+      // indistinguishable from twenty-eight; the dawn mist is three times
+      // as dense and wants all of them. Fixed at twenty-eight this was 2.85
+      // ms of a 5.3 ms night frame.
+      steps: Math.round(14 + 16 * Math.min(1, mist)),
       cones: 1,
     };
 
@@ -252,9 +261,6 @@ async function main() {
     if (key === 'ambient' || key === 'time') applySky();
     if (key === 'bloom' || key === 'vignette' || key === 'grain') applyPost();
     if (key === 'mist') applySky();
-    // only when the count actually changed: applying every control at once,
-    // as the defaults button does, was restarting the race for nothing
-    if (key === 'opponents' && arena.cars.length !== 1 + SETTINGS.opponents) arena.setField(SETTINGS.opponents);
   });
   applySky();
   applyPost();
@@ -462,13 +468,19 @@ async function main() {
    * an empty arena lit by a full set of lights.
    */
   const upload = (): number => {
-    // Every car in the field, from the body its own physics is carrying.
-    // Nothing here decides where anything is: the chassis takes the body's
-    // three angles, each wheel takes its own suspension travel and steer and
-    // roll, and the lamps ride the same frame. A wheel drawn anywhere but
-    // where the ray found the ground is a wheel you can see floating.
-    arena.cars.forEach((car, ci) => {
-      const truck = car.vehicle;
+    // The truck, and the ghost if there is a lap to put one on the road.
+    // Both are drawn from a pose and nothing else: the live one's comes from
+    // the physics, the ghost's from a recording read between two samples, and
+    // this loop cannot tell which is which. Nothing here decides where
+    // anything is — the chassis takes the body's three angles, each wheel its
+    // own suspension travel and steer and roll, the lamps ride the same
+    // frame. A wheel drawn anywhere but where the ray found the ground is a
+    // wheel you can see floating.
+    drawn.length = 0;
+    drawn.push(arena.truck);
+    const past = arena.ghost.poseAt(arena.lapTime);
+    if (past) drawn.push(past);
+    drawn.forEach((truck: Pose, ci: number) => {
       const yaw = truck.yaw, pitch = truck.pitch, roll = truck.roll;
       const cy = Math.cos(yaw); const sy = Math.sin(yaw);
       const cp = Math.cos(pitch); const sp = Math.sin(pitch);
@@ -484,7 +496,7 @@ async function main() {
 
       const chassis = on(0, 0, 0);
       placeVehiclePart(chassisM, ci, chassis[0], chassis[1], chassis[2], yaw, pitch, roll);
-      chassisMat.set([...car.colour, 0.24], ci * 4);
+      chassisMat.set([...PAINT[ci], 0.24], ci * 4);
       const cab = on(74, 0, 40);
       placeVehiclePart(cabM, ci, cab[0], cab[1], cab[2], yaw, pitch, roll);
 
@@ -493,11 +505,16 @@ async function main() {
         const w = truck.wheels[i];
         const hub = on(lx, ly, lz - w.drop);
         placeVehicleWheel(wheelM, ci * 4 + i, hub[0], hub[1], hub[2], yaw, pitch, roll, w.steer, w.spin);
-        wheelEffects(renderer, truck, w, hub, sky.day);
-        // rubber on the road: a sliding, loaded, dry wheel lays a mark from
-        // where it was to where it is; anything else lifts the streak
-        const key = `${ci}:${i}`;
-        if (w.onGround && !w.wet && w.slide > 0.35 && truck.speed > 300) skids.mark(key, hub[0], hub[1], w.ground);
+        // Smoke, spray and rubber come off the live truck only. The ghost
+        // laid all three on the lap it was recorded from and would lay them
+        // again every lap since, which is a road wearing marks from a truck
+        // that is not on it.
+        if (ci > 0) continue;
+        const live = arena.truck;
+        const lw = live.wheels[i];
+        wheelEffects(renderer, live, lw, hub, sky.day);
+        const key = `${i}`;
+        if (lw.onGround && !lw.wet && lw.slide > 0.35 && live.speed > 300) skids.mark(key, hub[0], hub[1], lw.ground);
         else skids.lift(key);
       }
 
@@ -509,12 +526,12 @@ async function main() {
         placeVehicleFacing(lampM, ci * 2 + lamp++, at[0], at[1], at[2], yaw, pitch, roll);
       }
     });
-    const field = arena.cars.length;
-    renderer.move(CHASSIS, chassisM, field);
+    const shown = drawn.length;
+    renderer.move(CHASSIS, chassisM, shown);
     renderer.tint(CHASSIS, chassisMat);
-    renderer.move(CAB, cabM, field);
-    renderer.move(WHEELS_GROUP, wheelM, field * 4);
-    renderer.move(LAMPS, lampM, field * 2);
+    renderer.move(CAB, cabM, shown);
+    renderer.move(WHEELS_GROUP, wheelM, shown * 4);
+    renderer.move(LAMPS, lampM, shown * 2);
     if (skids.dirty) { renderer.move(SKIDS, skids.matrices, skids.count); skids.dirty = false; }
 
     // the starting lights: dark until lit, then a hot red, all out on the go
@@ -587,12 +604,13 @@ async function main() {
     statsIn -= dt;
     if (statsIn <= 0) {
       statsIn = 0.2;
+      const delta = arena.delta;
       scorePanel.innerHTML =
         `<b>${arena.running ? clock(arena.lapTime) : Math.ceil(arena.countdown) + '…'}</b>`
-        + `P<span>${arena.position}</span> of ${arena.cars.length}`
-        + ` · lap <span>${arena.laps + 1}</span>`
+        + `lap <span>${arena.laps + 1}</span>`
         + ` · best <span>${arena.bestLap === null ? '—:——.—' : clock(arena.bestLap)}</span>`
-        + ` · last <span>${arena.lastLap === null ? '—:——.—' : clock(arena.lastLap)}</span>`;
+        + ` · last <span>${arena.lastLap === null ? '—:——.—' : clock(arena.lastLap)}</span>`
+        + ` · ghost <span${delta === null ? '' : ` class="${delta <= 0 ? 'up' : 'down'}"`}>${delta === null ? '—.——' : gap(delta)}</span>`;
       statsPanel.innerHTML =
         `<span>${smoothed.toFixed(1)}</span> ms · <span>${Math.round(1000 / smoothed)}</span> fps<br>`
         + `<span>${lights.count}</span> lights · <span>${effects}</span> glows<br>`
@@ -791,9 +809,8 @@ function buildMinimap(race: Race) {
   line.setAttribute('stroke-width', '120');
   mapSvg.appendChild(line);
 
-  // one dot per slot in the field, not per car: the field can change size
-  // and rebuilding the map for it would be more code than hiding a circle
-  const dots = Array.from({ length: MAX_FIELD }, (_, i) => {
+  // two dots: yours, and the ghost's when it is on the road
+  const dots = Array.from({ length: TRUCKS }, (_, i) => {
     const c = document.createElementNS(NS, 'circle');
     const [r, g, b] = PAINT[i];
     const hex = (v: number) => Math.round(Math.min(1, v) * 255).toString(16).padStart(2, '0');
@@ -810,15 +827,23 @@ function buildMinimap(race: Race) {
 
   return {
     update() {
+      const past = race.ghost.poseAt(race.lapTime);
+      const at = [race.truck, past];
       dots.forEach((dot, i) => {
-        const car = race.cars[i];
-        dot.setAttribute('visibility', car ? 'visible' : 'hidden');
-        if (!car) return;
-        dot.setAttribute('cx', car.vehicle.x.toFixed(0));
-        dot.setAttribute('cy', (-car.vehicle.y).toFixed(0));
+        const p = at[i];
+        dot.setAttribute('visibility', p ? 'visible' : 'hidden');
+        if (!p) return;
+        dot.setAttribute('cx', p.x.toFixed(0));
+        dot.setAttribute('cy', (-p.y).toFixed(0));
       });
     },
   };
+}
+
+/** A gap to the ghost, signed: behind is a plus, which is how a gap is read. */
+function gap(seconds: number): string {
+  const sign = seconds < 0 ? '-' : '+';
+  return `${sign}${Math.abs(seconds).toFixed(2)}`;
 }
 
 /** Minutes, seconds and tenths, which is how a lap time is read. */

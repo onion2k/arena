@@ -163,29 +163,11 @@ export function lightsFor(pool: LightPool, arena: Race) {
   starter(pool, arena);
   if (on <= 0) return;
 
-  // The field's headlamps. They carry nothing else — no pool under them, no
-  // exhaust, no brake light — because four cars with the player's full set
-  // would be two dozen lights on top of eighty-odd floodlights, and the ones
-  // you are behind are the only ones you can see anyway.
-  for (let i = 1; i < arena.cars.length; i++) {
-    const o = arena.cars[i].vehicle;
-    const ocy = Math.cos(o.yaw), osy = Math.sin(o.yaw);
-    for (const side of [-1, 1]) {
-      const toe = o.yaw + side * 0.07;
-      pool.add({
-        position: [
-          o.x + LAMP_AHEAD * ocy - side * LAMP_ACROSS * osy,
-          o.y + LAMP_AHEAD * osy + side * LAMP_ACROSS * ocy,
-          o.z + LAMP_HEIGHT - 52,
-        ],
-        radius: 2400,
-        colour: [1, 0.87, 0.62],
-        intensity: 16,
-        direction: [Math.cos(toe), Math.sin(toe), -0.20],
-        cone: [10, 25],
-      });
-    }
-  }
+  // The rivals' headlamps were here. There are no rivals, and the ghost
+  // carries no lamps: it is a recording of a truck and not a truck, and a
+  // second set of headlights washing the road would light the mist you are
+  // driving through with light from a car that is not there. What makes it
+  // visible in the dark is a pair of cold marker glows — see `effectsFor`.
 
   const hurt = false;
   // The lamps are bolted to a body that pitches, rolls and leaves the ground,
@@ -348,10 +330,10 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
     }
   }
 
-  // every car's lamps and brake lights, so they are bright points rather than
-  // dark discs with light appearing in front of them
-  for (const car of arena.cars) {
-    const v = car.vehicle;
+  // the truck's own lamps and brake lights, so they are bright points rather
+  // than dark discs with light appearing in front of them
+  {
+    const v = arena.truck;
     const vcy = Math.cos(v.yaw), vsy = Math.sin(v.yaw);
     const put = (lx: number, ly: number) => [v.x + lx * vcy - ly * vsy, v.y + lx * vsy + ly * vcy];
     for (const side of [-1, 1]) {
@@ -361,6 +343,30 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
         const [bx2, by2] = put(-168, side * 48);
         n = glow(out, n, vp, bx2, by2, v.z + 6, 22, 1.6 * v.braking, [1, 0.15, 0.08], 2.6);
       }
+    }
+  }
+
+  /*
+   * The ghost's markers.
+   *
+   * It carries no lights and lights nothing, so on an unlit stretch of road
+   * it would be a pale shape in the dark and on a black one nothing at all —
+   * and a reference you cannot find is not a reference. Two cold points on
+   * its shoulders, always lit, day and night: enough to say where it is from
+   * across the circuit, not enough to be mistaken for a car with its lamps
+   * on. They are glows, so they cost a screen quad each and light nothing.
+   */
+  const past = arena.ghost.poseAt(arena.lapTime);
+  if (past) {
+    const gcy = Math.cos(past.yaw), gsy = Math.sin(past.yaw);
+    // Four, at the corners of the body rather than two on the shoulders: two
+    // points is a thing in the distance and four is a truck-shaped thing, and
+    // which way the ghost is pointing as it goes into a corner is most of
+    // what you want from it.
+    for (const [lx, ly] of [[104, -58], [104, 58], [-104, -58], [-104, 58]]) {
+      n = glow(out, n, vp,
+        past.x + lx * gcy - ly * gsy, past.y + lx * gsy + ly * gcy, past.z + 62,
+        40, 2.6, [0.42, 0.70, 1], 2.4);
     }
   }
   return n;

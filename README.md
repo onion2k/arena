@@ -30,29 +30,57 @@ Needs a browser with WebGPU.
 | wheel | in, or out until the whole circuit is in frame |
 | **C** | put the camera back |
 
-## The field
+## The ghost
 
-Four cars, the player's and three driven by the same line-follower that has
-been testing the track since it existed. It reads the centreline the lap
-counter reads — offset by its own preferred line, looking further up the road
-the faster it goes, lifting and braking for whatever it cannot steer round.
-No racing line solved in advance, no lap of practice, no memory of the corner
-it is in.
+There were three rivals with a driving model of their own. They were
+competent and they did not add much: a driver who is always about as quick as
+you gives you something to bump into, and the question a circuit this size
+actually asks is whether you took the last corner better than you took it
+last time. So the field is gone, `racer.ts` with it, and what runs beside you
+is a recording of the best lap you have driven — a harder opponent than the
+AI was, one that gets harder exactly as fast as you do, and one that never
+blocks the road.
 
-A precomputed ideal line with a speed for every corner is what a serious
-racing game does and would drive better than this. It would also be a second
-description of the track, needing redone every time the circuit changed.
+**It is a recording, not a simulation.** A pose goes down thirty times a
+second — where the body was, which way it pointed, and what each of the four
+wheels was doing — and the replay reads between two samples, so a lap plays
+back as smooth as the frame it is drawn in. A fourteen-second lap is 420
+samples of twenty floats: 34KB, which is not worth being clever about.
+Nothing is re-driven. The ghost cannot bounce off a post it hit last lap,
+because it is not there: it has no collision, no momentum to trade, and it
+lays no rubber and throws no spray, all of which belong to the truck that is
+actually on the road.
 
-Two things it needs beyond following: a pull back toward the middle when it is
-off the road, because a driver that runs wide and keeps its preferred offset
-points further off it and ends the race beached on the inside; and a reverse,
-because a car cannot steer without moving and is pushed straight back out of
-whatever it hits, so without one a single bad corner ends its race where it
-happened.
+**The recording starts at a line crossing and never at the grid**, which is
+why no ghost appears until the second lap is done. A lap begun from a
+standing start is not one you can compare against; worse, a lap recorded from
+the grid runs its lap fraction backwards through the line before it starts,
+and the fraction is the one thing the comparison needs. It keeps a lap only
+if that lap beats the one it holds, so the ghost is always the best lap it
+has seen — which after a standing start is never the first one.
 
-Cars are pushed apart and their closing speed exchanged. Not a real impulse —
-no spin, no mass, nothing conserved — but enough that a car cannot be driven
-through, and that being leaned on in a corner costs you the corner.
+**The gap is measured by where you are, not by when.** At the point of the
+circuit you have reached, the recording says what the clock read when the
+ghost got here; the difference is what the HUD shows, green when you are up
+and red when you are down. Comparing at the same *time* instead would tell
+you which of you was further round, which is the same information read the
+hard way and no use at a corner. The two agree, which is worth checking: at a
+delta of 0.29s and 1700 mm/s the ghost was 502mm up the road, and 0.29 × 1700
+is 493.
+
+**Seeing it in the dark** is the one thing the renderer makes awkward. There
+is no transparency here, so the ghost cannot be the see-through thing a ghost
+usually is. It is painted a cold pale blue no truck is painted, it carries no
+lamps — a second set of headlights washing the road would be light from a car
+that is not there, and would light the mist you are driving through — and it
+wears four cold marker glows at the corners of its body. Four and not two,
+because two points is a thing in the distance and four is a truck-shaped
+thing, and which way the ghost is pointing going into a corner is most of
+what you want from it.
+
+R puts you back on the line and leaves the ghost alone: a restart is another
+go at the same circuit, and throwing your best lap away because you pressed R
+is not what R is for.
 
 ## The truck
 
@@ -147,7 +175,8 @@ Four things followed from that.
   a third of the grip away over a 200mm shoulder, and off-track rolling
   resistance takes speed as well — needed because on a track defined as a
   radius about a middle, cutting the inside makes the lap *shorter*, and the
-  fastest driver in the field was doing exactly that for a fifth of every lap.
+  fastest of the AI drivers, back when there were three, was doing exactly
+  that for a fifth of every lap.
 - **A handbrake**, on the space bar, which is the one input that is not a
   request for more of something.
 
@@ -185,9 +214,9 @@ slam.
 Measured, a brake tap of a quarter second at full lock then throttle with
 the wheel held: peak slip **22 degrees** against 11 without the tap, held
 between 10 and 19 under the throttle, no spin at 1200, 1700 or 2200 mm/s,
-back straight in under a tenth of a second when the wheel centres, and the
-drivers never trigger it — zero drift frames and zero marks from the field
-in ninety seconds. It costs speed: the tap and the sideways scrub take the
+back straight in under a tenth of a second when the wheel centres, and the AI
+drivers, while there were any, never triggered it — zero drift frames and
+zero marks from them in ninety seconds. It costs speed: the tap and the sideways scrub take the
 truck down to 330 to 500 mm/s before the throttle brings it back, which is
 what drifting costs a real car and is why nobody drifts to win. Nine
 tunings got here, and the thing they kept finding was that the truck's
@@ -231,33 +260,22 @@ source where it matters:
   feeding it, because once the truck is travelling sideways the direction its
   contact patch is sliding is along the truck rather than across it.
 
-### The drivers
+### The drivers, and why they went
 
-An opponent follows the centreline offset by a line of its own, and it now
-does two things it did not. It **steers for a yaw rate** rather than
-multiplying the heading error by a constant: that constant was chosen when
-full lock at speed was 0.23 radians and could not spin anything, and with the
-lock the truck has now it saturated at any error over 22 degrees and put full
-opposite lock on at 2000 mm/s. And it **brakes for the radius ahead** rather
-than for the corner it is already in — it reads how tight the track is far
-enough up the road to stop from here, works out what the tyres will hold
-there, and arrives already slowed.
+There were three of them, in `racer.ts`: an opponent followed the centreline
+offset by a line of its own, steered for a yaw rate rather than for a heading
+error, and aimed at a point corrected outward by the sagitta of the chord it
+was driving — a driver steering straight at a point on an arc passes inside
+that arc, 178mm of a 380mm half-width at the tightest corner here, and that
+correction took the fastest car from spending 20.9% of its lap off the road
+on the inside of every corner to 9.7%, and the other three to zero. They ran
+six laps in ninety seconds, best 13.6, none of them stalling.
 
-That rule does not currently fire, and it is worth saying so rather than
-leaving the claim standing. Measured over a lap since the wheelbase went up:
-the driver is at **full throttle 100% of the time**, and its speed never gets
-past 79% of the limit it works out, median 56%. The truck's top speed is below
-what the tyres would hold in every corner on this circuit, so what limits a
-lap is the engine against the drag, not the road. The rule stays because it is
-the right one and because more power or a tighter corner would make it bite —
-but nothing out there is being out-braked today.
-
-It also aims at a point corrected outward by the sagitta of the chord it is
-driving. A driver steering straight at a point on an arc passes inside that
-arc — at the tightest corner here, 178mm of a track whose half width is 380 —
-which is why the fastest car in the field spent a fifth of its lap off the
-road on the inside of every corner. Correcting it took that from 20.9% to
-9.7%, and the other three drivers to zero.
+All of which was true and none of which was interesting to drive against.
+They are gone, and a recording of your own best lap runs in their place: see
+[The ghost](#the-ghost). What they left behind is in the numbers above — the
+shoulder grip, the drift tuning and the racing line were all measured against
+them, and those measurements stand even though the drivers do not.
 
 ## The circuit
 
@@ -334,10 +352,10 @@ chosen to avoid, and it is why this is on a key rather than instead.
 
 ## The settings
 
-Escape opens a panel of ten sliders: the ambient light, the floodlights,
-the time of day, the top speed, the steering, how many drivers line up
-against you, three for the picture rather than the scene — the bloom, the
-vignette and the grain — and the dawn mist. They are
+Escape opens a panel of nine sliders: the ambient light, the floodlights,
+the time of day, the top speed, the steering, three for the picture rather
+than the scene — the bloom, the vignette and the grain — and the dawn mist.
+They are
 kept in one table in `settings.ts`, which is what the panel is built from —
 adding a knob is one line there and none in the page — and they are read
 live, every frame, by whoever uses them, so a slider moved mid-race takes
@@ -413,10 +431,8 @@ Each one is the constant it stands in for, made a lookup:
   the yaw rate they want into an input using the lock in force, so they keep
   driving the same line whatever it is set to. The circle at 1200 mm/s is
   486mm at one, 754 at 0.6 and 358 at 1.5.
-- **Opponents** rebuilds the grid — only when the count actually changes; the defaults button applies every control at once, and restarted the race for nothing until it checked. Every pool that holds a car is sized to
-  eight once, and how many of it are live is the length of the car list,
-  which is emptied and refilled rather than replaced so anything holding it
-  keeps seeing the race. Seven drivers ran forty seconds with none stalled.
+- **Opponents** was here, and rebuilt the grid. There are no opponents: see
+  [The ghost](#the-ghost).
 - **Dawn mist** scales the fog the clock decides on: see
   [The mist](#the-mist). At zero there is no mist at any hour, and it costs
   nothing.
@@ -850,10 +866,10 @@ through in favour of lamps it merely passed. Each is scored by how far into
 its reach the ray comes and the best eight kept, which costs 0.03 ms and is
 the difference between the right lamps and any eight lamps.
 
-What it does not do: the rivals' headlights have no cones. There are sixteen
-map slots and the fourteen floods and two headlights fill them; a rival's
-beam coming the other way would be worth having and would cost four more
-maps.
+The ghost throws none. It carries no lamps at all — a recording of a truck
+is not a truck, and a second pair of headlights washing the mist would be
+light from a car that is not on the road. What marks it in the dark is four
+cold glows at its corners, which light nothing.
 
 ## The picture
 
@@ -907,17 +923,34 @@ than timed off `requestAnimationFrame` — a browser tab that is not being
 composited stops calling back, and reads as a scene that mysteriously got
 slower. `measure(width, height, frames)` is on the console for repeating it.
 
-| | lights | ms a frame |
-| --- | ---: | ---: |
-| night, mist and cones | 50 | 3.64 |
-| dawn, full mist and cones | 50 | 3.64 |
-| noon, nothing in the air | 0 | 0.66 |
+Measured at the framing the arena opens on, with the camera settled — which
+matters more than it sounds. The figure in this table before this one was
+3.64 ms, taken three seconds after sending the camera somewhere, while the
+orbit was still easing toward it and the frame was smaller and further from
+the lamps than it ended up. Let the orbit stop before timing anything.
+
+| | lights | steps | ms a frame |
+| --- | ---: | ---: | ---: |
+| night, haze and cones | 46 | 19 | 4.27 |
+| noon, nothing in the air | 2 | — | 0.62 |
 
 A frame at sixty is 16.7 ms, so the night frame has four times its own cost
-in hand. Of the 3.64: about 2.3 is the scene and its shadow maps — the sun's
-and sixteen spots — 0.5 is the fog march, and 0.85 the cones in it. Noon is
-a twentieth of that because the lamps are out, the shadow maps are one
+in hand; 1440p is 7.0. Of the 4.27, medians of three with each configuration
+warmed first: **1.46** is the scene and its point lights, **1.06** the shadow
+maps — the sun's and sixteen spots — and **1.76** the fog and the cones in
+it. Noon is a seventh of it because the lamps are out, the maps are one
 instead of seventeen, and there is nothing in the air to march through.
+
+The march takes its number of steps from how thick the air is, which is worth
+about a fifth of the night frame. A thin haze scatters little per step, so
+the noise a short march leaves is small too: nineteen steps at night is
+indistinguishable from twenty-eight and the dawn mist, three times as dense,
+still gets all of them. Fixed at twenty-eight, the fog was 2.85 ms of a 5.3
+ms night frame.
+
+The CPU side is **0.034 ms** a step, nearly all of it the one vehicle: four
+substeps of a rigid body on four suspension rays, plus a ghost sample thirty
+times a second, which does not show.
 
 The CPU side is **0.02 ms** a step, almost all of it the vehicle — four
 substeps of a rigid body on four suspension rays.
