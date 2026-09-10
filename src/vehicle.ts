@@ -359,6 +359,8 @@ export interface Wheel {
   load: number;
   /** The height of the ground under it, as last found by the ray. */
   ground: number;
+  /** Whether that ground — or the road drawn over it — is under the water. */
+  wet: boolean;
 }
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
@@ -373,7 +375,7 @@ export class Vehicle {
   throttle = 0; braking = 0;
 
   readonly wheels: Wheel[] = WHEELS.map(() => ({
-    compression: 0, onGround: false, drop: REST, spin: 0, steer: 0, slide: 0, load: 0, ground: 0,
+    compression: 0, onGround: false, drop: REST, spin: 0, steer: 0, slide: 0, load: 0, ground: 0, wet: false,
   }));
 
   constructor(x = 0, y = 0) { this.x = x; this.y = y; this.z = height(x, y) + 50; }
@@ -475,7 +477,7 @@ export class Vehicle {
       const my = this.y + fy * lx + ry * ly + uy * lz;
       const mz = this.z + fz * lx + rz * ly + uz * lz;
 
-      if (!w.onGround) { w.slide = 0; w.load = 0; continue; }
+      if (!w.onGround) { w.slide = 0; w.load = 0; w.wet = false; continue; }
 
       const [nx, ny, nz] = normal(mx, my);
 
@@ -530,8 +532,8 @@ export class Vehicle {
       // that the truck was wet for a sixth of every lap, on ground that was
       // dry to look at.
       const surfaceZ = w.ground + (surface >= 1 ? TRACK_LIFT : 0);
-      const wet = surfaceZ < WATER_LEVEL ? WATER_DRAG : 0;
-      let wantFwd = -vFwd * (ROLL_RESIST + ROUGH_DRAG * (1 - surface) + wet);
+      w.wet = surfaceZ < WATER_LEVEL;
+      let wantFwd = -vFwd * (ROLL_RESIST + ROUGH_DRAG * (1 - surface) + (w.wet ? WATER_DRAG : 0));
       if (drive.hold) {
         // uncapped, unlike the brake pedal: a handbrake locks the wheels and
         // is limited by the tyres rather than by the brakes, which is what

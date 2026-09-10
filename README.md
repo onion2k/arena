@@ -579,6 +579,37 @@ or six hundred a ford. Against the road surface it is 5.5% of the lap, and
 the drivers' best laps are what they were: 13.6 to 14.2 seconds, six laps in
 a hundred seconds, nobody stranded.
 
+## Smoke and spray
+
+The trucks throw things up: smoke off a sliding tyre, spray off a wet one.
+Both are the renderer's GPU particles, from v0.7 of `artshape-render` — a
+fixed pool of thirty-two thousand in a storage buffer that never comes back
+to the CPU, filled as a ring, moved by a compute pass and drawn as
+camera-facing quads. The game's whole part is a burst a wheel a frame: where,
+how many, how fast, how long, what colour. The physics already knows whether
+a wheel is on the ground, how hard it is sliding and whether its ground is
+under the water, so `particles.ts` reads those and asks.
+
+Spray is additive — droplets thrown up and forward off the tyre, falling
+under gravity and dying where they meet the water again, with a little
+translucent mist that hangs. Smoke is translucent, from the contact patch,
+drifting with a share of the truck's motion and swelling as it thins. Both
+are tinted by the time of day, because the particles are unlit: smoke that
+was white at noon would glow white at midnight over a road that is nearly
+black, so at night it is a grey haze in the floods.
+
+What it costs: nothing at rest, and less than the measurement noise busy. A
+race keeps about seven hundred slots of the ring live, peaking at fifteen
+hundred, and the night frame at 1080p read 3.004ms with the pool against
+3.006 without it. Twenty thousand live particles moved it by less than the
+0.3ms the same measurement wanders by on its own. It was not free at first:
+the update and the draw walked every slot of the ring every frame, which
+cost 0.84ms for a pool holding a few hundred, until the passes were confined
+to the run from the oldest burst that could still be alive to the cursor —
+and that run was wrong once the ring had been lapped, reading the remainder
+past the wrap, until the cursor was kept unwrapped. Both are the library's
+now, and tested there.
+
 ## The forest
 
 Everything that is not the road or its shoulder is trees: 1784 cones, in

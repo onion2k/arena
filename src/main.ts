@@ -18,6 +18,7 @@ import { CONTROLS, SETTINGS, restoreDefaults, save } from './settings';
 import { TREES, forestBuffers, treeMesh } from './forest';
 import { clockLabel, skyAt } from './daylight';
 import { underWater, waterMesh } from './water';
+import { wheelEffects } from './particles';
 import { WHEELS } from './vehicle';
 import { START_BULBS, TRACK_HALF, centreline, gantry, tangentAt } from './track';
 import { height as groundAt } from './terrain';
@@ -47,7 +48,10 @@ async function main() {
   const ctx = await createContext(canvas);
   bootMsg.textContent = 'compiling shaders…';
 
-  const renderer = new GameRenderer(ctx, LIGHT_CAPACITY, EFFECT_CAPACITY);
+  // Thirty-two thousand particles: eight trucks with all four wheels in a
+  // ford throw about five hundred a frame, and a burst lives a second.
+  const renderer = new GameRenderer(ctx, LIGHT_CAPACITY, EFFECT_CAPACITY, 32768);
+  renderer.gravity = 9810;
   renderer.look = {
     ...renderer.look,
     // Where the sun is, what colour, the ambient and the sky are all set from
@@ -180,8 +184,9 @@ async function main() {
   const dayEnv = bakeEnvironment(ctx, 'daylight', { size: 128, mips: 6, sun: noon });
   let envIsDay = false;
   renderer.setEnvironment(nightEnv.specular, nightEnv.brdf, nightEnv.mips);
+  let sky = skyAt(SETTINGS.time, SETTINGS.ambient);
   const applySky = () => {
-    const sky = skyAt(arena.hours, SETTINGS.ambient);
+    sky = skyAt(arena.hours, SETTINGS.ambient);
     renderer.look.sunDir = sky.sunDir;
     renderer.look.sunColour = sky.sunColour;
     renderer.look.ambient = sky.ambient;
@@ -277,7 +282,7 @@ async function main() {
     orbit.update();
     setDepthRange(renderer.camera);
     upload();
-    renderer.frame(ctx.context.getCurrentTexture().createView(), 'redraw');
+    renderer.frame(ctx.context.getCurrentTexture().createView(), 'redraw', 1 / 60);
     await ctx.queue.onSubmittedWorkDone();
     const png = canvas.toDataURL('image/png');
     await fetch('/__shot', { method: 'POST', body: png });
@@ -448,6 +453,7 @@ async function main() {
         const w = truck.wheels[i];
         const hub = on(lx, ly, lz - w.drop);
         placeVehicleWheel(wheelM, ci * 4 + i, hub[0], hub[1], hub[2], yaw, pitch, roll, w.steer, w.spin);
+        wheelEffects(renderer, truck, w, hub, sky.day);
       }
 
       let lamp = 0;
@@ -527,7 +533,7 @@ async function main() {
 
     // redraw, not keep: every one of those lights moves, and a kept static
     // half would be lit by where they were when it was baked
-    renderer.frame(ctx.context.getCurrentTexture().createView(), 'redraw');
+    renderer.frame(ctx.context.getCurrentTexture().createView(), 'redraw', dt);
 
     minimap.update();
 
