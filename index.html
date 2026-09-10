@@ -18,6 +18,17 @@
   #stats span { color: var(--ink); }
   #help { bottom: 16px; left: 16px; color: #9a97ab; }
   #map { bottom: 16px; right: 16px; padding: 8px; line-height: 0; }
+  #config { top: 50%; left: 16px; transform: translateY(-50%); pointer-events: auto;
+            width: 320px; color: #9a97ab; }
+  #config .rows { display: grid; gap: 8px; }
+  #config label { display: grid; grid-template-columns: 104px 1fr 74px; align-items: center; gap: 8px; white-space: nowrap; }
+  #config output { text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+  #config input[type=range] { width: 100%; margin: 0; accent-color: #e8b74a; }
+  #config .foot { display: flex; justify-content: space-between; align-items: center;
+                  margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.09); }
+  #config button { font: inherit; color: var(--ink); background: rgba(255,255,255,0.08);
+                   border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+  #config button:hover { background: rgba(255,255,255,0.14); }
   #map svg { width: 168px; height: 168px; display: block; }
   #boot { position: fixed; inset: 0; display: grid; place-content: center; gap: 12px;
           text-align: center; background: #07070b; transition: opacity .4s; }
@@ -29,6 +40,7 @@
 <div class="panel" id="score" hidden><b>3…</b>lap <span>1</span></div>
 <div class="panel" id="stats" hidden></div>
 <div class="panel" id="map" hidden><svg id="mapSvg" aria-hidden="true"></svg></div>
-<div class="panel" id="help" hidden>steer <span>A D</span> / ←→ · throttle <span>W</span> / ↑ · brake, then reverse <span>S</span> / ↓ · handbrake <span>space</span><br>drag to orbit · wheel to zoom · <span>V</span> camera behind · <span>C</span> re-centre · <span>R</span> back to the line</div>
+<div class="panel" id="config" hidden></div>
+<div class="panel" id="help" hidden>steer <span>A D</span> / ←→ · throttle <span>W</span> / ↑ · brake, then reverse <span>S</span> / ↓ · handbrake <span>space</span><br>drag to orbit · wheel to zoom · <span>V</span> camera behind · <span>C</span> re-centre · <span>R</span> back to the line · <span>Esc</span> settings</div>
 <div id="boot"><h1>ARENA</h1><p id="bootMsg">starting the GPU…</p></div>
 <script type="module" src="/src/main.ts"></script>

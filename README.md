@@ -282,6 +282,39 @@ and the road ahead disappears over every crest, so it is much harder to see
 what the corner does before arriving. That is the trade the overhead view was
 chosen to avoid, and it is why this is on a key rather than instead.
 
+## The settings
+
+Escape opens a panel of five sliders: the ambient light, the floodlights, the
+top speed, the steering, and how many drivers line up against you. They are
+kept in one table in `settings.ts`, which is what the panel is built from —
+adding a knob is one line there and none in the page — and they are read
+live, every frame, by whoever uses them, so a slider moved mid-race takes
+effect on the next step. They persist in local storage, and the button puts
+them all back.
+
+Each one is the constant it stands in for, made a lookup:
+
+- **Ambient** is the renderer's `look.ambient`, which the frame uniform reads
+  every frame, so it is written straight into the look.
+- **Floodlights** is the intensity every trackside lamp is given when the
+  light list is rebuilt, which is every frame anyway.
+- **Top speed** sets the drag. The engine and the drag balance at the top, so
+  `AERO = ENGINE / v²`; at the default 2300 that is the 1.1e-3 it was as a
+  constant, and the acceleration feel is left alone. Measured over six
+  seconds on the open floor: 1256 mm/s at a setting of 1500, 2347 at 3200.
+- **Steering** scales the lock, for the drivers as well as you — they convert
+  the yaw rate they want into an input using the lock in force, so they keep
+  driving the same line whatever it is set to. The circle at 1200 mm/s is
+  486mm at one, 754 at 0.6 and 358 at 1.5.
+- **Opponents** rebuilds the grid. Every pool that holds a car is sized to
+  eight once, and how many of it are live is the length of the car list,
+  which is emptied and refilled rather than replaced so anything holding it
+  keeps seeing the race. Seven drivers ran forty seconds with none stalled.
+
+A slider with the focus owns the arrow keys, and the truck does not: the
+same keystroke steering the car and nudging the ambient light is a panel
+nobody can use.
+
 ## The minimap
 
 The whole circuit in the corner, with a dot per car. Two dimensions and no

@@ -16,7 +16,7 @@
  * numbers were tuned to get round at all; these are tuned to be beatable.
  */
 import { TRACK_HALF, centreline, curveOutward, curveRadius, radiusAt, where } from './track';
-import { MU, STEER_FALLOFF, STEER_LOCK, WHEELBASE } from './vehicle';
+import { MU, STEER_FALLOFF, WHEELBASE, steerLock } from './vehicle';
 import type { Drive } from './vehicle';
 import type { Vehicle } from './vehicle';
 
@@ -153,7 +153,7 @@ function steerFor(car: Vehicle, headingError: number): number {
   const wanted = clamp(headingError * HEADING_GAIN, -YAW_LIMIT, YAW_LIMIT);
   const v = Math.max(car.speed, 220);
   const delta = Math.atan((WHEELBASE * wanted) / v);
-  const input = (delta * (1 + v / STEER_FALLOFF)) / STEER_LOCK;
+  const input = (delta * (1 + v / STEER_FALLOFF)) / steerLock();
   return clamp(input - YAW_DAMP * (car.wYaw - wanted), -1, 1);
 }
 

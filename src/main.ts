@@ -13,7 +13,8 @@ import { Orbit } from 'artshape-render/gpu/camera';
 import { bakeEnvironment } from 'artshape-render/render/env';
 import { GameRenderer, EFFECT_STRIDE, type GameGroup } from 'artshape-render/game/renderer';
 import { LightPool } from 'artshape-render/game/lights';
-import { FIELD, Race, type Input } from './game';
+import { MAX_FIELD, PAINT, Race, type Input } from './game';
+import { CONTROLS, SETTINGS, restoreDefaults, save } from './settings';
 import { WHEELS } from './vehicle';
 import { START_BULBS, TRACK_HALF, centreline, gantry, tangentAt } from './track';
 import { height as groundAt } from './terrain';
@@ -33,6 +34,7 @@ const statsPanel = document.getElementById('stats')!;
 const helpPanel = document.getElementById('help')!;
 const mapPanel = document.getElementById('map')!;
 const mapSvg = document.getElementById('mapSvg') as unknown as SVGSVGElement;
+const configPanel = document.getElementById('config')!;
 
 main().catch((err) => { bootMsg.textContent = String(err?.message ?? err); console.error(err); });
 
@@ -122,23 +124,23 @@ async function main() {
 
   // The pools. Their size is fixed here and never changes again: what moves
   // each frame is the live count, and the matrices written into the prefix.
-  const chassisM = new Float32Array(FIELD * 16);
-  const chassisMat = new Float32Array(FIELD * 4);
-  const cabM = new Float32Array(FIELD * 16);
-  const wheelM = new Float32Array(FIELD * 4 * 16);
-  const lampM = new Float32Array(FIELD * 2 * 16);
+  const chassisM = new Float32Array(MAX_FIELD * 16);
+  const chassisMat = new Float32Array(MAX_FIELD * 4);
+  const cabM = new Float32Array(MAX_FIELD * 16);
+  const wheelM = new Float32Array(MAX_FIELD * 4 * 16);
+  const lampM = new Float32Array(MAX_FIELD * 2 * 16);
   const startMat = new Float32Array(2 * START_BULBS * 4);
   const dynamic: GameGroup[] = [
     // not a mirror: a polished metal under a near-black sky has nothing to
     // reflect and reads as a dark shape. A little roughness gives the point
     // lights a highlight wide enough to see the colour in.
-    { mesh: mesh.chassis, matrices: chassisM, count: FIELD, albedo: [1.0, 0.79, 0.36], roughness: 0.24 },
-    { mesh: mesh.cab, matrices: cabM, count: FIELD, albedo: [0.86, 0.90, 0.97], roughness: 0.12 },
+    { mesh: mesh.chassis, matrices: chassisM, count: MAX_FIELD, albedo: [1.0, 0.79, 0.36], roughness: 0.24 },
+    { mesh: mesh.cab, matrices: cabM, count: MAX_FIELD, albedo: [0.86, 0.90, 0.97], roughness: 0.12 },
     // tyres: dark and rough, the one thing out here that is not a mirror
-    { mesh: mesh.wheel, matrices: wheelM, count: FIELD * 4, albedo: [0.07, 0.07, 0.08], roughness: 0.62 },
+    { mesh: mesh.wheel, matrices: wheelM, count: MAX_FIELD * 4, albedo: [0.07, 0.07, 0.08], roughness: 0.62 },
     // near white and glossy, so the lamps read as lit glass rather than as
     // two more lumps of the same metal the truck is made of
-    { mesh: mesh.lamp, matrices: lampM, count: FIELD * 2, albedo: [1.0, 0.97, 0.9], roughness: 0.06 },
+    { mesh: mesh.lamp, matrices: lampM, count: MAX_FIELD * 2, albedo: [1.0, 0.97, 0.9], roughness: 0.06 },
     // the starting bulbs, which never move and are recoloured every frame
     { mesh: mesh.lamp, matrices: startBulbs(), count: 2 * START_BULBS, albedo: [0.2, 0.04, 0.03], roughness: 0.12 },
   ];
@@ -156,6 +158,14 @@ async function main() {
   const quads = new Float32Array(EFFECT_CAPACITY * EFFECT_STRIDE);
   const input = watchInput(arena);
   const minimap = buildMinimap(arena);
+  // The settings panel. Two of the five are read live by whoever uses them
+  // and need nothing done here; the ambient is a field on the renderer's
+  // look, and the field size rebuilds the grid, so those two are applied.
+  buildConfig((key) => {
+    if (key === 'ambient') renderer.look.ambient = SETTINGS.ambient;
+    if (key === 'opponents') arena.setField(SETTINGS.opponents);
+  });
+  renderer.look.ambient = SETTINGS.ambient;
   // Drag to swing the camera round, wheel to come in and out, shift-drag to
   // slide it. The floor is opaque from below and the arena is meant to be
   // looked into, so the polar range stops short of the horizon and of
@@ -401,11 +411,12 @@ async function main() {
         placeVehicleFacing(lampM, ci * 2 + lamp++, at[0], at[1], at[2], yaw, pitch, roll);
       }
     });
-    renderer.move(CHASSIS, chassisM, FIELD);
+    const field = arena.cars.length;
+    renderer.move(CHASSIS, chassisM, field);
     renderer.tint(CHASSIS, chassisMat);
-    renderer.move(CAB, cabM, FIELD);
-    renderer.move(WHEELS_GROUP, wheelM, FIELD * 4);
-    renderer.move(LAMPS, lampM, FIELD * 2);
+    renderer.move(CAB, cabM, field);
+    renderer.move(WHEELS_GROUP, wheelM, field * 4);
+    renderer.move(LAMPS, lampM, field * 2);
 
     // the starting lights: dark until lit, then a hot red, all out on the go
     for (let i = 0; i < 2 * START_BULBS; i++) {
@@ -477,7 +488,7 @@ async function main() {
       statsIn = 0.2;
       scorePanel.innerHTML =
         `<b>${arena.running ? clock(arena.lapTime) : Math.ceil(arena.countdown) + '…'}</b>`
-        + `P<span>${arena.position}</span> of ${FIELD}`
+        + `P<span>${arena.position}</span> of ${arena.cars.length}`
         + ` · lap <span>${arena.laps + 1}</span>`
         + ` · best <span>${arena.bestLap === null ? '—:——.—' : clock(arena.bestLap)}</span>`
         + ` · last <span>${arena.lastLap === null ? '—:——.—' : clock(arena.lastLap)}</span>`;
@@ -660,9 +671,11 @@ function buildMinimap(race: Race) {
   line.setAttribute('stroke-width', '120');
   mapSvg.appendChild(line);
 
-  const dots = race.cars.map((car, i) => {
+  // one dot per slot in the field, not per car: the field can change size
+  // and rebuilding the map for it would be more code than hiding a circle
+  const dots = Array.from({ length: MAX_FIELD }, (_, i) => {
     const c = document.createElementNS(NS, 'circle');
-    const [r, g, b] = car.colour;
+    const [r, g, b] = PAINT[i];
     const hex = (v: number) => Math.round(Math.min(1, v) * 255).toString(16).padStart(2, '0');
     // The player's is half again as big and outlined, so which dot is yours
     // is never a question. At 168 pixels across a map ten metres wide, 260
@@ -677,9 +690,12 @@ function buildMinimap(race: Race) {
 
   return {
     update() {
-      race.cars.forEach((car, i) => {
-        dots[i].setAttribute('cx', car.vehicle.x.toFixed(0));
-        dots[i].setAttribute('cy', (-car.vehicle.y).toFixed(0));
+      dots.forEach((dot, i) => {
+        const car = race.cars[i];
+        dot.setAttribute('visibility', car ? 'visible' : 'hidden');
+        if (!car) return;
+        dot.setAttribute('cx', car.vehicle.x.toFixed(0));
+        dot.setAttribute('cy', (-car.vehicle.y).toFixed(0));
       });
     },
   };
@@ -699,6 +715,54 @@ function identity(): Float32Array {
 }
 
 /**
+ * The settings panel: a slider per control, a readout beside each, and a
+ * button to put them all back. Built from the table in `settings.ts` so that
+ * adding a knob is one line there and none here.
+ *
+ * Every change is written straight into the live settings and saved, and
+ * the caller is told which key moved for the two that need applying by hand.
+ */
+function buildConfig(applied: (key: keyof typeof SETTINGS) => void) {
+  const rows = document.createElement('div');
+  rows.className = 'rows';
+  const readouts = new Map<string, HTMLElement>();
+  const sliders = new Map<string, HTMLInputElement>();
+  for (const c of CONTROLS) {
+    const row = document.createElement('label');
+    const name = document.createElement('span'); name.textContent = c.label;
+    const value = document.createElement('output'); value.textContent = c.show(SETTINGS[c.key]);
+    const slider = document.createElement('input');
+    slider.type = 'range'; slider.min = String(c.min); slider.max = String(c.max); slider.step = String(c.step);
+    slider.value = String(SETTINGS[c.key]);
+    slider.addEventListener('input', () => {
+      SETTINGS[c.key] = Number(slider.value);
+      value.textContent = c.show(SETTINGS[c.key]);
+      save();
+      applied(c.key);
+    });
+    row.append(name, slider, value);
+    rows.appendChild(row);
+    readouts.set(c.key, value); sliders.set(c.key, slider);
+  }
+  const foot = document.createElement('div');
+  foot.className = 'foot';
+  const reset = document.createElement('button');
+  reset.type = 'button'; reset.textContent = 'defaults';
+  reset.addEventListener('click', () => {
+    restoreDefaults();
+    for (const c of CONTROLS) {
+      sliders.get(c.key)!.value = String(SETTINGS[c.key]);
+      readouts.get(c.key)!.textContent = c.show(SETTINGS[c.key]);
+      applied(c.key);
+    }
+    reset.blur();
+  });
+  const hint = document.createElement('span'); hint.textContent = 'Esc to close';
+  foot.append(reset, hint);
+  configPanel.replaceChildren(rows, foot);
+}
+
+/**
  * The keys, and nothing else: the mouse belongs entirely to the camera now
  * that there is no gun to aim.
  */
@@ -709,6 +773,11 @@ function watchInput(race: Race) {
 
   addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
+    if (k === 'escape') { configPanel.hidden = !configPanel.hidden; (e.target as HTMLElement | null)?.blur?.(); return; }
+    // A slider with the focus is being driven by the arrow keys, and the
+    // truck must not be: the same keystroke steering the car and nudging the
+    // ambient light is a panel nobody can use.
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement) return;
     if (k === 'r') race.reset();
     if (k === 'c') recentre = true;
     if (k === 'v') chaseToggle = true;

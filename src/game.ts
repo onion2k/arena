@@ -10,6 +10,7 @@
 import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS } from './scene';
 import { Vehicle } from './vehicle';
 import { SKILLS, driveRound, type Skill } from './racer';
+import { SETTINGS } from './settings';
 import { START_BULBS, radiusAt, tangentAt, where } from './track';
 
 /** How long the lights hold you before the lap starts. */
@@ -94,23 +95,49 @@ export interface Car {
   skill: Skill | null;
 }
 
-/** How many cars line up, the player included. */
-export const FIELD = 4;
+/**
+ * The most cars that can line up, the player included. Every pool that holds
+ * a car — matrices, lamps, dots on the map — is sized to this once, and how
+ * many of it are live is `cars.length`, which the settings change.
+ */
+export const MAX_FIELD = 8;
 
-const PAINT: [number, number, number][] = [
+/** The paint for each slot in the field, the player's first. */
+export const PAINT: [number, number, number][] = [
   [1.0, 0.79, 0.36],   // the player: gold, as it always was
   [0.35, 0.62, 1.0],
   [1.0, 0.30, 0.26],
   [0.42, 0.95, 0.55],
+  [0.95, 0.55, 1.0],
+  [1.0, 0.62, 0.20],
+  [0.55, 0.92, 0.95],
+  [0.90, 0.90, 0.95],
 ];
 
 export class Race {
-  readonly cars: Car[] = PAINT.slice(0, FIELD).map((colour, i) => ({
-    vehicle: new Vehicle(0, 0),
-    lap: new Progress(),
-    colour,
-    skill: i === 0 ? null : SKILLS[(i - 1) % SKILLS.length],
-  }));
+  /**
+   * The player first, then the drivers. The array keeps its identity when the
+   * field changes size — it is emptied and refilled rather than replaced — so
+   * anything holding a reference to it keeps seeing the race.
+   */
+  readonly cars: Car[] = [];
+
+  constructor() { this.setField(SETTINGS.opponents); }
+
+  /** Put this many drivers on the grid beside the player, and restart. */
+  setField(opponents: number) {
+    const n = 1 + Math.max(0, Math.min(MAX_FIELD - 1, Math.round(opponents)));
+    this.cars.length = 0;
+    for (let i = 0; i < n; i++) {
+      this.cars.push({
+        vehicle: new Vehicle(0, 0),
+        lap: new Progress(),
+        colour: PAINT[i],
+        skill: i === 0 ? null : SKILLS[(i - 1) % SKILLS.length],
+      });
+    }
+    this.reset();
+  }
 
   /** The player's, which is the first of them. */
   get truck() { return this.cars[0].vehicle; }
@@ -163,8 +190,6 @@ export class Race {
     const through = (COUNTDOWN - this.countdown) / COUNTDOWN;
     return Math.min(START_BULBS, 1 + Math.floor(through * START_BULBS));
   }
-  constructor() { this.reset(); }
-
   step(dt: number, input: Input) {
     if (this.countdown > 0) {
       // Everyone is held on the line, the player and the field alike: the

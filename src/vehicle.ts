@@ -35,6 +35,7 @@
  */
 import { height, normal } from './terrain';
 import { gripAt } from './track';
+import { SETTINGS } from './settings';
 
 const G = 9810;                  // mm a second squared
 
@@ -237,8 +238,18 @@ const ENGINE = 5800;             // total drive acceleration at full throttle
  * below is a guard against a physics blow-up rather than a speed limiter, and
  * is not reached in normal driving.
  */
-const AERO = 1.1e-3;
-export const MAX_SPEED = 2800;
+/**
+ * Drag is not a constant any more: it is whatever makes the engine and the
+ * drag balance at the top speed the settings ask for. v² · AERO = ENGINE at
+ * the top, so AERO = ENGINE / v². At the default 2300 that is 1.096e-3,
+ * which is the 1.1e-3 it was as a constant.
+ */
+function aero(): number {
+  const v = Math.max(300, SETTINGS.topSpeed);
+  return ENGINE / (v * v);
+}
+/** A guard against a blow-up, a way above anything the drag will allow. */
+export const MAX_SPEED = 4200;
 
 /**
  * Steering lock at a standstill, and how sharply it is wound off with speed.
@@ -269,6 +280,8 @@ export const MAX_SPEED = 2800;
  * back inside 470.
  */
 export const STEER_LOCK = 0.72;
+/** The lock in force, which is the constant above scaled by the settings. */
+export function steerLock(): number { return STEER_LOCK * SETTINGS.steering; }
 export const STEER_FALLOFF = 2600;
 const STEER_RATE = 4.6;
 
@@ -391,7 +404,7 @@ export class Vehicle {
   }
 
   private substep(dt: number, drive: Drive) {
-    const wanted = clamp(drive.steer, -1, 1) * (STEER_LOCK / (1 + this.speed / STEER_FALLOFF));
+    const wanted = clamp(drive.steer, -1, 1) * (steerLock() / (1 + this.speed / STEER_FALLOFF));
     this.steer += clamp(wanted - this.steer, -STEER_RATE * dt, STEER_RATE * dt);
     this.throttle = drive.hold ? 0 : clamp(drive.throttle, 0, 1);
     if (drive.handbrake) this.throttle = 0;
@@ -566,7 +579,7 @@ export class Vehicle {
     // air resistance, which is what sets the top speed
     const sp3 = Math.hypot(this.vx, this.vy, this.vz);
     if (sp3 > 0) {
-      const d = AERO * sp3;
+      const d = aero() * sp3;
       ax -= this.vx * d; ay -= this.vy * d; az -= this.vz * d;
     }
 
