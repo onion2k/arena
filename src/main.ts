@@ -15,6 +15,7 @@ import { GameRenderer, EFFECT_STRIDE, type GameGroup } from 'artshape-render/gam
 import { LightPool } from 'artshape-render/game/lights';
 import { MAX_FIELD, PAINT, Race, type Input } from './game';
 import { CONTROLS, SETTINGS, restoreDefaults, save } from './settings';
+import { TREES, forestBuffers, treeMesh } from './forest';
 import { WHEELS } from './vehicle';
 import { START_BULBS, TRACK_HALF, centreline, gantry, tangentAt } from './track';
 import { height as groundAt } from './terrain';
@@ -102,6 +103,7 @@ async function main() {
     lamp: MESHES.lamp(), gantry: MESHES.gantry(),
   };
   const at = arenaMatrices();
+  const forest = forestBuffers(TREES);
 
   renderer.setStatic([
     // The ground. It was glossier than the tarmac at 0.14, which meant every
@@ -131,6 +133,12 @@ async function main() {
     { mesh: mesh.arm, matrices: at.arms, albedo: [0.30, 0.30, 0.33], roughness: 0.42 },
     { mesh: mesh.head, matrices: at.heads, albedo: [0.93, 0.92, 0.86], roughness: 0.14 },
     { mesh: mesh.gantry, matrices: gantryPosts(), count: 2, albedo: [0.62, 0.64, 0.70], roughness: 0.25 },
+    // The forest: one cone, drawn sixteen hundred times, each placement with
+    // its own green. Matte, because a glossy tree under a flood is a plastic
+    // one, and dark enough that only the moonlight and the spill from the
+    // road pick it out — which is what makes the black beyond the kerbs a
+    // place rather than an absence.
+    { mesh: treeMesh(), ...forest },
   ]);
 
   // The pools. Their size is fixed here and never changes again: what moves

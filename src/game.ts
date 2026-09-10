@@ -11,6 +11,7 @@ import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS } from './scene';
 import { Vehicle } from './vehicle';
 import { SKILLS, driveRound, type Skill } from './racer';
 import { SETTINGS } from './settings';
+import { TREES } from './forest';
 import { START_BULBS, radiusAt, tangentAt, where } from './track';
 
 /** How long the lights hold you before the lap starts. */
@@ -270,24 +271,35 @@ export class Race {
     if (t.y < -limY) { t.y = -limY; t.vy = Math.abs(t.vy) * BOUNCE; }
     if (t.y > limY) { t.y = limY; t.vy = -Math.abs(t.vy) * BOUNCE; }
 
+    // The lamp posts and then the trees, the same way: a circle each, and a
+    // truck that meets one is put outside it and bounced. Sixteen hundred
+    // trees against eight trucks is thirteen thousand distance checks a step,
+    // which is a few microseconds and not worth a grid.
     for (const post of COLUMNS) {
-      const cx = post.x; const cy = post.y;
-      const dx = t.x - cx;
-      const dy = t.y - cy;
-      const reach = COLUMN_RADIUS * post.scale + TRUCK_RADIUS;
-      const d2 = dx * dx + dy * dy;
-      if (d2 >= reach * reach || d2 < 1e-6) continue;
-      const d = Math.sqrt(d2);
-      const nx = dx / d; const ny = dy / d;
-      t.x = cx + nx * reach;
-      t.y = cy + ny * reach;
-      const into = t.vx * nx + t.vy * ny;
-      if (into < 0) {
-        t.vx -= into * (1 + BOUNCE) * nx;
-        t.vy -= into * (1 + BOUNCE) * ny;
-        // a corner clipped off a post turns the truck as well as stopping it
-        t.wYaw += (nx * t.vy - ny * t.vx) * 4e-4;
-      }
+      this.keepOff(t, post.x, post.y, COLUMN_RADIUS * post.scale);
+    }
+    for (const tree of TREES) {
+      this.keepOff(t, tree.x, tree.y, tree.r);
+    }
+  }
+
+  /** Push a truck out of a round thing at (cx, cy) of radius r, and bounce it. */
+  private keepOff(t: Vehicle, cx: number, cy: number, r: number) {
+    const dx = t.x - cx;
+    const dy = t.y - cy;
+    const reach = r + TRUCK_RADIUS;
+    const d2 = dx * dx + dy * dy;
+    if (d2 >= reach * reach || d2 < 1e-6) return;
+    const d = Math.sqrt(d2);
+    const nx = dx / d; const ny = dy / d;
+    t.x = cx + nx * reach;
+    t.y = cy + ny * reach;
+    const into = t.vx * nx + t.vy * ny;
+    if (into < 0) {
+      t.vx -= into * (1 + BOUNCE) * nx;
+      t.vy -= into * (1 + BOUNCE) * ny;
+      // a corner clipped off a post turns the truck as well as stopping it
+      t.wYaw += (nx * t.vy - ny * t.vx) * 4e-4;
     }
   }
 

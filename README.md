@@ -463,6 +463,34 @@ Nothing shorter, whatever it would do for the jumps: at three wheelbases the
 axles sit on opposite phases of every ripple and a truck that should be riding
 a hill is being shaken by a washboard.
 
+## The forest
+
+Everything that is not the road or its shoulder is trees: 1784 cones, in
+shades of green, one mesh drawn once. A tree is seven flat-shaded triangles,
+and everything that makes one different from the next — where it stands, how
+tall, which green — is its placement matrix and four floats of material, so
+the whole wood costs the GPU 0.26ms of a 2.97ms frame at 1080p and one draw
+call.
+
+They are planted on a jittered grid rather than at random, because a forest
+has no clumps of five trees in one spot and no bald patches. They start just
+behind the lamp posts — the nearest trunk a truck can reach is 985mm from the
+centreline, against the 884 the drivers have ever managed — and there is a
+second ring beyond the wall, on the apron the ground runs out to, which a truck
+can never touch and which turns the edge of the arena into the edge of a wood
+rather than of the world.
+
+The first planting started 900mm past the tarmac, and left a bare strip a
+truck and a half wide between the posts and the first tree. On the outside of
+the circuit, where the road bulges to within 180mm of the wall, that strip was
+most of what there was, and the forest read as a hedge in the distance.
+
+They are solid: a truck that reaches one is pushed out and bounced, the way it
+is off a lamp post. Sixteen hundred of them against eight trucks is thirteen
+thousand distance checks a step, which measures at 0.067ms for the whole step
+and is not worth a grid. A hundred and fifty seconds of racing with the wood
+there: every car ten laps, nothing stalled.
+
 ## The light
 
 Eighty-four floodlights on the trackside posts light the circuit and nothing
