@@ -245,10 +245,11 @@ export class Race {
     if (t.y < -limY) { t.y = -limY; t.vy = Math.abs(t.vy) * BOUNCE; }
     if (t.y > limY) { t.y = limY; t.vy = -Math.abs(t.vy) * BOUNCE; }
 
-    for (const [cx, cy, scale] of COLUMNS) {
+    for (const post of COLUMNS) {
+      const cx = post.x; const cy = post.y;
       const dx = t.x - cx;
       const dy = t.y - cy;
-      const reach = COLUMN_RADIUS * scale + TRUCK_RADIUS;
+      const reach = COLUMN_RADIUS * post.scale + TRUCK_RADIUS;
       const d2 = dx * dx + dy * dy;
       if (d2 >= reach * reach || d2 < 1e-6) continue;
       const d = Math.sqrt(d2);

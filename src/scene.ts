@@ -13,6 +13,7 @@
  */
 import { compile } from 'artshape-render/dsl';
 import { kerbMesh, posts as trackPosts, trackMesh } from './track';
+import type { Post } from './track';
 import { groupByMesh } from 'artshape-render/assembly/groups';
 import type { Mesh } from 'artshape-render/mesh/types';
 import { groundMesh, height } from './terrain';
@@ -109,8 +110,21 @@ export const MESHES = {
   kerbB: () => kerbMesh(1, 90, 30),
   /** A perimeter block, laid along the wall it belongs to. */
   block: () => part('plate(card(width: 218, height: 74, corner: 12), thickness: 132, bevel: 12)', 'base'),
-  /** An eight-sided column, for the corners to reflect things in. */
-  column: () => part(`disc(radius: 44, thickness: ${COLUMN_HEIGHT}, sides: 8, bevel: 9)`, 'base'),
+  /**
+   * A lamp post, in three pieces: the pole it stands on, the arm that reaches
+   * out over the road, and the head on the end of the arm.
+   *
+   * It was one fat eight-sided column 88mm across with a floodlight balanced
+   * on top of it, which at the scale of this arena is a chimney rather than a
+   * street light — and standing a chimney 260mm from the edge of a road 760
+   * wide made the circuit feel like a corridor. Three pieces rather than one
+   * mesh because material belongs to a draw here and the head wants to be a
+   * different thing from the pole: this way the head can be near-white and
+   * glossy, and read as the thing the light comes out of.
+   */
+  pole: () => part(`disc(radius: ${POLE_RADIUS}, thickness: ${COLUMN_HEIGHT}, sides: 10, bevel: 5)`, 'base'),
+  arm: () => part(`plate(card(width: ${LAMP_ARM}, height: 21, corner: 9), thickness: 17, bevel: 4)`),
+  head: () => part('plate(card(width: 78, height: 50, corner: 19), thickness: 27, bevel: 8)'),
   /**
    * The player is a technical: a flatbed with a gun on the back that aims
    * where it likes, not where the truck is pointing. It is five parts rather
@@ -133,8 +147,33 @@ export const MESHES = {
   gantry: () => part('disc(radius: 30, thickness: 900, sides: 8, bevel: 7)', 'base'),
 };
 
-/** How tall an unscaled post is, so a spotlight can sit on top of one. */
-export const COLUMN_HEIGHT = 430;
+/** How tall an unscaled post is, measured to where its arm is bolted on. */
+export const COLUMN_HEIGHT = 520;
+/**
+ * The pole, and the arm that carries the light out over the road.
+ *
+ * These two numbers are the whole of why the posts could move back. A light
+ * on top of a column has to stand where the light is wanted; a light on the
+ * end of an arm does not, and the pole can be as far from the road as it
+ * likes so long as the arm makes the difference up. So the poles went from
+ * 260mm off the tarmac to 470 — the road no longer has posts on its shoulder
+ * — while the lamps themselves are 260 out over it, exactly where they were.
+ */
+export const POLE_RADIUS = 17;
+export const LAMP_ARM = 210;
+/** How far a post's foot stands from the edge of the tarmac. */
+export const POST_CLEARANCE = 470;
+
+/** How far a post or a wall block is sunk, so no slope opens a gap under it. */
+const SINK = 48;
+
+/** Where a post's lamp head hangs: out along its arm, at the top of its pole. */
+export function lampAt(post: Post): [number, number, number] {
+  const reach = LAMP_ARM - 24;
+  const x = post.x + Math.cos(post.aim) * reach;
+  const y = post.y + Math.sin(post.aim) * reach;
+  return [x, y, height(post.x, post.y) - SINK + COLUMN_HEIGHT * post.scale - 8];
+}
 
 /**
  * The posts, which line the circuit rather than standing on a grid.
@@ -145,13 +184,13 @@ export const COLUMN_HEIGHT = 430;
  * road. Alternating heights, because a row of identical posts running away
  * from you is the strongest sense of distance there is.
  */
-export const COLUMN_RADIUS = 58;
-export const COLUMNS: [number, number, number][] = trackPosts(640);
+export const COLUMN_RADIUS = POLE_RADIUS;
+export const COLUMNS: Post[] = trackPosts(640, POST_CLEARANCE);
 
-/** How far a post or a wall block is sunk, so no slope opens a gap under it. */
-const SINK = 48;
-
-export function arenaMatrices(): { tiles: Float32Array; blocks: Float32Array; columns: Float32Array } {
+export function arenaMatrices(): {
+  tiles: Float32Array; blocks: Float32Array;
+  poles: Float32Array; arms: Float32Array; heads: Float32Array;
+} {
   const blocks: number[] = [];
   for (let x = -ARENA_X + 115; x <= ARENA_X - 115; x += 232) {
     blocks.push(x, -ARENA_Y, 0, x, ARENA_Y, 0);
@@ -159,18 +198,38 @@ export function arenaMatrices(): { tiles: Float32Array; blocks: Float32Array; co
   for (let y = -ARENA_Y + 125; y <= ARENA_Y - 125; y += 245) {
     blocks.push(-ARENA_X, y, Math.PI / 2, ARENA_X, y, Math.PI / 2);
   }
-  const columns: number[] = [];
-  const columnScales: number[] = [];
-  for (const [x, y, scale] of COLUMNS) { columns.push(x, y, 0); columnScales.push(scale); }
+  // The pole stands on the ground; the arm and the head hang off the top of
+  // it, turned to face the road. All three are worked out from the same post
+  // and the same `lampAt`, so a head is never anywhere but on the end of its
+  // own arm, and the beam is never anywhere but inside its own head.
+  const poles = new Float32Array(COLUMNS.length * 16);
+  const arms = new Float32Array(COLUMNS.length * 16);
+  const heads = new Float32Array(COLUMNS.length * 16);
+  for (let i = 0; i < COLUMNS.length; i++) {
+    const post = COLUMNS[i];
+    const foot = height(post.x, post.y) - SINK;
+    const top = foot + COLUMN_HEIGHT * post.scale;
+    const [hx, hy, hz] = lampAt(post);
+    place(poles, i, post.x, post.y, foot, 0, post.scale);
+    place(arms, i, (post.x + hx) / 2, (post.y + hy) / 2, top - 9, post.aim, 1);
+    place(heads, i, hx, hy, hz, post.aim, 1);
+  }
 
   // The tarmac lies on the ground and tips with it, like slabs laid over a
   // hill. Posts and walls stay upright and are sunk instead: a leaning post
   // reads as a mistake where a leaning paving slab reads as ground.
-  return {
-    tiles: identityPlacement(),
-    blocks: pack(blocks, undefined, true),
-    columns: pack(columns, columnScales, true),
-  };
+  return { tiles: identityPlacement(), blocks: pack(blocks, undefined, true), poles, arms, heads };
+}
+
+/** One placement written into a pool: a turn about z, a uniform scale, a spot. */
+function place(out: Float32Array, i: number, x: number, y: number, z: number, turn: number, k: number) {
+  const c = Math.cos(turn) * k; const s = Math.sin(turn) * k;
+  const o = i * 16;
+  out[o] = c; out[o + 1] = s;
+  out[o + 4] = -s; out[o + 5] = c;
+  out[o + 10] = k;
+  out[o + 12] = x; out[o + 13] = y; out[o + 14] = z;
+  out[o + 15] = 1;
 }
 
 /** Triples of x, y, turn into column-major placements, optionally scaled. */

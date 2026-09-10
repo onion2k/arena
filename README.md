@@ -347,6 +347,33 @@ is wrong now — a driver needs to know what a corner does before entering it,
 and a light that will be pointing elsewhere by the time you arrive is worse
 than no light.
 
+### They are street lights, and they stand back
+
+They were eight-sided columns 88mm across with a floodlight balanced on top,
+standing 260mm from the edge of a road 760 wide — at the scale of this arena,
+a row of chimneys on the shoulder, and the circuit read as a corridor.
+
+A lamp post is three pieces now: a slim pole, an arm out over the road, and a
+head on the end of the arm. That shape is the point and not the decoration,
+because it is what let the posts move: **a light on top of a column has to
+stand where the light is wanted, and a light on the end of an arm does not.**
+So the poles went from 260mm off the tarmac to 470 and the mast went from
+88mm across to 34, while the lamps themselves stayed within 30mm of where
+they had always been — the cone from each still crosses the full width of the
+road with about 190mm to spare, and the circuit is lit exactly as it was.
+
+Which way a post's arm reaches is now a property of the post rather than
+something worked out from its position in a list. It had been derived from
+the index in two different files, and one of them had the parity backwards
+for a while: half the floodlights spent that time lighting the empty middle
+of the arena while the road beside them stayed dark. There is one definition,
+`lampAt`, and the arm, the head, the beam and the glow are all placed from
+it, so a head is never anywhere but on the end of its own arm.
+
+The alternating tall-and-short posts went with them. That was a depth cue
+when they were columns; a row of street lights of two different heights just
+looks wrong, so they vary by six per cent instead of forty.
+
 The head of every post is drawn as a glow as well. A post is lit by its own
 flood from directly above and so is barely lit at all: the outer row stood as
 black poles against a black arena, which is clutter rather than scenery, and a

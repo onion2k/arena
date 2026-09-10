@@ -18,7 +18,7 @@
 import { LightPool } from 'artshape-render/game/lights';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
 import type { Race } from './game';
-import { COLUMNS, COLUMN_HEIGHT, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT } from './scene';
+import { COLUMNS, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, lampAt } from './scene';
 import { height } from './terrain';
 import { gantry } from './track';
 import { project } from './matrix';
@@ -47,19 +47,18 @@ export const EFFECT_CAPACITY = 512;
  */
 function floods(pool: LightPool) {
   for (let i = 0; i < COLUMNS.length; i++) {
-    const [x, y, scale] = COLUMNS[i];
-    // inward, toward the middle of the arena, which is where the track is
-    const r = Math.hypot(x, y) || 1;
-    const inx = -x / r; const iny = -y / r;
-    // The posts come in pairs, the inner edge first: an inner post has to
-    // look outward to light the track and an outer one inward. Getting this
-    // the wrong way round lights the empty arena and leaves the circuit dark,
-    // which is exactly what it did.
-    const side = i % 2 === 0 ? -1 : 1;
+    const post = COLUMNS[i];
+    // Out of the lamp head, and along the way the arm points. Both come from
+    // the post itself now: which side of the road it stands on is a fact
+    // about the post, and this file used to re-derive it from the post's
+    // index in the list, which is the sort of thing that is right until
+    // someone changes the order.
+    const [x, y, z] = lampAt(post);
+    const inx = Math.cos(post.aim); const iny = Math.sin(post.aim);
     const hue = (i / COLUMNS.length + 0.12) % 1;
     const c = hueToRgb(hue);
     pool.add({
-      position: [x, y, height(x, y) + COLUMN_HEIGHT * scale - 24],
+      position: [x, y, z],
       radius: 2900,
       // barely tinted: a coloured circuit is pretty, a white one is legible
       colour: [0.72 + c[0] * 0.28, 0.72 + c[1] * 0.28, 0.75 + c[2] * 0.25],
@@ -67,7 +66,7 @@ function floods(pool: LightPool) {
       // of the road, which is what the wide cones are for: too far down and
       // the far edge goes back to being a guess.
       intensity: 5.8,
-      direction: [inx * side * 0.60, iny * side * 0.60, -0.80],
+      direction: [inx * 0.60, iny * 0.60, -0.80],
       cone: [30, 58],
     });
   }
@@ -281,9 +280,9 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
    * being lit here, only seen, and a glow costs a screen-space quad against
    * a light's whole shading loop.
    */
-  for (const [px, py, scale] of COLUMNS) {
-    n = glow(out, n, vp, px, py, height(px, py) + COLUMN_HEIGHT * scale - 24,
-      52, 0.85, [1, 0.93, 0.78], 2.0);
+  for (const post of COLUMNS) {
+    const [hx, hy, hz] = lampAt(post);
+    n = glow(out, n, vp, hx, hy, hz - 10, 46, 0.9, [1, 0.93, 0.78], 2.0);
   }
 
   // the starting bulbs, so a lit one is a hot point rather than a red disc

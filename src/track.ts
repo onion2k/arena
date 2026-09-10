@@ -135,16 +135,39 @@ export function tarmac(across: number, step: number): number[] {
 }
 
 /** Where the posts stand: both edges of the track, evenly along it. */
-export function posts(step: number): [number, number, number][] {
-  const out: [number, number, number][] = [];
+/** One trackside lamp post: where its foot stands, how tall, and which way
+ *  its arm reaches. */
+export interface Post {
+  x: number;
+  y: number;
+  /** A little either side of one, so a row is not mechanically identical. */
+  scale: number;
+  /**
+   * The direction the arm and the beam go, as an angle: always across the
+   * road rather than away from it.
+   *
+   * It belongs here and not with whatever is drawing or lighting them,
+   * because it is decided by which side of the track the post is on and that
+   * is decided here. Two places worked it out from the post's index in the
+   * list before this, and one of them had the parity backwards for a while:
+   * half the floodlights spent that time lighting the empty middle of the
+   * arena while the road they stood beside stayed dark.
+   */
+  aim: number;
+}
+
+export function posts(step: number, clearance: number): Post[] {
+  const out: Post[] = [];
   let n = 0;
   for (const theta of walk(step)) {
     const perRadial = 1 / radialToAcross(theta);
     for (const side of [-1, 1]) {
-      const r = radiusAt(theta) + side * (TRACK_HALF + 260) * perRadial;
-      // alternate tall and short, which is what tells the eye it is looking
-      // at distance rather than at smaller posts
-      out.push([Math.cos(theta) * r, Math.sin(theta) * r, n % 2 === 0 ? 1.35 : 0.95]);
+      const r = radiusAt(theta) + side * (TRACK_HALF + clearance) * perRadial;
+      const x = Math.cos(theta) * r;
+      const y = Math.sin(theta) * r;
+      // toward the road: inward for a post outside it, outward for one inside
+      const aim = Math.atan2(-side * Math.sin(theta), -side * Math.cos(theta));
+      out.push({ x, y, scale: n % 2 === 0 ? 1.06 : 0.94, aim });
     }
     n++;
   }
