@@ -1,5 +1,8 @@
 import type { Mesh } from 'artshape-render/mesh/types';
 import { height, normal as groundNormal } from './terrain';
+
+/** How far the tarmac sits above the ground it follows: see `scene`. */
+export const TRACK_LIFT = 22;
 /**
  * The circuit: a closed loop the truck races round.
  *

@@ -12,7 +12,7 @@
  * again: the game writes those every frame.
  */
 import { compile } from 'artshape-render/dsl';
-import { kerbMesh, posts as trackPosts, trackMesh } from './track';
+import { TRACK_LIFT, kerbMesh, posts as trackPosts, trackMesh } from './track';
 import type { Post } from './track';
 import { groupByMesh } from 'artshape-render/assembly/groups';
 import type { Mesh } from 'artshape-render/mesh/types';
@@ -100,7 +100,7 @@ export const MESHES = {
    */
   floor: () => groundMesh(ARENA_X + 400, ARENA_Y + 400, 85),
   /** The tarmac: one ribbon following the centreline, not a run of slabs. */
-  tile: () => trackMesh(6, 90, 22),
+  tile: () => trackMesh(6, 90, TRACK_LIFT),
   /**
    * The kerbs, in two halves so the blocks can alternate colour. They sit
    * 8mm above the tarmac: enough to catch a light from the side, not enough

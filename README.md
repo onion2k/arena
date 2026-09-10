@@ -548,6 +548,37 @@ the trucks' as they pass.
 The tests for all of this live with the library: a box over a floor, the
 floor in its shadow darker than beside it, for the sun and for a spotlight.
 
+## The water
+
+One level, everywhere: ground below it is under water, and so is road. The
+level is not chosen by hand. It is the lowest the road surface gets round
+the lap plus twenty millimetres, so the dips in the circuit are fords — the
+road runs into the water for a truck length or two and out again, three
+times a lap (514, 475 and 223mm) — and the same level carried across the
+arena floods every hollow in the forest into a lake, 7.8% of the ground.
+The forest is planted only on ground 30mm clear of it; 580 trees went, and
+none stands in water. The lakes and the fords are on the minimap too, as
+squares of a 150mm grid whose ground is under the level, drawn over the road
+so that where the road goes into the water on the ground it goes into the
+water on the map.
+
+The water is one quad at the level, opaque, near black and nearly a mirror:
+what makes it read as water is what it reflects — the sky by day, every lamp
+on the shore as a hard glint by night — and the shadows the trees lay across
+it. Opaque, because the renderer has no transparency and this was not the
+change to give it one; a ford is therefore a place the road vanishes and
+reappears, which from above a real one is too. It costs nothing measurable:
+two triangles, and the night frame read 3.03ms against 3.09 before it.
+
+A wheel in the water drags — a sixteenth of a gravity with all four wet,
+about 150 mm/s over a half-metre ford — so a ford is felt, not just seen.
+The first version measured wetness against the terrain, and since the
+tarmac is drawn 22mm above the terrain the wheels ride on, the truck read
+wet for a sixth of every lap on road that was dry to look at, and lost five
+or six hundred a ford. Against the road surface it is 5.5% of the lap, and
+the drivers' best laps are what they were: 13.6 to 14.2 seconds, six laps in
+a hundred seconds, nobody stranded.
+
 ## The forest
 
 Everything that is not the road or its shoulder is trees: 1784 cones, in

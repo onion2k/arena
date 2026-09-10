@@ -34,7 +34,8 @@
  * a torque divided by one gives an angular acceleration directly.
  */
 import { height, normal } from './terrain';
-import { gripAt } from './track';
+import { TRACK_LIFT, gripAt } from './track';
+import { WATER_DRAG, WATER_LEVEL } from './water';
 import { SETTINGS } from './settings';
 
 const G = 9810;                  // mm a second squared
@@ -356,6 +357,8 @@ export interface Wheel {
   slide: number;
   /** What this wheel is carrying, as body acceleration. Zero in the air. */
   load: number;
+  /** The height of the ground under it, as last found by the ray. */
+  ground: number;
 }
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
@@ -370,7 +373,7 @@ export class Vehicle {
   throttle = 0; braking = 0;
 
   readonly wheels: Wheel[] = WHEELS.map(() => ({
-    compression: 0, onGround: false, drop: REST, spin: 0, steer: 0, slide: 0, load: 0,
+    compression: 0, onGround: false, drop: REST, spin: 0, steer: 0, slide: 0, load: 0, ground: 0,
   }));
 
   constructor(x = 0, y = 0) { this.x = x; this.y = y; this.z = height(x, y) + 50; }
@@ -452,7 +455,8 @@ export class Vehicle {
       const mz = this.z + fz * lx + rz * ly + uz * lz;
       const mx = this.x + fx * lx + rx * ly + ux * lz;
       const my = this.y + fy * lx + ry * ly + uy * lz;
-      w.compression = clamp(REST + WHEEL_RADIUS - (mz - height(mx, my)), 0, TRAVEL);
+      w.ground = height(mx, my);
+      w.compression = clamp(REST + WHEEL_RADIUS - (mz - w.ground), 0, TRAVEL);
       w.onGround = w.compression > 0;
       w.drop = REST - w.compression;
       w.steer = i < 2 ? this.steer : 0;
@@ -519,7 +523,15 @@ export class Vehicle {
       let grip = MU * load * surface * (rear ? REAR_GRIP : 1);
       if (hand > 0 && rear) grip *= 1 - (1 - HANDBRAKE_GRIP) * hand;
       let wantSide = -vSide / LATERAL_TAU;
-      let wantFwd = -vFwd * (ROLL_RESIST + ROUGH_DRAG * (1 - surface));
+      // Rolling resistance, more off the tarmac, and more again with the
+      // wheel in the water: a ford is felt, not just seen. The wheel rides
+      // the terrain and the tarmac is drawn 22mm above it, so on the road
+      // the surface the water is measured against is the road's — without
+      // that the truck was wet for a sixth of every lap, on ground that was
+      // dry to look at.
+      const surfaceZ = w.ground + (surface >= 1 ? TRACK_LIFT : 0);
+      const wet = surfaceZ < WATER_LEVEL ? WATER_DRAG : 0;
+      let wantFwd = -vFwd * (ROLL_RESIST + ROUGH_DRAG * (1 - surface) + wet);
       if (drive.hold) {
         // uncapped, unlike the brake pedal: a handbrake locks the wheels and
         // is limited by the tyres rather than by the brakes, which is what

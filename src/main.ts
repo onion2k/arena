@@ -17,6 +17,7 @@ import { MAX_FIELD, PAINT, Race, type Input } from './game';
 import { CONTROLS, SETTINGS, restoreDefaults, save } from './settings';
 import { TREES, forestBuffers, treeMesh } from './forest';
 import { clockLabel, skyAt } from './daylight';
+import { underWater, waterMesh } from './water';
 import { WHEELS } from './vehicle';
 import { START_BULBS, TRACK_HALF, centreline, gantry, tangentAt } from './track';
 import { height as groundAt } from './terrain';
@@ -108,6 +109,11 @@ async function main() {
     // taking the roughness from 0.34 to 0.85 — asphalt rather than wet
     // asphalt — is what stopped the road out-shining the cars on it.
     { mesh: mesh.tile, matrices: at.tiles, albedo: [0.058, 0.062, 0.072], roughness: 0.85 },
+    // The water: one quad over the whole ground at the level, opaque, near
+    // black and nearly a mirror. What makes it read as water is what it
+    // reflects — the sky by day, and by night every lamp and headlight on
+    // the shore as a hard glint — and the shadows the trees lay across it.
+    { mesh: waterMesh(ARENA_X + 400, ARENA_Y + 400), matrices: identity(), albedo: [0.02, 0.045, 0.07], roughness: 0.06 },
     // The kerbs: red and off-white blocks, matte enough to read as paint at
     // any angle. They are the only saturated colour in the arena, and they
     // are on the one thing the driver has to see.
@@ -701,6 +707,25 @@ function buildMinimap(race: Race) {
   road.setAttribute('stroke-width', String(TRACK_HALF * 2));
   road.setAttribute('stroke-linejoin', 'round');
   mapSvg.appendChild(road);
+
+  // The lakes, and the fords: every cell of a grid whose ground is under
+  // the water, as one path of squares, drawn over the road so that where
+  // the road goes into the water on the ground it goes into the water here.
+  // At 150mm a cell it is two pixels on the map, which is a shoreline.
+  const CELL = 150;
+  let lakes = '';
+  const reach = Math.max(ARENA_X, ARENA_Y) + 400;
+  for (let y = -reach; y < reach; y += CELL) {
+    for (let x = -reach; x < reach; x += CELL) {
+      if (underWater(x + CELL / 2, y + CELL / 2)) {
+        lakes += `M${x} ${-y - CELL}h${CELL}v${CELL}h${-CELL}z`;
+      }
+    }
+  }
+  const water = document.createElementNS(NS, 'path');
+  water.setAttribute('d', lakes);
+  water.setAttribute('fill', '#2a4a78');
+  mapSvg.appendChild(water);
 
   // the start line, across the road at the top of the lap
   const [sx, sy] = centreline(-Math.PI);

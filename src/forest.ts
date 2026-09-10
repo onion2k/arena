@@ -17,6 +17,7 @@ import type { Mesh } from 'artshape-render/mesh/types';
 import { TRACK_HALF, where } from './track';
 import { ARENA_X, ARENA_Y } from './scene';
 import { height } from './terrain';
+import { underWater } from './water';
 
 /**
  * How far from the centreline the trees start: just behind the lamp posts,
@@ -123,6 +124,9 @@ export function plant(seed = 7): Tree[] {
       const y = gy + (rand() - 0.5) * SPACING;
       if (Math.abs(x) > x1 || Math.abs(y) > y1) continue;
       if (Math.abs(where(x, y).offset) < FOREST_FROM) continue;
+      // not in a lake, nor on its shore: a tree's foot is sunk 22, and a tree
+      // standing in the water is a mistake you can see from anywhere
+      if (underWater(x, y, 30)) continue;
       const scale = 0.72 + rand() * 0.66;
       out.push({ x, y, scale, r: BASE_RADIUS * scale * 0.42 });
     }
