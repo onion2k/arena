@@ -193,29 +193,19 @@ export function lightsFor(pool: LightPool, arena: Race) {
     });
   }
 
-  // a small pool under the truck itself, so it is not a silhouette in its own
-  // headlights
-  pool.add({
-    position: at(-12, 0, 190),
-    radius: 620,
-    colour: hurt ? [1, 0.4, 0.35] : [0.9, 0.86, 0.8],
-    intensity: 1.1,
-  });
+  // There was a small unconed light over the truck here, so that it was not
+  // a silhouette in its own headlights. It read as a circle of light the
+  // truck carried round with it — which under street lights, on a road they
+  // light, it has no business doing — and the street lights do the job it
+  // was there for now.
 
-  if (arena.thrusting > 0) {
-    pool.add({
-      position: at(-180, 0, 40), radius: 700,
-      colour: [1, 0.62, 0.3], intensity: 1.6 * arena.thrusting,
-    });
-  }
-  if (arena.braking > 0) {
-    for (const side of [-1, 1]) {
-      pool.add({
-        position: at(-168, side * 48, 58), radius: 620,
-        colour: [1, 0.12, 0.07], intensity: 1.4 * arena.braking,
-      });
-    }
-  }
+  // The exhaust and the brake lights were point lights here too — unconed,
+  // 700 and 620 across — and with them gone the truck carries nothing round
+  // with it but its headlights. An unconed light on a vehicle is a circle of
+  // ground lit for no reason the scene can show, and it was the one thing in
+  // the arena that looked like a game rather than a night. They are still
+  // drawn: see `effectsFor`, where the exhaust and the brake lights are
+  // glows, which is what a small hot lamp looks like from across a road.
 
 }
 
