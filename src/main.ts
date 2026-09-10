@@ -17,13 +17,13 @@ import { PAINT, Race, TRUCKS, type Input } from './game';
 import type { Pose } from './ghost';
 import { CONTROLS, SETTINGS, restoreDefaults, save } from './settings';
 import { TREES, forestBuffers, replant, treeMesh } from './forest';
-import { BOLLARDS, RAILS, drumMesh, furnitureBuffers, railMesh, railPostMesh, rebuildFurniture, tyreMesh } from './furniture';
+import { BOLLARDS, RAILS, SIGNS, barMesh, boardPanelMesh, chevronMarkMesh, chevronPanelMesh, drumMesh, furnitureBuffers, railMesh, railPostMesh, rebuildFurniture, signPostMesh, tyreMesh } from './furniture';
 import { clockLabel, skyAt } from './daylight';
 import { WATER_LEVEL, refloodArena, underWater, waterMesh } from './water';
 import { wheelEffects } from './particles';
 import { Skids, markMesh } from './skids';
 import { WHEELS } from './vehicle';
-import { START_BULBS, TRACK_HALF, centreline, difficultyBand, gantry, generateTrack, rateTrack, setTrack, shapePreview, tangentAt } from './track';
+import { START_BULBS, TRACK_HALF, centreline, difficultyBand, gantry, generateTrack, radialToAcross, rateTrack, setTrack, shapePreview, tangentAt, where } from './track';
 import { height as groundAt, seedTerrain } from './terrain';
 import { ARENA_X, ARENA_Y, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices, restandColumns } from './scene';
 import { placeOnSlope, placeVehicleFacing, placeVehiclePart, placeVehicleWheel, project } from './matrix';
@@ -183,6 +183,18 @@ async function main() {
     { mesh: drumMesh(), matrices: kit.drums, count: kit.drumCount, materials: kit.drumTint, albedo: [0.42, 0.17, 0.10], roughness: 0.62 },
     // Tyre stacks, which are the one thing out here that is meant to be hit.
     { mesh: tyreMesh(), matrices: kit.tyres, count: kit.tyreCount, albedo: [0.045, 0.045, 0.05], roughness: 0.86 },
+    // The signs, in five groups because a group is one material.
+    //
+    // The posts are the barrier post's own dark metal, so a sign reads as
+    // the same street furniture the barriers are. The bars and the chevron
+    // boards are an off-white a shade under the kerbs, which the arena keeps
+    // as its only saturated colour — and matte, because a sign facing a
+    // floodlight head on at the kerb's own 0.80 is a sign that blooms.
+    { mesh: signPostMesh(), matrices: kit.signPosts, count: kit.signPostCount, albedo: [0.26, 0.27, 0.30], roughness: 0.55 },
+    { mesh: boardPanelMesh(), matrices: kit.boardPanels, count: kit.boardPanelCount, albedo: [0.16, 0.165, 0.18], roughness: 0.66 },
+    { mesh: barMesh(), matrices: kit.bars, count: kit.barCount, albedo: [0.74, 0.73, 0.70], roughness: 0.62 },
+    { mesh: chevronPanelMesh(), matrices: kit.panels, count: kit.panelCount, albedo: [0.16, 0.165, 0.18], roughness: 0.66 },
+    { mesh: chevronMarkMesh(), matrices: kit.marks, count: kit.markCount, albedo: [0.78, 0.77, 0.74], roughness: 0.60 },
   ]);
   }
   buildArena();
@@ -495,8 +507,8 @@ async function main() {
     // the app's own copy of the circuit. A console `import('/src/track.ts')`
     // is a different module instance with a different shape in it, which
     // makes a test driver steer for a road that is not there.
-    track: { centreline, tangentAt, generateTrack },
-    furniture: { rails: () => RAILS, bollards: () => BOLLARDS, buffers: furnitureBuffers },
+    track: { centreline, tangentAt, generateTrack, where, radialToAcross },
+    furniture: { rails: () => RAILS, bollards: () => BOLLARDS, signs: () => SIGNS, buffers: furnitureBuffers },
   });
 
   /**

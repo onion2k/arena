@@ -24,7 +24,8 @@
  * holding anything.
  */
 import type { Mesh } from 'artshape-render/mesh/types';
-import { TRACK_HALF, TRACK_LIFT, centreline, curveRadius, radiusAt, tangentAt } from './track';
+import { TRACK_HALF, TRACK_LIFT, centreline, curveRadius, radialToAcross, radiusAt, tangentAt } from './track';
+import { part } from './scene';
 import { height, normal } from './terrain';
 import { COLUMNS } from './scene';
 import { underWater } from './water';
@@ -43,6 +44,47 @@ const RAIL_TALL = 46;
 /** The post that holds it up, and how often one appears. */
 const POST_EVERY = 2;
 
+/**
+ * Where the signs stand, as a true across-track distance.
+ *
+ * Measured out from the middle of the road, everything is spoken for: tarmac
+ * to 380, shoulder to 580, tyre stacks 590 to 658 at an apex, the barrier
+ * 665 to 695, the lamp poles from about 833. The band between the barrier
+ * and the poles is the only one free the whole way round, and this sits in
+ * it.
+ *
+ * It is applied along the RADIUS with the across-track correction, the way
+ * `posts()` places the lamp posts, and not along the tangent's normal the
+ * way the barriers are. The two are different families of curves and they
+ * cross: a nominal 760 measured off the tangent normal reads anywhere from
+ * 689 to 905 as a real across-track distance, which is the difference
+ * between standing behind the barrier and standing in front of a lamp post.
+ * Every sign here is checked with `where().offset` afterwards, which is the
+ * only number that means anything.
+ */
+const SIGN_OUT = 730;
+/** How far apart the countdown boards are, along the line they stand on. */
+const BOARD_GAP = 400;
+/** The nearest board to the corner. Three of them reach back 1200. */
+const BOARD_FIRST = 400;
+/** A bar on a board, and the post that carries them. */
+const BAR_W = 104, BAR_D = 7, BAR_H = 24, BAR_PITCH = 34, BAR_LOW = 96;
+const BOARD_POST = 17, BOARD_POST_H = 176;
+/**
+ * The board behind the bars, the same for one bar or three.
+ *
+ * Bars alone read as an aerial rather than a sign: a pale stripe against the
+ * night has nothing to be a stripe *on*, and at driving distance the post
+ * and its bars come out as a cross. A dark board behind them is what makes a
+ * stripe a marking, and it is the same trick the chevrons already use. A
+ * one-bar board is the same size as a three-bar one, which is also what a
+ * real countdown marker does — the board is the ruler, the stripes are the
+ * reading.
+ */
+const BOARD_W = 118, BOARD_H = 122, BOARD_MID = 130;
+/** The chevron panel, and the mark on its face. */
+const CHEV_W = 128, CHEV_D = 10, CHEV_H = 58, CHEV_MID = 104;
+
 const DRUM_R = 24;
 const DRUM_H = 70;
 const TYRE_R = 34;
@@ -52,13 +94,52 @@ const TYRE_H = 96;
 export interface Bollard { x: number; y: number; r: number; kind: 'drum' | 'tyre'; turn: number; }
 /** A run of barrier, as the line its face follows. */
 export interface Rail { x1: number; y1: number; x2: number; y2: number; }
+/** One roadside sign: where it stands, which way it faces, and what it is. */
+export interface Sign {
+  x: number; y: number;
+  /** The way it looks, which is back up the road at whoever is coming. */
+  yaw: number;
+  kind: 'board' | 'chevron';
+  /** For a board, how many bars: three at 1200 out, one at 400. */
+  bars: number;
+  /** For a chevron, which way the corner goes: +1 turns left of travel. */
+  hand: number;
+}
 
 export let RAILS: Rail[] = [];
 export let BOLLARDS: Bollard[] = [];
+export let SIGNS: Sign[] = [];
 
 export const railMesh = (): Mesh => box(RAIL, RAIL_DEEP, RAIL_TALL);
 export const railPostMesh = (): Mesh => box(30, 30, RAIL_MID + RAIL_TALL / 2);
 export const drumMesh = (): Mesh => prism(DRUM_R, DRUM_H, 12);
+/** A countdown bar, lying across the driver's view; the post that holds it. */
+export const barMesh = (): Mesh => box(BAR_D, BAR_W, BAR_H);
+export const signPostMesh = (): Mesh => box(BOARD_POST, BOARD_POST, BOARD_POST_H);
+/** The chevron's backing board, and the mark on it. */
+export const chevronPanelMesh = (): Mesh => box(CHEV_D, CHEV_W, CHEV_H);
+/** The countdown board's own backing, taller than a chevron's to hold three bars. */
+export const boardPanelMesh = (): Mesh => box(CHEV_D, BOARD_W, BOARD_H);
+/**
+ * The chevron itself, from the library's own outline rather than built out
+ * of boxes at an angle. A plate off `chevron()` is 428 triangles against 24
+ * for two boxes, which is the sort of trade that went wrong once here — a
+ * lamp post out of the jewellery library cost 1,930 triangles each and 42%
+ * of everything the shadow maps drew. The arithmetic is different at this
+ * count: twenty-odd chevrons is 9,000 triangles against 115,000 in the
+ * arena, and two boxes at an angle cannot be one instanced draw anyway,
+ * because a placement here is a position and a heading and not a rotation
+ * in the panel's own plane.
+ *
+ * `width` spans the outline's Y and `rise` runs along its X, and `placeMark`
+ * puts Y up the panel — so the numbers read backwards from what a chevron
+ * looks like. Width is the mark's HEIGHT and rise plus bar is how far it
+ * reaches across. At 96 and 54 the mark stood 96 tall on a 58-tall board and
+ * both tails hung off it into the night, which is the very thing the boards
+ * were added to stop.
+ */
+export const chevronMarkMesh = (): Mesh =>
+  part('plate(chevron(width: 46, rise: 48, bar: 22), thickness: 7)');
 export const tyreMesh = (): Mesh => prism(TYRE_R, TYRE_H, 10);
 
 /** A deterministic generator, so a circuit's furniture is the same every time. */
@@ -93,6 +174,62 @@ export function rebuildFurniture(seed = 5) {
   const rnd = random(seed + 991);
   RAILS = [];
   BOLLARDS = [];
+  SIGNS = [];
+
+  /**
+   * A point on the sign line, `SIGN_OUT` out on the given side.
+   *
+   * Radial, with the across-track correction: a step outward along the
+   * radius is only a step across the road where the road is a circle, and
+   * this one is not. Without the correction a nominal 730 lands at 511 on
+   * the worst stretch of the shipped circuit — inside the barrier and on the
+   * shoulder the driver uses.
+   */
+  const signAt = (t: number, outward: number): [number, number] => {
+    const r = radiusAt(t) + outward * (SIGN_OUT / radialToAcross(t));
+    return [Math.cos(t) * r, Math.sin(t) * r];
+  };
+
+  /**
+   * Which way along the radius is the same way the barrier went.
+   *
+   * The two conventions in this file do not agree about what `side` means
+   * and there is no reason they should: the barriers step along the
+   * tangent's left normal, which on a loop travelled anticlockwise points
+   * *inwards*, and the signs step along the radius, which points out. Taken
+   * as the same number the chevrons ended up on the far side of the road
+   * from the Armco they are supposed to be standing behind. So this asks
+   * where the barrier actually is rather than assuming — it is one hypot per
+   * corner and it cannot be got backwards.
+   */
+  const outwardOf = (s: ReturnType<typeof at>, side: number): number => {
+    const [bx, by] = edge(s, side);
+    return Math.hypot(bx, by) > radiusAt(s.t) ? 1 : -1;
+  };
+
+  /**
+   * Walk back along the sign line from `t` until `want` millimetres of it
+   * have gone by, and return where that is.
+   *
+   * Along the sign line and not along the centreline, because they are not
+   * the same length: the offset line runs from a little over half the
+   * centreline's arc to half again as much, and it is furthest from parity
+   * exactly at a corner, which is where every one of these is measured. A
+   * board spaced by centreline arc would sit 20% wrong precisely where it
+   * matters.
+   */
+  const backAlong = (t: number, outward: number, want: number): number | null => {
+    const STEP = -0.0004;
+    let gone = 0, th = t;
+    let prev = signAt(th, outward);
+    for (let i = 0; i < 40000 && gone < want; i++) {
+      th += STEP;
+      const p = signAt(th, outward);
+      gone += Math.hypot(p[0] - prev[0], p[1] - prev[1]);
+      prev = p;
+    }
+    return gone >= want ? th : null;
+  };
 
   /**
    * Which way is out, and how hard the road is turning.
@@ -180,6 +317,56 @@ export function rebuildFurniture(seed = 5) {
       if (underWater(x, y, 10)) continue;
       BOLLARDS.push({ x, y, r: TYRE_R, kind: 'tyre', turn: rnd() * Math.PI });
     }
+    /*
+     * Chevrons, round the outside of the bend, facing back up the road.
+     *
+     * One at turn-in, one at the apex, one at the exit — three points that
+     * say the same thing a barrier says and one thing it does not, which is
+     * which way the corner goes before you can see round it. The mark is
+     * handed off the same side the apex chose, so a left-hander's chevrons
+     * point left.
+     */
+    const outward = outwardOf(samples[apex], side);
+    // Turn-in, apex, exit — deduplicated, because a corner short enough that
+    // its apex is also its first or last sample would otherwise get two
+    // chevrons in the same place: no error anywhere, just a sign drawn twice
+    // into itself and lit twice as brightly as its neighbours.
+    for (const k of [...new Set([core[0], apex, core[core.length - 1]])]) {
+      const ct = samples[k].t;
+      const [sx, sy] = signAt(ct, outward);
+      if (underWater(sx, sy, 10) || !clearOfPosts(sx, sy, 110)) continue;
+      const [ftx, fty] = tangentAt(ct);
+      SIGNS.push({ x: sx, y: sy, yaw: Math.atan2(-fty, -ftx), kind: 'chevron', bars: 0, hand: -side });
+    }
+
+    /*
+     * Countdown boards on the approach: three bars, then two, then one, the
+     * last of them 400mm before the corner turns in.
+     *
+     * Counting down to the corner rather than to the braking point. The
+     * braking point is the more useful thing to mark and it is not a
+     * property of the circuit: it comes out of the speed profile, which
+     * depends on the top speed in force, and the shipped circuit has no
+     * braking zones at all below 1790 mm/s and eight above 2510. Boards that
+     * appear and vanish as a settings slider moves are not a ruler. The
+     * corner is where it is whatever the truck can do.
+     *
+     * They stand on the same side and the same line as the corner's own
+     * chevrons, so the whole sequence reads as one approach, and they are
+     * inside the barrier's own lead-in, so nothing here is reachable
+     * without hitting the Armco first.
+     */
+    for (let b = 0; b < 3; b++) {
+      const bt = backAlong(samples[core[0]].t, outward, BOARD_FIRST + b * BOARD_GAP);
+      if (bt === null) break;
+      // never in the corner before this one
+      if (curveRadius(bt, 240) < CORNER) break;
+      const [bx, by] = signAt(bt, outward);
+      if (underWater(bx, by, 10) || !clearOfPosts(bx, by, 110)) break;
+      const [btx, bty] = tangentAt(bt);
+      SIGNS.push({ x: bx, y: by, yaw: Math.atan2(-bty, -btx), kind: 'board', bars: b + 1, hand: 0 });
+    }
+
     // and drums on the inside, which is where an apex marker goes
     for (let k = -1; k <= 1; k++) {
       const out = TRACK_HALF + 265 + rnd() * 90;
@@ -211,6 +398,11 @@ export function furnitureBuffers(): {
   posts: Float32Array; postCount: number;
   drums: Float32Array; drumCount: number; drumTint: Float32Array;
   tyres: Float32Array; tyreCount: number;
+  signPosts: Float32Array; signPostCount: number;
+  bars: Float32Array; barCount: number;
+  boardPanels: Float32Array; boardPanelCount: number;
+  panels: Float32Array; panelCount: number;
+  marks: Float32Array; markCount: number;
 } {
   const rails = new Float32Array(RAILS.length * 16);
   const posts = new Float32Array(RAILS.length * 16);
@@ -250,7 +442,65 @@ export function furnitureBuffers(): {
     placeUp(tyres, i, b.x, b.y, g, b.turn, nrm, 0);
   });
 
-  return { rails, railCount, posts, postCount, drums, drumCount: drumsOf.length, drumTint, tyres, tyreCount: tyresOf.length };
+  /*
+   * The signs. A post per sign; a board and its bars; a chevron's board and
+   * its mark. FIVE groups, because a group is one material and these are
+   * five — a mark has to read against its own board and the board against
+   * the night, and the two kinds of board are different sizes.
+   *
+   * No per-instance tint buffer on any of them. Nothing varies sign to sign,
+   * and supplying a materials array that is shorter than the count is worse
+   * than not supplying one: the group's own albedo stops being read at all,
+   * and every instance past the end of the buffer comes out a black mirror
+   * rather than an error.
+   */
+  const boards = SIGNS.filter((g) => g.kind === 'board');
+  const chevs = SIGNS.filter((g) => g.kind === 'chevron');
+  const signPosts = new Float32Array(SIGNS.length * 16);
+  SIGNS.forEach((g, i) => {
+    const z = height(g.x, g.y), n = normal(g.x, g.y);
+    // One post mesh for both kinds, hung so its top finishes just under the
+    // panel it carries and whatever is left over goes underground. There was
+    // a second post height here that only moved the same box up and down —
+    // it never made the post shorter, so every chevron wore a stub above its
+    // own board and sat twice as deep in the ground as intended.
+    const top = g.kind === 'board' ? BOARD_MID + BOARD_H / 2 : CHEV_MID + CHEV_H / 2;
+    placeUp(signPosts, i, g.x, g.y, z, g.yaw, n, top - 6 - BOARD_POST_H / 2);
+  });
+
+  const barTotal = boards.reduce((sum, g) => sum + g.bars, 0);
+  const bars = new Float32Array(barTotal * 16);
+  const boardPanels = new Float32Array(boards.length * 16);
+  let barCount = 0;
+  boards.forEach((g, i) => {
+    const z = height(g.x, g.y), n = normal(g.x, g.y);
+    placeUp(boardPanels, i, g.x, g.y, z, g.yaw, n, BOARD_MID);
+    for (let k = 0; k < g.bars; k++) {
+      // proud of the board's face, so a bar is a marking on it and not a
+      // stripe floating in front of one
+      placeProud(bars, barCount++, g.x, g.y, z, g.yaw, n, BAR_LOW + k * BAR_PITCH, CHEV_D / 2 + 3);
+    }
+  });
+
+  const panels = new Float32Array(chevs.length * 16);
+  const marks = new Float32Array(chevs.length * 16);
+  chevs.forEach((g, i) => {
+    const z = height(g.x, g.y), n = normal(g.x, g.y);
+    placeUp(panels, i, g.x, g.y, z, g.yaw, n, CHEV_MID);
+    // the mark stands proud of the panel it is on, and is turned so that it
+    // points the way the corner goes rather than the way it was modelled
+    placeMark(marks, i, g.x, g.y, z, g.yaw, n, CHEV_MID, g.hand);
+  });
+
+  return {
+    rails, railCount, posts, postCount,
+    drums, drumCount: drumsOf.length, drumTint, tyres, tyreCount: tyresOf.length,
+    signPosts, signPostCount: SIGNS.length,
+    bars, barCount,
+    boardPanels, boardPanelCount: boards.length,
+    panels, panelCount: chevs.length,
+    marks, markCount: chevs.length,
+  };
 }
 
 /** On the ground, along a heading, lifted along the ground's own normal. */
@@ -269,6 +519,56 @@ function placeUp(
   out[o + 4] = lx; out[o + 5] = ly; out[o + 6] = lz; out[o + 7] = 0;
   out[o + 8] = n[0]; out[o + 9] = n[1]; out[o + 10] = n[2]; out[o + 11] = 0;
   out[o + 12] = x + n[0] * lift; out[o + 13] = y + n[1] * lift; out[o + 14] = z + n[2] * lift;
+  out[o + 15] = 1;
+}
+
+/** Like `placeUp`, but pushed out along the facing normal to stand proud. */
+function placeProud(
+  out: Float32Array, i: number, x: number, y: number, z: number,
+  yaw: number, n: [number, number, number], lift: number, push: number,
+) {
+  placeUp(out, i, x, y, z, yaw, n, lift);
+  const o = i * 16;
+  out[o + 12] += out[o] * push;
+  out[o + 13] += out[o + 1] * push;
+  out[o + 14] += out[o + 2] * push;
+}
+
+/**
+ * A chevron's mark: on the face of its panel, turned in the panel's own
+ * plane so the V points the way the road goes.
+ *
+ * The panel's local axes after `placeUp` are: x out of its face, y across
+ * it, z up it. The mark is modelled in the ground plane pointing along +x,
+ * so it is stood up and turned about the face normal. `hand` flips it for a
+ * left-hander, by mirroring the across axis rather than by rotating: a turn
+ * would need the mesh to be symmetric about its own centre and the library's
+ * chevron is not.
+ */
+function placeMark(
+  out: Float32Array, i: number, x: number, y: number, z: number,
+  yaw: number, n: [number, number, number], lift: number, hand: number,
+) {
+  let fx = Math.cos(yaw), fy = Math.sin(yaw), fz = 0;
+  const along = fx * n[0] + fy * n[1];
+  fx -= n[0] * along; fy -= n[1] * along; fz -= n[2] * along;
+  const len = Math.hypot(fx, fy, fz) || 1;
+  fx /= len; fy /= len; fz /= len;
+  const lx = n[1] * fz - n[2] * fy, ly = n[2] * fx - n[0] * fz, lz = n[0] * fy - n[1] * fx;
+  // The across axis here is `n x f`, and `f` is the way the sign LOOKS, which
+  // is back up the road — so it comes out as the driver's right, not their
+  // left. Handedness is therefore the opposite of what it reads like, and
+  // taken at face value every chevron pointed away from its own corner.
+  const s = hand >= 0 ? -1 : 1;
+  const o = i * 16;
+  // modelled +x becomes across the panel (handed), +y becomes up it, +z out
+  out[o] = lx * s; out[o + 1] = ly * s; out[o + 2] = lz * s; out[o + 3] = 0;
+  out[o + 4] = n[0]; out[o + 5] = n[1]; out[o + 6] = n[2]; out[o + 7] = 0;
+  out[o + 8] = fx; out[o + 9] = fy; out[o + 10] = fz; out[o + 11] = 0;
+  const push = CHEV_D / 2 + 4;
+  out[o + 12] = x + n[0] * lift + fx * push;
+  out[o + 13] = y + n[1] * lift + fy * push;
+  out[o + 14] = z + n[2] * lift + fz * push;
   out[o + 15] = 1;
 }
 

@@ -914,6 +914,64 @@ drums are a little over scale too. What makes a barrier visible is that it is
 continuous, but it has to clear the wheels to look like it is holding
 anything.
 
+### Marker boards and chevrons
+
+Chevrons at the turn-in, apex and exit of every corner that already earns a
+barrier, pointing the way it bends; countdown boards on the approach at 400,
+800 and 1200mm back from turn-in, carrying one, two and three bars. Both
+stand **730mm across-track** — the band between the barrier's outer face at
+695 and the lamp poles at 833 is the only one free the whole way round — and
+both are behind the Armco, so a clean lap is 14.57s exactly as it was before
+they existed.
+
+**Counting down to the corner, not to the braking point.** The braking point
+is the more useful thing to mark and it is not a property of the circuit: it
+falls out of the speed profile, which depends on the top speed in force. The
+shipped circuit has no braking zones at all below 1790 mm/s, two at 2300 and
+eight above 2510, and the zones themselves are 236 and 667mm long — a 3-2-1
+board set inside one would have its boards 80mm apart, a quarter of a truck
+length. Boards that appear and vanish as a settings slider moves are not a
+ruler. The corner is where it is whatever the truck can do.
+
+**Bars and marks, because there are no textures.** Nothing in the game path
+binds one: `mesh.uvs` is never uploaded, and a material is one albedo and one
+roughness for a whole draw group. So a numeral is impossible and a sign's
+markings have to be geometry in a group of their own — five groups in all,
+one per material: posts, board panels, bars, chevron panels, chevron marks.
+The dark board behind each is not decoration. A pale stripe against the night
+has nothing to be a stripe *on*, and the first version, bars on a bare post,
+read at driving distance as a television aerial.
+
+**The offset had to be radial.** Signs are placed along the radius with the
+across-track correction, the way `posts()` places the lamp posts, and not
+along the tangent's normal the way the barriers are. The two are different
+families of curves and they cross: a nominal 760 measured off the tangent
+normal reads anywhere from 689 to 905 as a true across-track distance, which
+is the difference between standing behind the barrier and standing in front
+of a lamp post. Every sign is checked with `where().offset` afterwards, which
+is the only number that means anything — all 33 of them read exactly 730.0.
+
+**Four bugs, three of which a review caught and one of which I did.** The
+tangent's left normal points *inward* on a loop travelled anticlockwise, so
+`side` means opposite things to the barriers and to a radial placement, and
+the first chevrons stood on the far side of the road from the Armco they are
+meant to be bolted behind; the fix asks where the barrier actually went
+rather than assuming. A corner short enough that its apex is also its first
+sample drew two chevrons in the same place, lit twice as brightly as its
+neighbours, with no error anywhere. `chevron()` spans its `width` across Y
+and rises along X, so the mark stood 96 tall on a 58-tall board with both
+tails hanging off it — the very failure the boards were added to prevent.
+And worst: the mark's across axis is `n × f` where `f` is the way the sign
+*looks*, which is back up the road — so it comes out as the driver's right,
+not their left, and every chevron pointed away from its own corner. All 18
+now point into theirs, checked by the sign of a dot product rather than by
+eye.
+
+**What it costs: 0.48ms**, 4.34 to 4.82 at 1080p. More than the barriers and
+drums cost together, and all of it is draw calls rather than triangles: five
+groups over the scene pass, the sun's map and sixteen spot maps is ninety
+extra draws a frame.
+
 ## The forest
 
 Everything that is not the road or its shoulder is trees: 1784 cones, in

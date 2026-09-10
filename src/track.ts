@@ -75,7 +75,7 @@ function dRadius(theta: number): number {
  * 176 a truck and a post need between them — and the first fast lap ended
  * jammed against one two hundred millimetres after the start.
  */
-function radialToAcross(theta: number): number {
+export function radialToAcross(theta: number): number {
   const r = radiusAt(theta);
   return r / Math.hypot(r, dRadius(theta));
 }
