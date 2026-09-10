@@ -861,6 +861,59 @@ and that run was wrong once the ring had been lapped, reading the remainder
 past the wrap, until the cursor was kept unwrapped. Both are the library's
 now, and tested there.
 
+## Trackside
+
+Crash barriers on the outside of the corners, tyre stacks where each corner
+bites hardest, oil drums marking the apex on the inside and loose in the
+run-off. None of it is placed by hand, because the circuit changes — a
+barrier list written for one seed is scenery in a field on the next — so it
+is all read off the curvature the same way the lamp posts are. A corner
+tighter than 1,900mm gets a barrier; how many a circuit gets falls out of the
+circuit. The *relentless* seed 7 carries 46 rails, the gentler 341 carries
+22, and nobody decided that.
+
+**All of it is solid.** A barrier you can drive through is worse than no
+barrier: it tells you where the edge is and then lies about it. The drums and
+the tyre stacks are circles, which the truck already knew how to be pushed
+out of. A barrier is not — it is a line — so what the truck meets is the
+nearest point on that line, which turns it back into the circle case with a
+circle that slides along the rail as the truck does. `keepOff` reflects only
+the part of the velocity along the normal, so a glancing hit scrapes and
+carries on and a square-on one stops you. Measured: driven straight at a rail
+from 900mm out, the truck ends 109 from the line, which is its own 98 of
+radius plus the rail's 11 of half-thickness, and nothing passes through.
+
+**It costs a clean lap nothing.** The original circuit lapped in 14.57s
+before any of this existed and laps in 14.57s now — the furniture stands
+where you go if you get it wrong, not where you go if you get it right. It
+costs the frame 0.07ms, 4.27 to 4.34 at 1080p, because a hundred and sixty
+small instanced things against sixteen hundred trees is nothing.
+
+**Two things went wrong, both geometry.** The barriers were first placed
+using `curveOutward`, which gives the direction away from the circumcentre of
+three points on the road: exactly right in a corner and meaningless on a
+straight, where three nearly collinear points have a circumcentre anywhere at
+all. The lead-in samples either side of every corner are straights by
+definition, so the first version laid lengths of barrier across the road.
+Deciding the side once per corner, at the apex where the sign of the turn
+means something, fixed it — a per-sample answer flaps from one side to the
+other along the lead-in, every join between two flapped samples gets thrown
+out as crossing the tarmac, and a circuit that should carry forty rails
+carried thirteen in ones and twos.
+
+The second was subtler: the rail mesh is one fixed length, and the line a
+barrier follows is offset outward from the centreline, so its arc is longer
+than the centreline's. At a fixed length the rails came out as a dashed line
+with daylight between them. Each is stretched to its own segment now.
+
+**Scale.** The truck is 300 long and about 130 to the top of its cab, which
+puts the arena at about 1:15 — so a real Armco rail, 750mm to the top of the
+beam, is 50 here. That is correct and it is too short to read at driving
+distance against a truck twice its height, so the rail top is 85 and the
+drums are a little over scale too. What makes a barrier visible is that it is
+continuous, but it has to clear the wheels to look like it is holding
+anything.
+
 ## The forest
 
 Everything that is not the road or its shoulder is trees: 1784 cones, in

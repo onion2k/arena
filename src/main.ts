@@ -17,6 +17,7 @@ import { PAINT, Race, TRUCKS, type Input } from './game';
 import type { Pose } from './ghost';
 import { CONTROLS, SETTINGS, restoreDefaults, save } from './settings';
 import { TREES, forestBuffers, replant, treeMesh } from './forest';
+import { BOLLARDS, RAILS, drumMesh, furnitureBuffers, railMesh, railPostMesh, rebuildFurniture, tyreMesh } from './furniture';
 import { clockLabel, skyAt } from './daylight';
 import { WATER_LEVEL, refloodArena, underWater, waterMesh } from './water';
 import { wheelEffects } from './particles';
@@ -106,6 +107,8 @@ async function main() {
     refloodArena();
     restandColumns();
     replant();
+    // last, because it stands clear of the posts and out of the water
+    rebuildFurniture(seed);
   }
   useTrack(SETTINGS.seed);
 
@@ -130,6 +133,7 @@ async function main() {
   function buildArena() {
   const at = arenaMatrices();
   const forest = forestBuffers(TREES);
+  const kit = furnitureBuffers();
 
   renderer.setStatic([
     // The ground. It was glossier than the tarmac at 0.14, which meant every
@@ -169,6 +173,16 @@ async function main() {
     // road pick it out — which is what makes the black beyond the kerbs a
     // place rather than an absence.
     { mesh: treeMesh(), ...forest },
+    // The barriers. Galvanised steel that has been out in the weather: light
+    // enough to catch a flood from across the circuit, which is what draws
+    // the edge of the road at night, and rough enough not to be a mirror.
+    { mesh: railMesh(), matrices: kit.rails, count: kit.railCount, albedo: [0.52, 0.54, 0.58], roughness: 0.46 },
+    { mesh: railPostMesh(), matrices: kit.posts, count: kit.postCount, albedo: [0.26, 0.27, 0.30], roughness: 0.55 },
+    // Oil drums, a yard's worth rather than a matching set: rust, faded red,
+    // faded blue, each drum taking its own from the tint buffer.
+    { mesh: drumMesh(), matrices: kit.drums, count: kit.drumCount, materials: kit.drumTint, albedo: [0.42, 0.17, 0.10], roughness: 0.62 },
+    // Tyre stacks, which are the one thing out here that is meant to be hit.
+    { mesh: tyreMesh(), matrices: kit.tyres, count: kit.tyreCount, albedo: [0.045, 0.045, 0.05], roughness: 0.86 },
   ]);
   }
   buildArena();
@@ -482,6 +496,7 @@ async function main() {
     // is a different module instance with a different shape in it, which
     // makes a test driver steer for a road that is not there.
     track: { centreline, tangentAt, generateTrack },
+    furniture: { rails: () => RAILS, bollards: () => BOLLARDS, buffers: furnitureBuffers },
   });
 
   /**

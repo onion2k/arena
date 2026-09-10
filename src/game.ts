@@ -19,6 +19,7 @@ import { Vehicle } from './vehicle';
 import { Ghost } from './ghost';
 import { SETTINGS } from './settings';
 import { TREES } from './forest';
+import { BOLLARDS, RAILS, RAIL_DEEP } from './furniture';
 import { START_BULBS, radiusAt, tangentAt, where } from './track';
 
 /** How long the lights hold you before the lap starts. */
@@ -252,13 +253,31 @@ export class Race {
 
     // The lamp posts and then the trees, the same way: a circle each, and a
     // truck that meets one is put outside it and bounced. Sixteen hundred
-    // trees against eight trucks is thirteen thousand distance checks a step,
+    // trees against one truck is sixteen hundred distance checks a step,
     // which is a few microseconds and not worth a grid.
     for (const post of COLUMNS) {
       this.keepOff(t, post.x, post.y, COLUMN_RADIUS * post.scale);
     }
     for (const tree of TREES) {
       this.keepOff(t, tree.x, tree.y, tree.r);
+    }
+    // The drums and the tyre stacks are circles like everything else.
+    for (const b of BOLLARDS) {
+      this.keepOff(t, b.x, b.y, b.r);
+    }
+    // The barriers are not. A rail is a line, and what the truck meets is
+    // the nearest point on it — which turns the whole thing into the circle
+    // case again, with a circle that slides along the rail as the truck
+    // does. `keepOff` reflects only the part of the velocity along the
+    // normal, so a glancing hit scrapes and carries on, which is what a
+    // barrier is for; a square-on one stops you, which is also what it is
+    // for.
+    for (const r of RAILS) {
+      const dx = r.x2 - r.x1, dy = r.y2 - r.y1;
+      const len2 = dx * dx + dy * dy;
+      let u = len2 > 1e-9 ? ((t.x - r.x1) * dx + (t.y - r.y1) * dy) / len2 : 0;
+      u = u < 0 ? 0 : u > 1 ? 1 : u;
+      this.keepOff(t, r.x1 + dx * u, r.y1 + dy * u, RAIL_DEEP / 2);
     }
   }
 
