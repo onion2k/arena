@@ -22,7 +22,7 @@ import { WATER_LEVEL, refloodArena, underWater, waterMesh } from './water';
 import { wheelEffects } from './particles';
 import { Skids, markMesh } from './skids';
 import { WHEELS } from './vehicle';
-import { START_BULBS, TRACK_HALF, centreline, gantry, generateTrack, setTrack, tangentAt } from './track';
+import { START_BULBS, TRACK_HALF, centreline, gantry, generateTrack, setTrack, shapePreview, tangentAt } from './track';
 import { height as groundAt, seedTerrain } from './terrain';
 import { ARENA_X, ARENA_Y, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices, restandColumns } from './scene';
 import { placeOnSlope, placeVehicleFacing, placeVehiclePart, placeVehicleWheel, project } from './matrix';
@@ -34,6 +34,12 @@ const CHASSIS = 0, CAB = 1, WHEELS_GROUP = 2, LAMPS = 3, START_LAMPS = 4, SKIDS 
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
+const pregame = document.getElementById('pregame')!;
+const pregameMap = document.getElementById('pregameMap')!;
+const pregameFacts = document.getElementById('pregameFacts')!;
+const pregameSeed = document.getElementById('pregameSeed') as HTMLInputElement;
+const pregameAnother = document.getElementById('pregameAnother')!;
+const pregameGo = document.getElementById('pregameGo')!;
 const bootMsg = document.getElementById('bootMsg')!;
 const scorePanel = document.getElementById('score')!;
 const statsPanel = document.getElementById('stats')!;
@@ -292,6 +298,85 @@ async function main() {
     applySky();
   }
 
+  /*
+   * The track-select screen.
+   *
+   * Browsing circuits is cheap and committing to one is not: drawing a
+   * candidate is a path and two numbers, and building it is 35ms of meshes,
+   * posts and forest. So the screen flips through candidates without
+   * building any of them — `shapePreview` swaps a shape in, reads what it
+   * needs and puts the old one back — and the arena is only rebuilt when the
+   * race button is pressed, and only if the circuit actually changed.
+   */
+  const NS = 'http://www.w3.org/2000/svg';
+  let choice = SETTINGS.seed;
+  /** What the arena is currently built for, so racing the same one is free. */
+  let built = SETTINGS.seed;
+  let racing = false;
+
+  const road = document.createElementNS(NS, 'path');
+  road.setAttribute('fill', 'none');
+  road.setAttribute('stroke', '#4a4c58');
+  road.setAttribute('stroke-width', String(TRACK_HALF * 2));
+  road.setAttribute('stroke-linejoin', 'round');
+  const paint = document.createElementNS(NS, 'path');
+  paint.setAttribute('fill', 'none');
+  paint.setAttribute('stroke', '#e8b74a');
+  paint.setAttribute('stroke-width', '90');
+  paint.setAttribute('stroke-linejoin', 'round');
+  paint.setAttribute('stroke-dasharray', '360 300');
+  const startLine = document.createElementNS(NS, 'line');
+  startLine.setAttribute('stroke', '#e6e4f0');
+  startLine.setAttribute('stroke-width', '150');
+  pregameMap.append(road, paint, startLine);
+
+  /** Draw a circuit on the select screen without building any of it. */
+  function preview(seed: number) {
+    choice = seed;
+    const p = shapePreview(generateTrack(seed));
+    pregameMap.setAttribute('viewBox', p.box.join(' '));
+    road.setAttribute('d', p.path);
+    paint.setAttribute('d', p.path);
+    startLine.setAttribute('x1', String(p.start[0])); startLine.setAttribute('y1', String(p.start[1]));
+    startLine.setAttribute('x2', String(p.start[2])); startLine.setAttribute('y2', String(p.start[3]));
+    if (document.activeElement !== pregameSeed) pregameSeed.value = String(seed);
+    pregameFacts.innerHTML =
+      `${seed === 0 ? 'the original circuit' : `circuit <span>#${seed}</span>`}`
+      + ` · <span>${(p.length / 1000).toFixed(1)}</span> m a lap`
+      + ` · tightest corner <span>${Math.round(p.curve)}</span> mm`;
+  }
+
+  function openPregame() {
+    racing = false;
+    preview(SETTINGS.seed);
+    pregame.removeAttribute('hidden');
+  }
+
+  function startRace() {
+    // only rebuild if it is a different road; racing the same one again is
+    // a reset, not thirty-five milliseconds of geometry
+    if (choice !== built) { newTrack(choice); built = choice; } else { arena.reset(); }
+    pregame.setAttribute('hidden', '');
+    racing = true;
+  }
+
+  pregameAnother.addEventListener('click', () => {
+    preview(1 + Math.floor(Math.random() * 998));
+    (pregameAnother as HTMLElement).blur();
+  });
+  pregameSeed.addEventListener('input', () => {
+    const v = Math.max(0, Math.min(999999, Math.floor(Number(pregameSeed.value))));
+    if (Number.isFinite(v)) preview(v);
+  });
+  pregameSeed.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { pregameSeed.blur(); startRace(); }
+    e.stopPropagation();
+  });
+  pregameGo.addEventListener('click', () => { startRace(); (pregameGo as HTMLElement).blur(); });
+  addEventListener('keydown', (e) => {
+    if (!pregame.hidden && e.key === 'Enter') startRace();
+  });
+
   const lights = new LightPool(LIGHT_CAPACITY);
   const quads = new Float32Array(EFFECT_CAPACITY * EFFECT_STRIDE);
   const input = watchInput(arena);
@@ -308,7 +393,7 @@ async function main() {
     if (key === 'ambient' || key === 'time') applySky();
     if (key === 'bloom' || key === 'vignette' || key === 'grain') applyPost();
     if (key === 'mist') applySky();
-  }, newTrack);
+  }, () => { configPanel.hidden = true; openPregame(); });
   applySky();
   applyPost();
   // Drag to swing the camera round, wheel to come in and out, shift-drag to
@@ -512,6 +597,7 @@ async function main() {
   for (const el of [scorePanel, statsPanel, helpPanel, mapPanel]) el.removeAttribute('hidden');
   boot.classList.add('gone');
   setTimeout(() => boot.setAttribute('hidden', ''), 500);
+  openPregame();
 
   /**
    * Everything the GPU needs for the state the arena is in: where each thing
@@ -643,7 +729,10 @@ async function main() {
     followShip(dt);
     orbit.update();
     setDepthRange(renderer.camera);
-    arena.step(dt, input.read());
+    // The circuit chooser holds the race: the arena is drawn behind it, but
+    // nothing steps and the lights do not count down. A countdown that ran
+    // while you were picking a track would be over before you picked one.
+    if (racing) arena.step(dt, input.read());
 
     const effects = upload();
 
@@ -928,7 +1017,7 @@ function identity(): Float32Array {
  * Every change is written straight into the live settings and saved, and
  * the caller is told which key moved for the two that need applying by hand.
  */
-function buildConfig(applied: (key: keyof typeof SETTINGS) => void, newTrack: (seed: number) => void) {
+function buildConfig(applied: (key: keyof typeof SETTINGS) => void, chooseCircuit: () => void) {
   const rows = document.createElement('div');
   rows.className = 'rows';
   const readouts = new Map<string, HTMLElement>();
@@ -961,13 +1050,11 @@ function buildConfig(applied: (key: keyof typeof SETTINGS) => void, newTrack: (s
   const trackValue = document.createElement('output');
   const showSeed = () => {
     trackValue.textContent = SETTINGS.seed === 0 ? 'the original' : `#${SETTINGS.seed}`;
-    shuffle.textContent = 'new circuit';
+    shuffle.textContent = 'choose circuit';
   };
   showSeed();
   shuffle.addEventListener('click', () => {
-    // a seed you can read out and type back in, rather than 2^32 of them
-    newTrack(1 + Math.floor(Math.random() * 998));
-    showSeed();
+    chooseCircuit();
     shuffle.blur();
   });
   trackRow.append(trackName, shuffle, trackValue);
@@ -1002,6 +1089,10 @@ function watchInput(race: Race) {
 
   addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
+    // The chooser owns the keyboard while it is up: every key here drives a
+    // truck that is not going anywhere yet. Enter is handled where the
+    // chooser lives, next to the button it stands in for.
+    if (!pregame.hidden) return;
     if (k === 'escape') { configPanel.hidden = !configPanel.hidden; (e.target as HTMLElement | null)?.blur?.(); return; }
     // A slider with the focus is being driven by the arrow keys, and the
     // truck must not be: the same keystroke steering the car and nudging the

@@ -570,3 +570,45 @@ export function generateTrack(seed: number): Shape {
 
 /** Put a circuit in force. Everything downstream has to be rebuilt after this. */
 export function setTrack(s: Shape) { shape = s; }
+
+/**
+ * Everything a track-select screen needs to draw a circuit it has not
+ * committed to: the outline, a box round it, where the start line goes, and
+ * what the thing measures.
+ *
+ * It swaps the shape in, reads what it needs, and puts the old one back — so
+ * a screen can flip through candidates without any of the arena being built
+ * for them. Building one costs 35ms of meshes, posts and forest; drawing one
+ * costs this.
+ */
+export function shapePreview(s: Shape, steps = 400): {
+  path: string;
+  box: [number, number, number, number];
+  start: [number, number, number, number];
+  length: number;
+  curve: number;
+} {
+  const m = measureShape(s);
+  const was = shape;
+  shape = s;
+  let lo = Infinity, hi = -Infinity;
+  let path = '';
+  for (let i = 0; i <= steps; i++) {
+    const t = -Math.PI + (i / steps) * Math.PI * 2;
+    const [x, y] = centreline(t);
+    lo = Math.min(lo, x, -y); hi = Math.max(hi, x, -y);
+    path += `${i === 0 ? 'M' : 'L'}${x.toFixed(0)} ${(-y).toFixed(0)}`;
+  }
+  path += 'Z';
+  const [sx, sy] = centreline(-Math.PI);
+  const [tx, ty] = tangentAt(-Math.PI);
+  shape = was;
+  const pad = TRACK_HALF + 300;
+  return {
+    path,
+    box: [lo - pad, lo - pad, hi - lo + pad * 2, hi - lo + pad * 2],
+    start: [sx + ty * TRACK_HALF, -(sy - tx * TRACK_HALF), sx - ty * TRACK_HALF, -(sy + tx * TRACK_HALF)],
+    length: m.length,
+    curve: m.curve,
+  };
+}

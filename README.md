@@ -344,13 +344,42 @@ on, and replaying one over a different road would put a truck through the
 trees — which is not a bug anyone would report, it is a bug that quietly
 stops you trusting the ghost. The skid marks go too, and the race restarts.
 
-The seed is in the settings panel, on its own row above the buttons: the
-circuit you are on, and a button to be given another. It is a number between
-1 and 998 so it can be read out and typed back; seed zero is the original.
-It persists, so the circuit you were driving is the one you come back to. The
-defaults button deliberately does *not* reset it — defaults is for undoing a
-slider you regret, and having it swap the road out from under a lap in
-progress is not what the button says it does.
+### Choosing one
+
+The game opens on a track-select screen rather than on the grid: the circuit
+drawn large, what it measures under it, and three ways to decide — **another**
+for a fresh one, a box to **type a seed** into, and **race** to take it.
+Enter races what is on screen.
+
+**Browsing is free and committing is not**, and the screen is built round
+that. Drawing a candidate is a path and two numbers — `shapePreview` swaps a
+shape in, reads what it needs and puts the old one back, so nothing is built
+for a circuit you are only looking at. The arena is rebuilt when you press
+race, and only if the circuit actually changed: racing the same one again is
+a reset and costs **0ms**, a different one costs 28. You can flip through
+fifty circuits without the GPU hearing about any of them.
+
+The clock is held while the screen is up. Nothing steps and the starting
+lights do not count down — a countdown that ran while you were picking a
+track would be over before you picked one.
+
+It is also how you change circuit mid-session: Escape, then **choose
+circuit**, which opens the same screen. That button used to swap the road out
+from under you the moment it was pressed, which is a strange thing for a
+button to do when the road is what you are standing on.
+
+The seed is a number you can read off the screen and type back in; seed zero
+is the original. It persists, so the circuit you were driving is the one you
+come back to. The defaults button deliberately does *not* reset it — defaults
+is for undoing a slider you regret.
+
+One bug worth recording, because it will happen again to anyone styling a
+panel here: `#pregame { display: grid }` beats the `hidden` attribute's
+`display: none`, which comes from the user-agent stylesheet and loses to any
+author rule. The screen went on being drawn after it was hidden, while every
+piece of state behind it said the race had started. `#pregame[hidden] {
+display: none }` is the fix, and the same trap is set for every panel in this
+file that sets its own display.
 
 ![six circuits](docs/circuits.svg)
 

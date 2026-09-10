@@ -37,6 +37,28 @@
   #config .rows label:last-child { margin-top: 4px; padding-top: 10px;
                                    border-top: 1px solid rgba(255,255,255,0.09); }
   #map svg { width: 168px; height: 168px; display: block; }
+  /* the track-select screen: a circuit, what it measures, and a way to pick */
+  #pregame { position: fixed; inset: 0; display: grid; place-content: center; gap: 14px;
+             background: rgba(7, 7, 11, 0.86); backdrop-filter: blur(3px);
+             pointer-events: auto; z-index: 20; justify-items: center; }
+  /* an author `display` beats the `hidden` attribute's UA rule, and the
+     chooser stayed on screen after it was hidden */
+  #pregame[hidden], #boot[hidden] { display: none; }
+  #pregame h2 { margin: 0; font-size: 15px; font-weight: 500; letter-spacing: 0.28em;
+                color: #9a97ab; text-transform: uppercase; }
+  #pregame svg { width: min(56vmin, 440px); height: min(56vmin, 440px); display: block; }
+  #pregame .facts { color: #9a97ab; letter-spacing: 0.04em; }
+  #pregame .facts span { color: var(--ink); font-variant-numeric: tabular-nums; }
+  #pregame .picks { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+  #pregame input { font: inherit; width: 84px; text-align: center; color: var(--ink);
+                   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14);
+                   border-radius: 6px; padding: 5px 8px; }
+  #pregame button { font: inherit; color: var(--ink); background: rgba(255,255,255,0.08);
+                    border: 1px solid rgba(255,255,255,0.14); border-radius: 6px;
+                    padding: 5px 14px; cursor: pointer; }
+  #pregame button:hover { background: rgba(255,255,255,0.16); }
+  #pregame button.go { background: #e8b74a; border-color: #e8b74a; color: #14131a; font-weight: 600; padding: 6px 22px; }
+  #pregame button.go:hover { background: #f3c65f; }
   #boot { position: fixed; inset: 0; display: grid; place-content: center; gap: 12px;
           text-align: center; background: #07070b; transition: opacity .4s; }
   #boot.gone { opacity: 0; pointer-events: none; }
@@ -49,5 +71,15 @@
 <div class="panel" id="map" hidden><svg id="mapSvg" aria-hidden="true"></svg></div>
 <div class="panel" id="config" hidden></div>
 <div class="panel" id="help" hidden>steer <span>A D</span> / ←→ · throttle <span>W</span> / ↑ · brake, then reverse <span>S</span> / ↓ · handbrake <span>space</span><br>drag to orbit · wheel to zoom · <span>V</span> camera behind · <span>C</span> re-centre · <span>R</span> back to the line · <span>Esc</span> settings</div>
+<div id="pregame" hidden>
+  <h2>choose a circuit</h2>
+  <svg id="pregameMap" aria-hidden="true"></svg>
+  <p class="facts" id="pregameFacts"></p>
+  <div class="picks">
+    <button type="button" id="pregameAnother">another</button>
+    <input id="pregameSeed" type="number" min="0" max="999999" step="1" aria-label="circuit seed">
+    <button type="button" class="go" id="pregameGo">race</button>
+  </div>
+</div>
 <div id="boot"><h1>ARENA</h1><p id="bootMsg">starting the GPU…</p></div>
 <script type="module" src="/src/main.ts"></script>
