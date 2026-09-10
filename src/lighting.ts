@@ -114,6 +114,28 @@ function lampsOn(arena: Race): number {
   return skyAt(arena.hours, SETTINGS.ambient).lampsOn;
 }
 
+/** How many of the street lights cast shadows: the renderer's ceiling. */
+const SHADOWED_LAMPS = 8;
+
+/**
+ * Which floods should carry a shadow map this frame: the eight nearest the
+ * player's truck, by their index in the pool. The floods are added first
+ * and in post order, so a post's index is its light's, and only while the
+ * lamps are on — by day the list is empty and the sun does the casting.
+ *
+ * Nearest the truck rather than nearest the camera, because the camera
+ * leads the truck and the shadows that matter are the ones you drive
+ * through: a tree's across the road ahead, your own from the lamp you are
+ * passing under.
+ */
+export function shadowedLamps(arena: Race): number[] {
+  if (lampsOn(arena) <= 0) return [];
+  const t = arena.truck;
+  const order = COLUMNS.map((p, i) => ({ i, d: (p.x - t.x) ** 2 + (p.y - t.y) ** 2 }));
+  order.sort((a, b) => a.d - b.d);
+  return order.slice(0, SHADOWED_LAMPS).map((o) => o.i);
+}
+
 export function lightsFor(pool: LightPool, arena: Race) {
   pool.clear();
   // By day there are no lamps: the floods, the headlights and the glows on

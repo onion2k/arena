@@ -22,7 +22,7 @@ import { START_BULBS, TRACK_HALF, centreline, gantry, tangentAt } from './track'
 import { height as groundAt } from './terrain';
 import { ARENA_X, ARENA_Y, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices } from './scene';
 import { placeOnSlope, placeVehicleFacing, placeVehiclePart, placeVehicleWheel, project } from './matrix';
-import { EFFECT_CAPACITY, LIGHT_CAPACITY, effectsFor, lightsFor, setProjectionScale } from './lighting';
+import { EFFECT_CAPACITY, LIGHT_CAPACITY, effectsFor, lightsFor, setProjectionScale, shadowedLamps } from './lighting';
 
 const FOV = 40;
 /** Where the dynamic groups sit, in the order they are handed over. */
@@ -155,6 +155,15 @@ async function main() {
   renderer.setDynamic(dynamic);
 
   const arena = new Race();
+  // The sun's shadow map is fitted round the whole arena, apron included,
+  // and up to the tallest thing in it: a tree at its biggest is 414, a lamp
+  // post 551 plus the ground under it. 2048 texels across 14 metres is
+  // seven millimetres each, which is a shadow with an edge you can see.
+  renderer.setSunShadow({
+    min: [-ARENA_X - 400, -ARENA_Y - 400, -140],
+    max: [ARENA_X + 400, ARENA_Y + 400, 780],
+  });
+
   bootMsg.textContent = 'baking the environment…';
   // Two of them, night and day, baked once and swapped as the sun comes up.
   // The environment is what lights the ground by day — the renderer's sun is
@@ -463,7 +472,7 @@ async function main() {
     renderer.tint(START_LAMPS, startMat);
 
     lightsFor(lights, arena);
-    renderer.setLights(lights);
+    renderer.setLights(lights, shadowedLamps(arena));
     renderer.camera.update();
     const effects = effectsFor(quads, arena, renderer.camera.viewProjection);
     renderer.setEffects(quads, effects);

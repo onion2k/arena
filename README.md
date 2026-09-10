@@ -510,6 +510,37 @@ Nothing shorter, whatever it would do for the jumps: at three wheelbases the
 axles sit on opposite phases of every ripple and a truck that should be riding
 a hill is being shaken by a washboard.
 
+## Shadows
+
+The sun casts, and so do the eight street lights nearest the truck. Both
+are the renderer's, from v0.6.0 of `artshape-render`: the game shader's sun
+was a highlight only until then, and a day on it was a bright overcast one
+lit by the environment. It has the same quarter of matte the point lights
+always had now, and one orthographic shadow map fitted round a box the game
+names — the whole arena and its apron, up to the tallest tree — read through
+four hardware-compared taps. Up to eight spotlights carry a perspective map
+each; the game hands the renderer the pool indices of the floods nearest the
+player's truck, nearest the truck rather than the camera because the shadows
+that matter are the ones you drive through.
+
+What it costs, fenced at 1080p, median of three: **1.3ms at night** — the
+sun's map, eight spot maps at 512, and the lookups, on a 2.8ms frame — and
+**0.16ms by day**, when only the sun's map is rendered, on a 0.25ms frame.
+The maps are rendered every frame over all 390k triangles; if that ever
+needs trimming, the bevelled lamp posts and wall blocks are 72% of them.
+
+What it looks like is measured too. At noon the shadows shift the frame's
+mean brightness by under one per cent — the sun is nearly overhead and every
+tree's shadow is under the tree. At 08:00, with the sun at 33 degrees, they
+turn 5.7% of the frame dark and drop the mean 3.7%: lamp posts across the
+road, lit and shaded sides on every tree, the trucks' own under them. The
+evening is the same the other way round. By night the moon casts, faintly,
+and the lamps cast hard — a post's own shadow across the road under it, and
+the trucks' as they pass.
+
+The tests for all of this live with the library: a box over a floor, the
+floor in its shadow darker than beside it, for the sun and for a spotlight.
+
 ## The forest
 
 Everything that is not the road or its shoulder is trees: 1784 cones, in
