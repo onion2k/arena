@@ -285,7 +285,7 @@ chosen to avoid, and it is why this is on a key rather than instead.
 ## The settings
 
 Escape opens a panel of six sliders: the ambient light, the floodlights, the
-moonlight, the top speed, the steering, and how many drivers line up against
+time of day, the top speed, the steering, and how many drivers line up against
 you. They are
 kept in one table in `settings.ts`, which is what the panel is built from —
 adding a knob is one line there and none in the page — and they are read
@@ -299,14 +299,36 @@ Each one is the constant it stands in for, made a lookup:
   every frame, so it is written straight into the look.
 - **Floodlights** is the intensity every trackside lamp is given when the
   light list is rebuilt, which is every frame anyway.
-- **Moonlight** scales the sun's colour, keeping its hue. It is there because
-  with the floodlights and the ambient both at zero the track was still
-  plainly visible, and measuring what was left found the sun: it is the one
-  light the ambient does not scale, and alone it is worth a frame-wide mean of
-  12.9 against 2.3 with every light off — more than the floods once they are
-  gone, because at the grazing angle a following camera looks along a road
-  at, the road throws it straight back. Zero is the only way to a dark arena;
-  what remains then is your own headlights, the glows, and a sky of 5 in 255.
+- **Time of day** is a clock, and `daylight.ts` turns it into everything the
+  sky does: where the sun is, what colour, how much the environment lights
+  the arena, what the sky looks like, and whether the lamps are on. The sun
+  rises at six and sets at eighteen, comes up warm and goes white a fifth of
+  the way up, and swings from east through the moon's quarter at noon to
+  west. Below the horizon it is the moon — dim, cold, and from a fixed place —
+  which is the light the night was always lit by, and the one thing the
+  ambient slider does not scale. (It had a slider of its own for a day; the
+  clock replaced it.)
+
+  **By day the lamps are off.** The floods, the headlights, and the glows on
+  the lamp heads and headlamps all follow the clock — off a little after the
+  sun is up, on a little before it is down — so that a street light at noon
+  does not happen. The starting lights do not: they are a signal, and a red
+  light at noon still means wait. Measured: 92 lights at 22:00, 0 at 09:00
+  and noon, 92 again by 18:30, with the dawn and dusk fades between.
+
+  Daylight here is mostly the environment. The renderer's sun is a highlight
+  and not a lamp — it puts a glint on things and does not otherwise light
+  them — so what lights the ground by day is the baked environment through
+  `ambient`, and there are two environments, a dusk and a daylight one baked
+  with its sun where noon puts it, swapped as the sun clears the horizon.
+  The day ambient is 1.0; at 0.62 the arena at noon measured a frame-wide
+  mean of 59 against 54 at night, an overcast afternoon at best, and at 1.0
+  it is 88, with nothing blown out. It is a bright overcast day rather than a
+  sunny one, and it cannot be the other with this renderer: a sun that
+  lights the sunny side of a tree and not the shaded one needs a diffuse
+  term the game shader does not have. That is a change to the library, held
+  to the library's bar, and it is the next thing to do if the day is to look
+  like one.
 - **Top speed** sets the drag. The engine and the drag balance at the top, so
   `AERO = ENGINE / v²`; at the default 2300 that is the 1.1e-3 it was as a
   constant, and the acceleration feel is left alone. Measured over six

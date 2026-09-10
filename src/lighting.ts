@@ -23,6 +23,7 @@ import { height } from './terrain';
 import { gantry } from './track';
 import { project } from './matrix';
 import { SETTINGS } from './settings';
+import { skyAt } from './daylight';
 
 export const LIGHT_CAPACITY = 256;
 export const EFFECT_CAPACITY = 512;
@@ -46,7 +47,7 @@ export const EFFECT_CAPACITY = 512;
  * light the whole circuit — the arena beyond it stays dark, which is what
  * makes the track read as a track.
  */
-function floods(pool: LightPool) {
+function floods(pool: LightPool, on: number) {
   for (let i = 0; i < COLUMNS.length; i++) {
     const post = COLUMNS[i];
     // Out of the lamp head, and along the way the arm points. Both come from
@@ -66,7 +67,7 @@ function floods(pool: LightPool) {
       // 5.8 by default, turned down from 8.5. The trade is against lighting
       // the whole width of the road, which is what the wide cones are for:
       // too far down and the far edge goes back to being a guess.
-      intensity: SETTINGS.flood,
+      intensity: SETTINGS.flood * on,
       direction: [inx * 0.60, iny * 0.60, -0.80],
       cone: [30, 58],
     });
@@ -108,10 +109,21 @@ function starter(pool: LightPool, arena: Race) {
   }
 }
 
+/** How far on the street lights and headlights are, 1 by night to 0 by day. */
+function lampsOn(): number {
+  return skyAt(SETTINGS.time, SETTINGS.ambient).lampsOn;
+}
+
 export function lightsFor(pool: LightPool, arena: Race) {
   pool.clear();
-  floods(pool);
+  // By day there are no lamps: the floods, the headlights and the glows on
+  // the lamp heads all go with the clock. The starting lights do not — they
+  // are a signal, not an illumination, and a red light at noon still means
+  // wait.
+  const on = lampsOn();
+  if (on > 0) floods(pool, on);
   starter(pool, arena);
+  if (on <= 0) return;
 
   // The field's headlamps. They carry nothing else — no pool under them, no
   // exhaust, no brake light — because four cars with the player's full set
@@ -187,7 +199,7 @@ export function lightsFor(pool: LightPool, arena: Race) {
       // 0.09, so nine tenths of the beam is thrown away by the geometry
       // before intensity is even considered. That is true of a real headlight
       // too, and a real headlight answers it by being very bright.
-      intensity: 22,
+      intensity: 22 * on,
       direction: facing(Math.cos(side * 0.07), Math.sin(side * 0.07), -0.20),
       cone: [10, 25],
     });
@@ -271,9 +283,12 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
    * being lit here, only seen, and a glow costs a screen-space quad against
    * a light's whole shading loop.
    */
-  for (const post of COLUMNS) {
-    const [hx, hy, hz] = lampAt(post);
-    n = glow(out, n, vp, hx, hy, hz - 10, 46, 0.9, [1, 0.93, 0.78], 2.0);
+  const on = lampsOn();
+  if (on > 0) {
+    for (const post of COLUMNS) {
+      const [hx, hy, hz] = lampAt(post);
+      n = glow(out, n, vp, hx, hy, hz - 10, 46, 0.9 * on, [1, 0.93, 0.78], 2.0);
+    }
   }
 
   // the starting bulbs, so a lit one is a hot point rather than a red disc
@@ -301,7 +316,7 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
     const put = (lx: number, ly: number) => [v.x + lx * vcy - ly * vsy, v.y + lx * vsy + ly * vcy];
     for (const side of [-1, 1]) {
       const [lx, ly] = put(LAMP_AHEAD + 6, side * LAMP_ACROSS);
-      n = glow(out, n, vp, lx, ly, v.z + LAMP_HEIGHT - 52, 24, 2.2, [1, 0.9, 0.7], 2.8);
+      if (on > 0) n = glow(out, n, vp, lx, ly, v.z + LAMP_HEIGHT - 52, 24, 2.2 * on, [1, 0.9, 0.7], 2.8);
       if (v.braking > 0) {
         const [bx2, by2] = put(-168, side * 48);
         n = glow(out, n, vp, bx2, by2, v.z + 6, 22, 1.6 * v.braking, [1, 0.15, 0.08], 2.6);
