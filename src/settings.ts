@@ -44,6 +44,12 @@ export interface Settings {
    * is any: see `mistAt`. Zero is a clear morning, and costs nothing.
    */
   mist: number;
+  /**
+   * Which circuit. Not a slider: it is a number you press a button to
+   * change, and dragging through it would rebuild the arena for every step
+   * of the drag. Zero is the circuit the game shipped with.
+   */
+  seed: number;
 }
 
 export const DEFAULTS: Readonly<Settings> = {
@@ -56,6 +62,7 @@ export const DEFAULTS: Readonly<Settings> = {
   vignette: 0.3,
   grain: 0.03,
   mist: 1,
+  seed: 0,
 };
 
 /** One row of the panel: which setting, what to call it, how far it goes. */
@@ -97,6 +104,11 @@ function load(): Partial<Settings> {
     if (!raw) return {};
     const saved = JSON.parse(raw) as Record<string, unknown>;
     const out: Partial<Settings> = {};
+    // the seed is not a control, so it is not clamped to a range: it is
+    // whichever circuit was last asked for
+    if (typeof saved.seed === 'number' && Number.isFinite(saved.seed)) {
+      out.seed = Math.max(0, Math.floor(saved.seed));
+    }
     for (const c of CONTROLS) {
       const v = saved[c.key];
       if (typeof v === 'number' && Number.isFinite(v)) {
@@ -113,7 +125,13 @@ export function save() {
   try { localStorage.setItem(KEY, JSON.stringify(SETTINGS)); } catch { /* a private window, or full */ }
 }
 
+/**
+ * Everything back to how it shipped — except the circuit. Defaults is for
+ * undoing a slider you regret, and having it silently swap the road out from
+ * under a lap in progress is not what the button says it does.
+ */
 export function restoreDefaults() {
-  Object.assign(SETTINGS, DEFAULTS);
+  const seed = SETTINGS.seed;
+  Object.assign(SETTINGS, DEFAULTS, { seed });
   save();
 }

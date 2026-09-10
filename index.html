@@ -32,6 +32,10 @@
   #config button { font: inherit; color: var(--ink); background: rgba(255,255,255,0.08);
                    border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
   #config button:hover { background: rgba(255,255,255,0.14); }
+  /* the circuit row: its button fills the column a slider would have */
+  #config button.wide { width: 100%; padding: 4px 10px; }
+  #config .rows label:last-child { margin-top: 4px; padding-top: 10px;
+                                   border-top: 1px solid rgba(255,255,255,0.09); }
   #map svg { width: 168px; height: 168px; display: block; }
   #boot { position: fixed; inset: 0; display: grid; place-content: center; gap: 12px;
           text-align: center; background: #07070b; transition: opacity .4s; }

@@ -16,15 +16,15 @@ import { LightPool } from 'artshape-render/game/lights';
 import { PAINT, Race, TRUCKS, type Input } from './game';
 import type { Pose } from './ghost';
 import { CONTROLS, SETTINGS, restoreDefaults, save } from './settings';
-import { TREES, forestBuffers, treeMesh } from './forest';
+import { TREES, forestBuffers, replant, treeMesh } from './forest';
 import { clockLabel, skyAt } from './daylight';
-import { WATER_LEVEL, underWater, waterMesh } from './water';
+import { WATER_LEVEL, refloodArena, underWater, waterMesh } from './water';
 import { wheelEffects } from './particles';
 import { Skids, markMesh } from './skids';
 import { WHEELS } from './vehicle';
-import { START_BULBS, TRACK_HALF, centreline, gantry, tangentAt } from './track';
-import { height as groundAt } from './terrain';
-import { ARENA_X, ARENA_Y, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices } from './scene';
+import { START_BULBS, TRACK_HALF, centreline, gantry, generateTrack, setTrack, tangentAt } from './track';
+import { height as groundAt, seedTerrain } from './terrain';
+import { ARENA_X, ARENA_Y, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices, restandColumns } from './scene';
 import { placeOnSlope, placeVehicleFacing, placeVehiclePart, placeVehicleWheel, project } from './matrix';
 import { EFFECT_CAPACITY, LIGHT_CAPACITY, effectsFor, lightsFor, setProjectionScale, shadowedLamps } from './lighting';
 
@@ -84,6 +84,24 @@ async function main() {
     background: [0.006, 0.011, 0.026],
   };
 
+  /**
+   * Put a circuit in force, and everything that grows out of one with it.
+   *
+   * The order is the dependency order and it is not negotiable: the water
+   * level is the lowest point of the road plus a little, so the road has to
+   * exist first; the posts stand along the road; and the trees are planted
+   * round both the road and the water. Getting this backwards plants a
+   * forest in last circuit's lake.
+   */
+  function useTrack(seed: number) {
+    setTrack(generateTrack(seed));
+    seedTerrain(seed);
+    refloodArena();
+    restandColumns();
+    replant();
+  }
+  useTrack(SETTINGS.seed);
+
   bootMsg.textContent = 'generating the arena…';
   // One frame's grace, so the message is painted before the geometry blocks
   // the thread. Raced against a timer because a tab that is not being
@@ -91,13 +109,18 @@ async function main() {
   // one is worse than no loading screen at all.
   await new Promise((r) => { requestAnimationFrame(r); setTimeout(r, 50); });
 
+  // The parts that are the same on every circuit: a truck, a lamp post, a
+  // gantry. Built once. Everything the circuit decides — the ground it is
+  // cut into, the tarmac, the kerbs, the water, where the posts stand and
+  // where the trees do — is built in `buildArena` and built again whenever
+  // the circuit changes.
   const mesh = {
-    floor: MESHES.floor(), tile: MESHES.tile(),
-    kerbA: MESHES.kerbA(), kerbB: MESHES.kerbB(),
     pole: MESHES.pole(), arm: MESHES.arm(), head: MESHES.head(),
     chassis: MESHES.chassis(), cab: MESHES.cab(), wheel: MESHES.wheel(),
     lamp: MESHES.lamp(), gantry: MESHES.gantry(),
   };
+
+  function buildArena() {
   const at = arenaMatrices();
   const forest = forestBuffers(TREES);
 
@@ -107,14 +130,14 @@ async function main() {
     // the arena read as corrugated iron — the bumps you could see were mostly
     // highlights rather than shape. Rough and cold now: it takes the light
     // and does not throw it back, so what you see of the ground is its form.
-    { mesh: mesh.floor, matrices: identity(), albedo: [0.042, 0.048, 0.066], roughness: 0.62 },
+    { mesh: MESHES.floor(), matrices: identity(), albedo: [0.042, 0.048, 0.066], roughness: 0.62 },
     // Tarmac. Roughness is what darkens it, not the colour: albedo here is
     // the Fresnel base, and at the grazing angles a camera following a car
     // looks along a road at, Fresnel goes to one whatever that base is. So
     // dropping the colour from 0.135 to 0.062 changed almost nothing, and
     // taking the roughness from 0.34 to 0.85 — asphalt rather than wet
     // asphalt — is what stopped the road out-shining the cars on it.
-    { mesh: mesh.tile, matrices: at.tiles, albedo: [0.058, 0.062, 0.072], roughness: 0.85 },
+    { mesh: MESHES.tile(), matrices: at.tiles, albedo: [0.058, 0.062, 0.072], roughness: 0.85 },
     // The water: one quad over the whole ground at the level, opaque, near
     // black and nearly a mirror. What makes it read as water is what it
     // reflects — the sky by day, and by night every lamp and headlight on
@@ -123,8 +146,8 @@ async function main() {
     // The kerbs: red and off-white blocks, matte enough to read as paint at
     // any angle. They are the only saturated colour in the arena, and they
     // are on the one thing the driver has to see.
-    { mesh: mesh.kerbA, matrices: at.tiles, albedo: [0.62, 0.075, 0.055], roughness: 0.55 },
-    { mesh: mesh.kerbB, matrices: at.tiles, albedo: [0.80, 0.80, 0.82], roughness: 0.55 },
+    { mesh: MESHES.kerbA(), matrices: at.tiles, albedo: [0.62, 0.075, 0.055], roughness: 0.55 },
+    { mesh: MESHES.kerbB(), matrices: at.tiles, albedo: [0.80, 0.80, 0.82], roughness: 0.55 },
     // The lamp posts. Pole and arm are a dark painted metal that the beam
     // never falls on — a street light stands outside its own pool — and the
     // head is near white and glossy, so what you see of a post at a distance
@@ -140,6 +163,8 @@ async function main() {
     // place rather than an absence.
     { mesh: treeMesh(), ...forest },
   ]);
+  }
+  buildArena();
 
   // The pools. Their size is fixed here and never changes again: what moves
   // each frame is the live count, and the matrices written into the prefix.
@@ -245,6 +270,28 @@ async function main() {
   renderer.camera.fov = FOV;
   setProjectionScale(FOV);
 
+  /**
+   * A different circuit. Everything the old one decided is thrown away and
+   * built again, which takes long enough to see and not long enough to want
+   * a progress bar.
+   *
+   * The ghost goes with it. A best lap belongs to the circuit it was driven
+   * on, and replaying one over a different road would put a truck through
+   * the trees — which is not a bug you would report, it is a bug you would
+   * simply stop trusting the ghost over.
+   */
+  function newTrack(seed: number) {
+    SETTINGS.seed = seed;
+    save();
+    useTrack(seed);
+    buildArena();
+    minimap.redraw();
+    skids.clear();
+    arena.ghost.clear();
+    arena.reset();
+    applySky();
+  }
+
   const lights = new LightPool(LIGHT_CAPACITY);
   const quads = new Float32Array(EFFECT_CAPACITY * EFFECT_STRIDE);
   const input = watchInput(arena);
@@ -261,7 +308,7 @@ async function main() {
     if (key === 'ambient' || key === 'time') applySky();
     if (key === 'bloom' || key === 'vignette' || key === 'grain') applyPost();
     if (key === 'mist') applySky();
-  });
+  }, newTrack);
   applySky();
   applyPost();
   // Drag to swing the camera round, wheel to come in and out, shift-drag to
@@ -334,7 +381,13 @@ async function main() {
     await fetch('/__shot', { method: 'POST', body: png });
     return png.length;
   };
-  Object.assign(globalThis as Record<string, unknown>, { arena, renderer, orbit, input, lights, measure, shoot, skids });
+  Object.assign(globalThis as Record<string, unknown>, {
+    arena, renderer, orbit, input, lights, measure, shoot, skids, newTrack,
+    // the app's own copy of the circuit. A console `import('/src/track.ts')`
+    // is a different module instance with a different shape in it, which
+    // makes a test driver steer for a road that is not there.
+    track: { centreline, tangentAt, generateTrack },
+  });
 
   /**
    * Frame the arena, and set how far in and out the wheel may go from there.
@@ -758,20 +811,8 @@ function startBulbs(): Float32Array {
 function buildMinimap(race: Race) {
   const NS = 'http://www.w3.org/2000/svg';
   const STEPS = 320;
-  let lo = Infinity, hi = -Infinity;
-  let path = '';
-  for (let i = 0; i <= STEPS; i++) {
-    const t = (i / STEPS) * Math.PI * 2 - Math.PI;
-    const [x, y] = centreline(t);
-    lo = Math.min(lo, x, -y); hi = Math.max(hi, x, -y);
-    path += `${i === 0 ? 'M' : 'L'}${x.toFixed(0)} ${(-y).toFixed(0)}`;
-  }
-  path += 'Z';
-  const pad = TRACK_HALF + 260;
-  mapSvg.setAttribute('viewBox', `${lo - pad} ${lo - pad} ${hi - lo + pad * 2} ${hi - lo + pad * 2}`);
 
   const road = document.createElementNS(NS, 'path');
-  road.setAttribute('d', path);
   road.setAttribute('fill', 'none');
   road.setAttribute('stroke', '#4a4c58');
   road.setAttribute('stroke-width', String(TRACK_HALF * 2));
@@ -782,32 +823,51 @@ function buildMinimap(race: Race) {
   // the water, as one path of squares, drawn over the road so that where
   // the road goes into the water on the ground it goes into the water here.
   // At 150mm a cell it is two pixels on the map, which is a shoreline.
-  const CELL = 150;
-  let lakes = '';
-  const reach = Math.max(ARENA_X, ARENA_Y) + 400;
-  for (let y = -reach; y < reach; y += CELL) {
-    for (let x = -reach; x < reach; x += CELL) {
-      if (underWater(x + CELL / 2, y + CELL / 2)) {
-        lakes += `M${x} ${-y - CELL}h${CELL}v${CELL}h${-CELL}z`;
-      }
-    }
-  }
   const water = document.createElementNS(NS, 'path');
-  water.setAttribute('d', lakes);
   water.setAttribute('fill', '#2a4a78');
   mapSvg.appendChild(water);
 
   // the start line, across the road at the top of the lap
-  const [sx, sy] = centreline(-Math.PI);
-  const [tx, ty] = tangentAt(-Math.PI);
   const line = document.createElementNS(NS, 'line');
-  line.setAttribute('x1', String(sx + ty * TRACK_HALF));
-  line.setAttribute('y1', String(-(sy - tx * TRACK_HALF)));
-  line.setAttribute('x2', String(sx - ty * TRACK_HALF));
-  line.setAttribute('y2', String(-(sy + tx * TRACK_HALF)));
   line.setAttribute('stroke', '#e6e4f0');
   line.setAttribute('stroke-width', '120');
   mapSvg.appendChild(line);
+
+  /** Draw the circuit, its water and its line. Called again for a new one. */
+  function redraw() {
+    let lo = Infinity, hi = -Infinity;
+    let path = '';
+    for (let i = 0; i <= STEPS; i++) {
+      const t = (i / STEPS) * Math.PI * 2 - Math.PI;
+      const [x, y] = centreline(t);
+      lo = Math.min(lo, x, -y); hi = Math.max(hi, x, -y);
+      path += `${i === 0 ? 'M' : 'L'}${x.toFixed(0)} ${(-y).toFixed(0)}`;
+    }
+    path += 'Z';
+    const pad = TRACK_HALF + 260;
+    mapSvg.setAttribute('viewBox', `${lo - pad} ${lo - pad} ${hi - lo + pad * 2} ${hi - lo + pad * 2}`);
+    road.setAttribute('d', path);
+
+    const CELL = 150;
+    let lakes = '';
+    const reach = Math.max(ARENA_X, ARENA_Y) + 400;
+    for (let y = -reach; y < reach; y += CELL) {
+      for (let x = -reach; x < reach; x += CELL) {
+        if (underWater(x + CELL / 2, y + CELL / 2)) {
+          lakes += `M${x} ${-y - CELL}h${CELL}v${CELL}h${-CELL}z`;
+        }
+      }
+    }
+    water.setAttribute('d', lakes);
+
+    const [sx, sy] = centreline(-Math.PI);
+    const [tx, ty] = tangentAt(-Math.PI);
+    line.setAttribute('x1', String(sx + ty * TRACK_HALF));
+    line.setAttribute('y1', String(-(sy - tx * TRACK_HALF)));
+    line.setAttribute('x2', String(sx - ty * TRACK_HALF));
+    line.setAttribute('y2', String(-(sy + tx * TRACK_HALF)));
+  }
+  redraw();
 
   // two dots: yours, and the ghost's when it is on the road
   const dots = Array.from({ length: TRUCKS }, (_, i) => {
@@ -826,6 +886,7 @@ function buildMinimap(race: Race) {
   });
 
   return {
+    redraw,
     update() {
       const past = race.ghost.poseAt(race.lapTime);
       const at = [race.truck, past];
@@ -867,7 +928,7 @@ function identity(): Float32Array {
  * Every change is written straight into the live settings and saved, and
  * the caller is told which key moved for the two that need applying by hand.
  */
-function buildConfig(applied: (key: keyof typeof SETTINGS) => void) {
+function buildConfig(applied: (key: keyof typeof SETTINGS) => void, newTrack: (seed: number) => void) {
   const rows = document.createElement('div');
   rows.className = 'rows';
   const readouts = new Map<string, HTMLElement>();
@@ -889,6 +950,29 @@ function buildConfig(applied: (key: keyof typeof SETTINGS) => void) {
     rows.appendChild(row);
     readouts.set(c.key, value); sliders.set(c.key, slider);
   }
+  // The circuit. A row of its own above the buttons, because it is the one
+  // control that throws away what you were doing: a new road means a new
+  // best lap, so it says which circuit you are on and asks before it moves
+  // you off it.
+  const trackRow = document.createElement('label');
+  const trackName = document.createElement('span'); trackName.textContent = 'circuit';
+  const shuffle = document.createElement('button');
+  shuffle.type = 'button'; shuffle.className = 'wide';
+  const trackValue = document.createElement('output');
+  const showSeed = () => {
+    trackValue.textContent = SETTINGS.seed === 0 ? 'the original' : `#${SETTINGS.seed}`;
+    shuffle.textContent = 'new circuit';
+  };
+  showSeed();
+  shuffle.addEventListener('click', () => {
+    // a seed you can read out and type back in, rather than 2^32 of them
+    newTrack(1 + Math.floor(Math.random() * 998));
+    showSeed();
+    shuffle.blur();
+  });
+  trackRow.append(trackName, shuffle, trackValue);
+  rows.appendChild(trackRow);
+
   const foot = document.createElement('div');
   foot.className = 'foot';
   const reset = document.createElement('button');

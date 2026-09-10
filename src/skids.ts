@@ -67,6 +67,12 @@ export class Skids {
     this.dirty = true;
   }
 
+  /** Nothing on the road: a new circuit, or a road that has been resurfaced. */
+  clear() {
+    this.count = 0; this.cursor = 0; this.dirty = true;
+    this.last.clear();
+  }
+
   /** The wheel has stopped sliding: the next mark starts a new streak. */
   lift(key: string) {
     this.last.delete(key);

@@ -165,4 +165,7 @@ export function forestBuffers(trees: Tree[]): { matrices: Float32Array; material
 }
 
 /** The forest as planted, once, for the drawing and the driving to share. */
-export const TREES: Tree[] = plant();
+export let TREES: Tree[] = plant();
+
+/** Plant the forest again, round wherever the road and the water are now. */
+export function replant(seed = 7) { TREES = plant(seed); }

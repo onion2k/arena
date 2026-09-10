@@ -277,6 +277,83 @@ They are gone, and a recording of your own best lap runs in their place: see
 shoulder grip, the drift tuning and the racing line were all measured against
 them, and those measurements stand even though the drivers do not.
 
+## Generating a circuit
+
+The circuit is a polar curve — a radius that varies with the angle — and that
+form is what makes a generator possible at all. Every term is a whole number
+of cycles round the loop, so the curve closes for free; there is no way to
+draw a shape that does not join up, and no way to draw one that crosses
+itself. What is left is choosing amplitudes and phases, which a seed can do.
+
+**The hard part is that random harmonics make a closed loop every time and a
+good one only sometimes.** Too much amplitude in a high harmonic and there is
+a corner tighter than the truck can turn; too much in any of them and the
+radius runs so steeply that it is barely across the track at all, which puts
+the trackside posts on the racing line — the same geometry that once had a
+post 437mm from the centreline when its clearance said 640.
+
+So the generator proposes and then measures, and if the measurement fails it
+tames the proposal and measures again. Taming is scaling every amplitude
+down; in the limit that is a circle, and a circle passes everything, so the
+loop always terminates with a drivable track. It cannot hand back something
+broken — the worst case is a duller circuit.
+
+What it measures, and the bar, which is `CLASSIC` — the circuit the game
+shipped with — at 29,099mm a lap, a radius from 2,775 to 5,148, a tightest
+corner of 638 and a worst radial-to-across of 0.672:
+
+| | limit | why |
+| --- | ---: | --- |
+| tightest corner | 600mm | the truck's circle is 486 at 1200 mm/s |
+| radius | 2,500–5,300 | inside it crowds the middle, outside it leaves the arena |
+| radial-to-across | 0.62 | under this the posts stand nearer the road than their clearance says |
+| lap length | 24–34m | so a lap stays within a few seconds of the ones before it |
+
+Measured over 200 seeds: every one passed without falling back, laps from
+25,319 to 30,501mm, tightest corners from 605 to a median of 860, radius
+within 2,601–5,298. Driven rather than measured, 30 circuits each got a lap
+in under thirty seconds with nothing stuck, best laps from 15.68 to 18.10
+against the original's 17.03.
+
+**The start line is put on a straight.** The grid sits at an angle of -pi
+whatever the circuit does there, and on a random one that is as likely to be
+the apex of the tightest corner on the lap as anything else: lights out, and
+the first thing you do is understeer into the scenery. The generator scans
+for where the curve is flattest and turns the whole shape to put it there,
+which is free in this form — replacing theta with theta plus an offset inside
+`sin(k * theta + phase)` is the same as adding `k * offset` to the phase, so
+the circuit rotates without any geometry being recomputed.
+
+**New hills come with it, but only their phases.** The amplitudes and
+wavelengths in `terrain.ts` are the measured part of that file — how steep a
+ramp can be before a car on the shoulder cannot climb out of it, how tall a
+crest must be before the springs stop swallowing it whole — and drawing those
+at random would produce ground that strands the truck. A wave of the same
+size and length, in a different place and pointing a different way, is new
+ground with the old ground's guarantees.
+
+**Everything downstream is rebuilt, in dependency order**: the road, then the
+ground, then the water — whose level is the lowest point of the road plus a
+little, so the road has to exist first — then the posts along the road, then
+the forest planted round both the road and the water. Backwards, and the
+trees get planted in last circuit's lake. It takes **35ms**, which is long
+enough to see and not long enough to want a progress bar.
+
+**The ghost goes with it.** A best lap belongs to the circuit it was driven
+on, and replaying one over a different road would put a truck through the
+trees — which is not a bug anyone would report, it is a bug that quietly
+stops you trusting the ghost. The skid marks go too, and the race restarts.
+
+The seed is in the settings panel, on its own row above the buttons: the
+circuit you are on, and a button to be given another. It is a number between
+1 and 998 so it can be read out and typed back; seed zero is the original.
+It persists, so the circuit you were driving is the one you come back to. The
+defaults button deliberately does *not* reset it — defaults is for undoing a
+slider you regret, and having it swap the road out from under a lap in
+progress is not what the button says it does.
+
+![six circuits](docs/circuits.svg)
+
 ## The circuit
 
 A closed loop 29 metres round, defined in polar form — a radius that varies

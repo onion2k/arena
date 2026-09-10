@@ -15,33 +15,50 @@ export const TRACK_LIFT = 22;
  * accumulating error, and a lap line that cannot be crossed sideways.
  */
 
-const R0 = 4200;
-const WOBBLE = 700;
-const KINK = 300;
-const KINK_PHASE = 1.1;
 /**
- * A third, faster term. Scaling a track up scales every corner with it, so a
- * circuit three times the size is three times easier to drive — this puts
- * corners back in that are tight against the truck rather than against the
- * radius of the loop.
+ * The shape of one circuit: a base radius and a few harmonics of the angle.
+ *
+ * `r(theta) = r0 + sum over terms of amp * sin(k * theta + phase)`. Every
+ * term is a whole number of cycles round the loop, which is what keeps the
+ * curve closed; the low harmonics are the shape of the circuit and the high
+ * ones are the corners in it.
  */
-const TWIST = 440;
-const TWIST_PHASE = 2.3;
+export interface Shape {
+  r0: number;
+  /** Harmonic, amplitude, phase — one triple per term. */
+  terms: [number, number, number][];
+}
+
+/**
+ * The circuit the game shipped with, and the one every generated track is
+ * measured against. Its numbers: a lap of 29,099mm, a radius between 2,775
+ * and 5,148, a tightest corner of 638 and a worst radial-to-across of 0.672.
+ */
+export const CLASSIC: Shape = {
+  r0: 4200,
+  terms: [[2, 700, 0], [3, 300, 1.1], [5, 440, 2.3]],
+};
+
+let shape: Shape = CLASSIC;
+
+/** The circuit in force. Everything downstream reads it through the functions below. */
+export function trackShape(): Shape { return shape; }
 
 /** Half the width of the tarmac. The truck is 128 across, so about five of it. */
 export const TRACK_HALF = 380;
 
 /** The radius of the centreline at an angle. */
 export function radiusAt(theta: number): number {
-  return R0 + WOBBLE * Math.sin(2 * theta) + KINK * Math.sin(3 * theta + KINK_PHASE)
-    + TWIST * Math.sin(5 * theta + TWIST_PHASE);
+  let r = shape.r0;
+  for (const [k, amp, phase] of shape.terms) r += amp * Math.sin(k * theta + phase);
+  return r;
 }
 
 /** How fast the radius is changing with the angle. */
 function dRadius(theta: number): number {
-  return 2 * WOBBLE * Math.cos(2 * theta)
-    + 3 * KINK * Math.cos(3 * theta + KINK_PHASE)
-    + 5 * TWIST * Math.cos(5 * theta + TWIST_PHASE);
+  let d = 0;
+  for (const [k, amp, phase] of shape.terms) d += k * amp * Math.cos(k * theta + phase);
+  return d;
 }
 
 /**
@@ -410,3 +427,146 @@ export function curveOutward(theta: number, span: number): [number, number, numb
   const r = Math.hypot(ox, oy) || 1;
   return [ox / r, oy / r, r];
 }
+
+/**
+ * Generating a circuit.
+ *
+ * A seed in, a shape out, and the shape is always drivable — which is the
+ * whole difficulty. Harmonics drawn at random make a closed loop for free
+ * (that is what whole-numbered harmonics are) but they make a *good* loop
+ * only some of the time: too much amplitude in a high harmonic and there is
+ * a corner tighter than the truck can turn, or a stretch where the radius
+ * runs so steeply that it is barely across the track at all and the posts
+ * end up on the racing line.
+ *
+ * So the generator proposes and then measures, and if the measurement fails
+ * it tames the proposal and measures again. Taming is scaling every
+ * amplitude down: in the limit that is a circle, and a circle passes every
+ * test, so the loop always terminates with a track. It cannot hand back
+ * something undrivable, and the fallback is a duller circuit rather than a
+ * broken one.
+ */
+
+/** What a circuit has to clear to be worth driving. Measured against `CLASSIC`. */
+const LIMITS = {
+  /** No corner tighter than this. The truck's circle is 486mm at 1200 mm/s. */
+  curve: 600,
+  /** Inside this and the loop crowds the middle; outside and it leaves the arena. */
+  minRadius: 2500,
+  maxRadius: 5300,
+  /**
+   * How square the radius has to stay to the track. Everything here is
+   * measured radially — that is what makes the lap progress free — and where
+   * the radius runs steeply it is mostly *along* the road rather than across
+   * it, which is what puts a post the road's own width closer than its
+   * clearance says.
+   */
+  across: 0.62,
+  /** A lap wants to stay within a few seconds of the ones before it. */
+  minLength: 24000,
+  maxLength: 34000,
+};
+
+/** Everything the limits are about, measured round a whole lap. */
+export function measureShape(s: Shape, steps = 1440): {
+  minRadius: number; maxRadius: number; curve: number; across: number; length: number;
+} {
+  const was = shape;
+  shape = s;
+  let minRadius = Infinity, maxRadius = -Infinity, curve = Infinity, across = Infinity, length = 0;
+  let prev = centreline(-Math.PI);
+  for (let i = 1; i <= steps; i++) {
+    const t = -Math.PI + (i / steps) * Math.PI * 2;
+    const r = radiusAt(t);
+    minRadius = Math.min(minRadius, r);
+    maxRadius = Math.max(maxRadius, r);
+    curve = Math.min(curve, curveRadius(t, 260));
+    across = Math.min(across, radialToAcross(t));
+    const p = centreline(t);
+    length += Math.hypot(p[0] - prev[0], p[1] - prev[1]);
+    prev = p;
+  }
+  shape = was;
+  return { minRadius, maxRadius, curve, across, length };
+}
+
+function passes(m: ReturnType<typeof measureShape>): boolean {
+  return m.curve >= LIMITS.curve
+    && m.minRadius >= LIMITS.minRadius && m.maxRadius <= LIMITS.maxRadius
+    && m.across >= LIMITS.across
+    && m.length >= LIMITS.minLength && m.length <= LIMITS.maxLength;
+}
+
+/** A small deterministic generator, so a seed always gives the same circuit. */
+function random(seed: number): () => number {
+  let a = (seed >>> 0) || 1;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Turn the shape so its straightest point is on the start line.
+ *
+ * The grid sits at an angle of -pi whatever the circuit does there, and on a
+ * random one that can be the apex of the tightest corner on the lap: lights
+ * out, and the first thing you do is understeer into the scenery. Finding
+ * where the curve is flattest and rotating the whole shape to put it there
+ * costs a scan and makes every generated circuit start on a straight.
+ *
+ * Rotating is free in this form. Replacing theta with theta + off inside
+ * `sin(k * theta + phase)` is the same as adding `k * off` to the phase, so
+ * the shape turns without any of the geometry being recomputed.
+ */
+function turnStartToStraight(s: Shape, steps = 360): Shape {
+  const was = shape;
+  shape = s;
+  let best = -Math.PI, flattest = -Infinity;
+  for (let i = 0; i < steps; i++) {
+    const t = -Math.PI + (i / steps) * Math.PI * 2;
+    const r = curveRadius(t, 400);
+    if (r > flattest) { flattest = r; best = t; }
+  }
+  shape = was;
+  const off = best - -Math.PI;
+  return { r0: s.r0, terms: s.terms.map(([k, amp, phase]) => [k, amp, phase + k * off]) };
+}
+
+/**
+ * A circuit for a seed. Always drivable: see the note above about proposing
+ * and measuring. Seed zero is the circuit the game shipped with.
+ */
+export function generateTrack(seed: number): Shape {
+  if (seed === 0) return CLASSIC;
+  const rnd = random(seed);
+  const pick = <T>(a: T[]): T => a[Math.floor(rnd() * a.length)];
+
+  // One low harmonic for the shape of the circuit, one middle, one high for
+  // the corners. Two twos would make a shape with two lobes and no detail;
+  // two sixes would make a scalloped circle.
+  const low = pick([2, 2, 3]);
+  const mid = pick([3, 4, 4, 5]);
+  const high = pick([5, 6, 7]);
+  const r0 = 3900 + rnd() * 500;
+  let terms: [number, number, number][] = [
+    [low, 420 + rnd() * 520, rnd() * Math.PI * 2],
+    [mid, 180 + rnd() * 300, rnd() * Math.PI * 2],
+    [high, 150 + rnd() * 330, rnd() * Math.PI * 2],
+  ];
+
+  // Propose, measure, tame, repeat. Twelve rounds of 0.86 is a factor of six,
+  // by which point the wildest draw is a gentle oval.
+  for (let i = 0; i < 12; i++) {
+    const s = turnStartToStraight({ r0, terms });
+    if (passes(measureShape(s))) return s;
+    terms = terms.map(([k, amp, phase]) => [k, amp * 0.86, phase]);
+  }
+  return CLASSIC;
+}
+
+/** Put a circuit in force. Everything downstream has to be rebuilt after this. */
+export function setTrack(s: Shape) { shape = s; }

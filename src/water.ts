@@ -35,7 +35,10 @@ function lowestRoad(): number {
 }
 
 /** Where the water is, in the same millimetres as the ground. */
-export const WATER_LEVEL = lowestRoad() + FORD_DEPTH;
+export let WATER_LEVEL = lowestRoad() + FORD_DEPTH;
+
+/** Find the level again: the road moved, so the lowest point on it did too. */
+export function refloodArena() { WATER_LEVEL = lowestRoad() + FORD_DEPTH; }
 
 /** Whether the ground at a point is under the water. */
 export function underWater(x: number, y: number, margin = 0): boolean {

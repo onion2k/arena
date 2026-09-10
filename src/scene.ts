@@ -199,7 +199,10 @@ export const COLUMN_RADIUS = POLE_RADIUS;
  * lamps carrying shadow maps, and every one of them throwing a cone through
  * the mist.
  */
-export const COLUMNS: Post[] = trackPosts(1280, POST_CLEARANCE);
+export let COLUMNS: Post[] = trackPosts(1280, POST_CLEARANCE);
+
+/** Stand the posts again, along wherever the road now runs. */
+export function restandColumns() { COLUMNS = trackPosts(1280, POST_CLEARANCE); }
 
 export function arenaMatrices(): {
   tiles: Float32Array;

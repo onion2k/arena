@@ -141,6 +141,45 @@ function envelopeAt(w: Wave, x: number, y: number): number {
 }
 
 /** How high the ground is under a point. */
+/**
+ * New hills for a new circuit.
+ *
+ * Only the phases and the headings move. The amplitudes and the wavelengths
+ * are the measured part of this file — how steep a ramp can be before a car
+ * on the shoulder cannot climb it, how tall a crest has to be before the
+ * springs stop swallowing it — and a generator that drew those at random
+ * would produce ground that strands the truck about a third of the time. A
+ * wave of the same size and length in a different place and pointing a
+ * different way is new ground with the old ground's guarantees.
+ */
+export function seedTerrain(seed: number) {
+  let a = (seed >>> 0) || 1;
+  const rnd = () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  for (let i = 0; i < WAVES.length; i++) {
+    const w = WAVES[i];
+    const base = BASE[i];
+    // seed zero is the ground the game shipped with
+    w.angle = seed === 0 ? base.angle : rnd() * Math.PI;
+    w.phase = seed === 0 ? base.phase : rnd() * Math.PI * 2;
+    if (w.env && base.env) {
+      w.env.angle = seed === 0 ? base.env.angle : rnd() * Math.PI;
+      w.env.phase = seed === 0 ? base.env.phase : rnd() * Math.PI * 2;
+    }
+  }
+}
+
+/** Where every wave started, so seed zero can put them all back. */
+const BASE = WAVES.map((w) => ({
+  angle: w.angle, phase: w.phase,
+  env: w.env ? { angle: w.env.angle, phase: w.env.phase } : undefined,
+}));
+
 export function height(x: number, y: number): number {
   let h = 0;
   for (const w of WAVES) {
