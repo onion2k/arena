@@ -331,8 +331,8 @@ per-class number where the technical had a constant.
 | grip (μ) | 1.35 | 1.45 | 1.70 | 1.95 |
 | suspension travel | 26 | 34 | 18 | 12 |
 | collision radius | 98 | 90 | 105 | 110 |
-| corner / accel / brake rating | 61 / 700 / 2400 | 73 / 785 / 2627 | 69 / 852 / 2915 | 60 / 1015 / 3410 |
-| par lap, seed 0, medium | 14.6 s | 13.3 s | 11.9 s | 12.7 s |
+| corner / accel / brake rating | 61 / 700 / 2400 | 73 / 785 / 2627 | 69 / 852 / 2915 | 71 / 1018 / 3383 |
+| par lap, seed 0, medium | 14.6 s | 13.3 s | 11.9 s | 11.3 s |
 
 ### Benching the three new classes
 
@@ -351,6 +351,9 @@ long enough to reach top speed covers ground `where`'s polar offset was
 never meant to answer for on a loop a few metres across, and reads as
 running wide within a few seconds — `setBenchGrip` holds grip at 1 for the
 run instead.
+
+*(This paragraph turned out to be wrong: see [A step is a
+120th](#a-step-is-a-120th).)*
 
 A third thing surfaced once those two were out of the way, and it is not a
 bench bug: held dead straight at full throttle for long enough, every
@@ -386,6 +389,8 @@ already carries against its own bench result — corner ×1.113, accel
 ×0.227, brake ×0.437 — the only calibration available to check this bench
 against at all.
 
+*(So did this one, for the same reason.)*
+
 One finding worth keeping rather than tuning away: the F1 car's benched
 corner rating, 54.3 raw, comes out barely above the technical's own 54.8
 despite having by far the most tyre grip of the four (μ 1.95). The bench
@@ -419,6 +424,80 @@ Switching keeps the road you are on — only the seed or the size rebuilds the
 arena; the vehicle is a mesh-and-physics swap on top of it.
 
 ![four vehicles](docs/vehicles.png)
+
+### A step is a 120th
+
+The race used to step by whatever the frame took, and the vehicle integrated
+each step in quarters. So a 60Hz display ran the suspension at a 240th of a
+second, a 144Hz one at a 576th, and a frame that hit the loop's own cap of a
+twentieth at an 80th. Nothing in the technical minded. The new classes did.
+
+The body is integrated explicitly — velocity from force, then position from
+velocity — and a damper under that is only stable while its rate times the
+step is under two. The fastest mode here is roll: four dampers at the wheels'
+distance across the body, over the body's inertia in roll, `rollDamping` in
+`vehicle.ts`. That is 136 a second for the technical, 160 for the rally car,
+207 for the prototype and 448 for the F1. At a 240th the F1 is at 1.87, and
+the springs take it the rest of the way.
+
+What it did was not a wobble. The whole load jumped from one side of the car
+to the other every substep — two wheels carrying all of it and two nothing,
+then the other way — with the body flicking two thousandths of a radian
+either side of level. Four substeps a frame is an even number, so every frame
+landed on the same side: a car sitting level, on two wheels, with the tyres
+on the light side sliding. Flat out on the flat, fifteen seconds, stepped as
+the game stepped it:
+
+| | 20Hz | 30Hz | 45Hz | 60Hz | 90Hz+ |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| technical | 2193 | 2193 | 2193 | 2193 | 2193 |
+| rally car | **1710** | 2386 | 2386 | 2386 | 2386 |
+| Le Mans prototype | **1973** | 2874 | 2874 | 2874 | 2874 |
+| F1 car | **784** | **1452** | **2275** | **2275** | 3183 |
+
+In bold, on two wheels. The theory predicts every cell: each class goes over
+where its damping rate times a quarter-frame passes two.
+
+This is what the bench above took for a pitch-and-heave mode. The bench
+stepped at a sixtieth, so it drove the F1 on two wheels for all three of its
+measurements, and the "finding" that the F1 corners barely better than the
+technical was the car doing it on half its tyres. Re-benched, its corner
+number is 63.9 and not 54.3, and its steady circle is taken at 1885 mm/s and
+not 1559; scaled the same way as before, its rating is 71 / 1018 / 3383
+rather than 60 / 1015 / 3410, and its par on the original circuit is 11.3 s,
+the quickest of the four, not 12.7. The other three classes moved by under
+1.5% and are left as they were. Nothing like the oscillation reproduces in
+the technical, the rally car or the prototype on the flat, at the old step
+or the new.
+
+Two changes. **Substeps are a 480th at most** (`SUBSTEP`), however long the
+step that asks for them: the F1's roll is then 0.93, half the limit, and a
+test holds every class's `rollDamping` under that bound, so a stiffer class
+arrives with a failing test. **The race steps in 120ths** (`STEP`,
+`FixedStep` in `game.ts`), whatever the frame took, carrying the remainder
+to the next frame. That is four substeps a step, which is exactly what a
+120Hz display always got — and every display now runs the same race: the
+tests drive a race at 20, 30, 60, 120, 144 and 240Hz and get the same state,
+bit for bit, after the same number of steps.
+
+The price of stepping in whole 120ths is that the physics is up to a step
+behind the frame, and at 144Hz one frame in six takes no step at all. Drawn
+from the physics, that frame repeats the one before it — 24 frames in 144
+stood still in the test, before the fix. So nothing is drawn from the physics
+any more: `Race.shown` is read between where the truck was before its last
+step and where it is now, as far as the frame has got toward the next one,
+and the body, the wheels, the lamps and their beams, the glows, the camera
+and the minimap all read that. The ghost is read at `shownLapTime`, the lap
+clock at the same instant, so it does not run a step ahead of you. Speed,
+slide and each wheel's own state still come from the vehicle, where the
+physics is.
+
+The F1 is not done being strange. With the step fixed, on real ground at
+speed its load still swaps between diagonal pairs of wheels — front left and
+rear right, then the other two — but that one converges: a 1920th gives the
+same pattern as a 480th to within a few newtons. It is what twelve
+millimetres of travel does on ground with hills in it, and it is tuning, not
+a bug.
 
 ## Generating a circuit
 
@@ -1539,7 +1618,8 @@ ms night frame.
 
 The CPU side is **0.034 ms** a step, nearly all of it the one vehicle: four
 substeps of a rigid body on four suspension rays, plus a ghost sample thirty
-times a second, which does not show.
+times a second, which does not show. That was a frame's step; a step is a
+120th now and still four substeps, so a 60Hz display does twice this a frame.
 
 The CPU side is **0.02 ms** a step, almost all of it the vehicle — four
 substeps of a rigid body on four suspension rays.

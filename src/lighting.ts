@@ -143,7 +143,7 @@ let playerHeads: number[] = [];
  */
 export function shadowedLamps(arena: Race): number[] {
   if (lampsOn(arena) <= 0) return [];
-  const t = arena.truck;
+  const t = arena.shown;
   const order = COLUMNS.map((p, i) => ({ i, d: (p.x - t.x) ** 2 + (p.y - t.y) ** 2 }));
   order.sort((a, b) => a.d - b.d);
   // The headlights first, so that they are never the two that miss out when
@@ -174,7 +174,7 @@ export function lightsFor(pool: LightPool, arena: Race) {
   // so they are placed and aimed in its frame rather than on a plane at zero.
   // A headlight that stays level while the truck noses over a crest is a
   // headlight that has come loose.
-  const car = arena.truck;
+  const car = arena.shown;
   const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw);
   const cp = Math.cos(car.pitch), sp = Math.sin(car.pitch);
   const cr = Math.cos(car.roll), sr = Math.sin(car.roll);
@@ -280,7 +280,7 @@ export function setProjectionScale(fovDegrees: number) {
  */
 export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): number {
   let n = 0;
-  const t = arena.truck;
+  const t = arena.shown;
   const cy = Math.cos(t.yaw); const sy = Math.sin(t.yaw);
   const at = (lx: number, ly: number) => [t.x + lx * cy - ly * sy, t.y + lx * sy + ly * cy];
   if (arena.thrusting > 0) {
@@ -333,15 +333,15 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
   // the truck's own lamps and brake lights, so they are bright points rather
   // than dark discs with light appearing in front of them
   {
-    const v = arena.truck;
+    const v = arena.shown;
     const vcy = Math.cos(v.yaw), vsy = Math.sin(v.yaw);
     const put = (lx: number, ly: number) => [v.x + lx * vcy - ly * vsy, v.y + lx * vsy + ly * vcy];
     for (const side of [-1, 1]) {
       const [lx, ly] = put(LAMP_AHEAD + 6, side * LAMP_ACROSS);
       if (on > 0) n = glow(out, n, vp, lx, ly, v.z + LAMP_HEIGHT - 52, 24, 2.2 * on, [1, 0.9, 0.7], 2.8);
-      if (v.braking > 0) {
+      if (arena.braking > 0) {
         const [bx2, by2] = put(-168, side * 48);
-        n = glow(out, n, vp, bx2, by2, v.z + 6, 22, 1.6 * v.braking, [1, 0.15, 0.08], 2.6);
+        n = glow(out, n, vp, bx2, by2, v.z + 6, 22, 1.6 * arena.braking, [1, 0.15, 0.08], 2.6);
       }
     }
   }
@@ -356,7 +356,7 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
    * across the circuit, not enough to be mistaken for a car with its lamps
    * on. They are glows, so they cost a screen quad each and light nothing.
    */
-  const past = arena.ghost.poseAt(arena.lapTime);
+  const past = arena.ghost.poseAt(arena.shownLapTime);
   if (past) {
     const gcy = Math.cos(past.yaw), gsy = Math.sin(past.yaw);
     // Four, at the corners of the body rather than two on the shoulders: two

@@ -177,17 +177,15 @@ const F1: VehicleSpec = {
   inertia: { gyration: 1.1, antiSquat: 0.88, tiltLimit: 0.5, airSpinDamp: 0.9 },
   maxSpeed: 5200,
   radius: 110,
-  // bench: corner 54.3, accel 4477, brake 7809 at top speed 3300. Corner
-  // comes out barely above the technical's own 61 despite this having by
-  // far the most tyre grip of the four (mu 1.95) — the bench holds every
-  // class at full lock at roughly half its own top speed, and at F1's
-  // 1559 mm/s there `steering.lock` (0.48, the tightest here) and
-  // `steering.falloff` (3800, the widest) have already wound most of the
-  // lock off, and the 276mm wheelbase widens the geometric circle on top
-  // of that — so this class is limited by its own steering geometry at
-  // this speed, not by what its tyres could hold. Real F1 cars are built
-  // the same way: fast in a flowing corner, not nimble in a hairpin.
-  rating: { corner: 60, accel: 1015, brake: 3410 },
+  // bench: corner 63.9, accel 4484, brake 7741 at top speed 3300. It read
+  // 54.3/4477/7809 when this class was first benched, and the comment here
+  // explained the low corner as steering geometry winning over grip. It was
+  // not: the bench stepped at a 240th, the F1's roll damping cannot be
+  // integrated at a 240th, and the car took the bench's circle on two wheels
+  // (`SUBSTEP` in `vehicle.ts`). Re-benched at a 480th, scaled by the same
+  // factors as before. The other three classes moved by under 1.5% and are
+  // left as they were.
+  rating: { corner: 71, accel: 1018, brake: 3383 },
   kit: {
     body: () => part('plate(card(width: 360, height: 110, corner: 16), thickness: 22, bevel: 5)'),
     detail: {

@@ -16,39 +16,29 @@
  * long before the real circuit ever would. `setBenchGrip` holds grip at 1
  * for the run.
  *
- * A third thing surfaced once those two were out of the way, and this one
- * is not a bench bug: held dead straight at full throttle for long enough,
- * every vehicle here — including the technical, untouched by this work —
- * settles into a sustained pitch-and-heave oscillation, tens of millimetres
- * of ride height and tenths of a radian of pitch, that does not damp out.
- * It is a real mode of the suspension model, excited by a perfectly
- * symmetric, perfectly sustained input that gameplay never actually
- * supplies — a human holds a line by correcting it, not by holding
- * millimetre-perfect straight for twenty seconds, and the real terrain's
- * bumps are irregular rather than tuned to the resonance. Fixing the mode
- * itself is out of scope here; what a bench can do instead is measure
- * quantities an integral is naturally robust to. Distance and net speed
- * change over a window average out an oscillation with no persistent trend
- * far better than any one instantaneous reading would, so accel and brake
- * are `v² = u² + 2as` over a window wide enough to span several cycles of
- * it, and top speed is not measured by coasting up to it at all — it is
- * already a design input (`spec.engine.topSpeed`), exact by construction,
- * since `aero()` is defined to balance the engine and the drag exactly
- * there.
+ * A third thing surfaced once those two were out of the way, and was taken
+ * at the time for a real mode of the suspension, in every class: held dead
+ * straight at full throttle, a pitch-and-heave oscillation that did not damp
+ * out. Nothing like it reproduces on the flat in the technical, the rally
+ * car or the prototype, then or now. What does reproduce is the F1's, and it
+ * was not the suspension: the bench stepped at a sixtieth, the vehicle in
+ * quarters of that, and the F1's roll damping cannot be integrated at a
+ * 240th — the load flipped from one side of the car to the other every
+ * substep. `SUBSTEP` in `vehicle.ts` has the whole of it; substeps are a
+ * 480th at most now, whatever `dt` a caller passes, and the tests hold every
+ * class to four wheels flat out at any frame rate.
  *
- * The technical's own shipped rating, 61/700/2400, was not reproduced by
- * this: benched the same way it comes out nearer 55/2400/3400, because the
- * shipped numbers are lower than the vehicle can actually manage in a
- * straight line. That gap is not a bug in either number — `rateTrack`'s own
- * comment says its ideal-point-mass lap is compared against real driven
- * laps and found 8 to 16% quick (`REAL`), and a rating tuned down from the
- * raw physics toward what a lap actually takes is exactly what that
- * comparison would produce. This bench cannot redo that comparison — it
- * has no recording of twenty real laps to check against — so it reports
- * the straight physical limit, honestly labelled as that, and the three new
- * classes are rated from it directly rather than left as a guess. Their par
- * times will run a little optimistic against a real driven lap for the same
- * reason the technical's would if its rating were replaced with this.
+ * The windows below were chosen to average over that oscillation, and are
+ * kept: `v² = u² + 2as` over a wide window is a sound way to read an
+ * acceleration regardless, and top speed is not measured at all — it is a
+ * design input (`spec.engine.topSpeed`), exact by construction, since
+ * `aero()` is defined to balance the engine and the drag exactly there.
+ *
+ * The technical's own shipped rating, 61/700/2400, is not reproduced by this:
+ * benched, it comes out at 54.7/3091/5448. The three new classes are rated
+ * by scaling their bench by the ratio between those two — see `vehicles.ts`
+ * — which is a calibration against one vehicle and nothing else, and is the
+ * next thing to replace with laps actually driven.
  */
 import { setBenchFlat } from './terrain';
 import { centreline, setBenchGrip, tangentAt, type CornerRating } from './track';

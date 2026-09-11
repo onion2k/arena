@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { drive, raceOn } from './sim';
+import { drive, raceOn, stateOf } from './sim';
 import { setTrack, circuitFor, centreline, tangentAt, setBenchGrip } from '../track';
 import { setBenchFlat } from '../terrain';
-import { Vehicle } from '../vehicle';
+import { SUBSTEP, Vehicle, rollDamping } from '../vehicle';
 import { VEHICLES, VEHICLE_KEYS } from '../vehicles';
 import type { BiomeKey } from '../biomes';
 import type { SizeKey } from '../world';
@@ -55,19 +55,58 @@ describe('every vehicle class', () => {
     }
   }
 
-  // Fails at the commit this harness lands in. The physics is stepped at
-  // whatever the frame took, in quarters; the stiffer classes' roll damping
-  // outruns a quarter of a sixtieth, and the body locks into a flip-flop
-  // that never shows at the frame — two wheels carrying everything and two
-  // nothing. The F1 does it at 60Hz and tops out at 2275 instead of 3183.
-  it.fails('stays on four wheels at full speed whatever the display runs at', () => {
+  it('stays on four wheels at full speed whatever the display runs at', () => {
     for (const key of VEHICLE_KEYS) {
       const fine = flatOut(key, 1000);
-      for (const hz of [20, 30, 60, 144]) {
+      for (const hz of [20, 30, 60, 120, 144]) {
         const { speed, lean } = flatOut(key, hz);
         expect(lean, `${key} at ${hz}Hz: load across an axle`).toBeLessThan(0.02);
         expect(Math.abs(speed - fine.speed) / fine.speed, `${key} at ${hz}Hz: ${speed.toFixed(0)} against ${fine.speed.toFixed(0)}`).toBeLessThan(0.01);
       }
     }
+  });
+
+  // Why the test above holds, per class, before anyone has to drive one: a
+  // damper integrated explicitly is stable while its rate times the step is
+  // under two, and this keeps every class under half of that. A class stiff
+  // enough to fail here needs a shorter `SUBSTEP`, not a softer test.
+  it('has roll damping the substep can integrate with room to spare', () => {
+    for (const key of VEHICLE_KEYS) {
+      expect(rollDamping(VEHICLES[key]) * SUBSTEP, key).toBeLessThan(1);
+    }
+  });
+});
+
+describe('the race clock', () => {
+  // Constant input, so that what a display's frames sample of it cannot
+  // differ: the lights, then ten seconds of a held turn at full throttle.
+  const input = { turn: 0.4, throttle: 1, brake: 0 };
+
+  it('runs the same race at any frame rate, bit for bit', () => {
+    const states = new Map<number, string>();
+    for (const hz of [20, 30, 60, 120, 144, 240]) {
+      const race = raceOn(0, 'M', 'forest', 'f1');
+      while (race.clock.count < 1680) race.advance(1 / hz, input);
+      expect(race.clock.count, `${hz}Hz`).toBe(1680);
+      states.set(hz, stateOf(race));
+    }
+    expect(new Set(states.values()).size, JSON.stringify(Object.fromEntries(states))).toBe(1);
+  });
+
+  // At 144Hz a step is longer than a frame, so one frame in six takes no step
+  // at all. Drawn from the physics that frame would repeat the last; drawn
+  // between the last two steps, it moves on like every other.
+  it('draws the truck somewhere new every frame, even when no step was taken', () => {
+    const race = raceOn(0, 'M', 'forest', 'technical');
+    for (let f = 0; f < 5 * 144; f++) race.advance(1 / 144, input);
+    let still = 0;
+    let lastX = race.shown.x, lastY = race.shown.y;
+    for (let f = 0; f < 144; f++) {
+      race.advance(1 / 144, input);
+      const { x, y } = race.shown;
+      if (Math.hypot(x - lastX, y - lastY) < 1e-6) still++;
+      lastX = x; lastY = y;
+    }
+    expect(still).toBe(0);
   });
 });

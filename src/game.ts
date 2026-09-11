@@ -17,7 +17,7 @@
 import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS } from './scene';
 import { Vehicle, type VehicleSpec } from './vehicle';
 import { VEHICLES } from './vehicles';
-import { Ghost } from './ghost';
+import { Ghost, blankPose, blendPose, type Pose } from './ghost';
 import { SETTINGS } from './settings';
 import { PROPS } from './flora';
 import { BOLLARDS, RAILS, RAIL_DEEP } from './furniture';
@@ -26,6 +26,48 @@ import type { CircleGrid } from './spatial';
 
 /** How long the lights hold you before the lap starts. */
 export const COUNTDOWN = 4;
+
+/**
+ * How long one step of the race is, in seconds, whatever the display runs at.
+ *
+ * The race used to step by whatever the frame took. That made a lap on a 60Hz
+ * display a different simulation from the same lap on a 144Hz one — close,
+ * and different — and it made the vehicle's own substeps as coarse as the
+ * frame, which the stiffer classes could not stand: see `SUBSTEP` in
+ * `vehicle.ts`. Now the frame hands its time to a `FixedStep`, the race steps
+ * in 120ths, and what is drawn is read between the last two steps.
+ */
+export const STEP = 1 / 120;
+
+/**
+ * Frame time in, whole steps out. Whatever is left over is carried to the
+ * next frame, and `alpha` is how far it is toward the next step — which is
+ * how far between the last two states a frame should be drawn.
+ */
+export class FixedStep {
+  private carried = 0;
+  /** 0 to 1: where between the previous step and the last one to draw. */
+  alpha = 1;
+  /** Steps taken since the last reset. */
+  count = 0;
+
+  constructor(readonly step = STEP) {}
+
+  advance(dt: number, stepOnce: () => void) {
+    this.carried += dt;
+    // a sixtieth is two 120ths that do not add up to one sixtieth exactly in
+    // floating point, and a frame that came out a hair short would take one
+    // step and the next three
+    while (this.carried >= this.step - 1e-9) {
+      this.carried -= this.step;
+      stepOnce();
+      this.count++;
+    }
+    this.alpha = Math.min(1, Math.max(0, this.carried / this.step));
+  }
+
+  reset() { this.carried = 0; this.alpha = 1; this.count = 0; }
+}
 
 
 /** How much of its speed the truck keeps when it meets a wall or a post. */
@@ -141,6 +183,11 @@ export class Race {
   readonly lap = new Progress();
   /** Your best lap, kept and replayed: see `ghost.ts`. */
   readonly ghost = new Ghost();
+  /** The frame's time, in whole steps. */
+  readonly clock = new FixedStep();
+  /** Where the truck was before the last step, and what is drawn between. */
+  private readonly before: Pose = blankPose();
+  private readonly between: Pose = blankPose();
 
   constructor() { this.reset(); }
 
@@ -168,6 +215,25 @@ export class Race {
   get hours(): number {
     const driven = Math.max(0, this.lap.driven);
     return (SETTINGS.time + driven * HOURS_PER_LAP) % 24;
+  }
+
+  /**
+   * Where to draw the truck this frame: between where it was before the last
+   * step and where it is now, as far as the frame has got toward the next
+   * one. The physics is always a whole step old or less, so without this a
+   * 144Hz display would draw the same position on one frame in six and a
+   * 60Hz one would see nothing wrong — which is how it would go unnoticed.
+   * Everything that places something on the truck reads this: the body, the
+   * wheels, the lamps and their beams, the camera. Speed, slide and the
+   * wheels' own state read the truck, which is where the physics is.
+   */
+  get shown(): Pose { return blendPose(this.before, this.truck, this.clock.alpha, this.between); }
+
+  /** The lap clock at the moment `shown` is drawn at, for the ghost to be
+   *  read at the same instant rather than up to a step ahead of the truck. */
+  get shownLapTime(): number {
+    if (!this.running) return this.lap.lapTime;
+    return Math.max(0, this.lap.lapTime - (1 - this.clock.alpha) * this.clock.step);
   }
 
   get px() { return this.truck.x; }
@@ -218,7 +284,15 @@ export class Race {
     const through = (COUNTDOWN - this.countdown) / COUNTDOWN;
     return Math.min(START_BULBS, 1 + Math.floor(through * START_BULBS));
   }
+  /** A frame's worth of race: as many whole steps as the time it took holds. */
+  advance(dt: number, input: Input) {
+    this.clock.advance(dt, () => this.step(this.clock.step, input));
+  }
+
+  /** One step. The page calls `advance`; this is for a caller that wants to
+   *  choose its own step, and it keeps `shown` right either way. */
   step(dt: number, input: Input) {
+    blendPose(this.truck, this.truck, 0, this.before);
     if (this.countdown > 0) {
       // Held on the line: the wheels are still driven by the same code, with
       // the handbrake on, so the truck settles on its springs where it
@@ -344,6 +418,9 @@ export class Race {
     this.ghost.begin();
     this.running = false;
     this.countdown = COUNTDOWN; this.sinceStart = 0;
+    // nothing to draw between: the truck has not moved since it was put here
+    this.clock.reset();
+    blendPose(this.truck, this.truck, 0, this.before);
   }
 }
 

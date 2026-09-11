@@ -56,6 +56,51 @@ const G = 9810;                  // mm a second squared
  */
 const SPAWN_CLEARANCE = 50;
 
+/**
+ * The longest a substep may be, in seconds.
+ *
+ * The body is integrated explicitly: a velocity is updated from the forces
+ * on it, then the position from the velocity. A damper under that is only
+ * stable while its rate times the step stays under two — past it, each step
+ * overcorrects the last by more than it corrected, and the motion flips sign
+ * every step and grows until something clamps it. The stiffest mode here is
+ * roll, whose rate is `rollDamping` below: 136 a second for the technical,
+ * 448 for the F1.
+ *
+ * The step used to be a quarter of the frame, whatever the frame took. The
+ * technical never got near the limit, and the rally car, the prototype and
+ * the F1 all passed it at a frame rate a real display runs at: the F1 at
+ * sixty (448 × 1/240 is 1.87, and the springs take it over), the prototype
+ * and the rally car at twenty, which the frame loop's own cap allows. What
+ * that looks like is not a wobble. The whole load jumps from one side of
+ * the car to the other and back every substep — two wheels carrying all of
+ * it, two nothing, then the other way round — with the body flicking two
+ * thousandths of a radian either side of level. Four substeps a frame is an
+ * even count, so every frame lands on the same side and shows a car sitting
+ * level on two wheels whose tyres are sliding; an F1 flat out on the flat
+ * tops out at 2275 instead of 3183. The bench took it for a slow
+ * pitch-and-heave mode of the suspension.
+ *
+ * A 480th keeps the F1's roll at 0.93 — half the limit — and the game steps
+ * the race at a 120th (`STEP` in `game.ts`), so this is four substeps a
+ * step, which is what a quarter of the frame always was on a 120Hz display.
+ * `rollDamping` is checked against it for every class in the tests, so a
+ * stiffer class arrives with a failing test rather than a car on two wheels.
+ */
+export const SUBSTEP = 1 / 480;
+
+/**
+ * How fast the roll dampers kill a roll rate, per second: four dampers, each
+ * pushing at its wheel's distance across the body and resisting a speed that
+ * grows with that same distance, over the body's inertia in roll.
+ */
+export function rollDamping(spec: VehicleSpec): number {
+  const { width: w, height: h } = spec.body;
+  const iRoll = ((w * w + h * h) / 12) * spec.inertia.gyration;
+  const arm = spec.wheels.reduce((s, [, ly]) => s + ly * ly, 0);
+  return (spec.suspension.damper * arm) / iRoll;
+}
+
 /** Everything a vehicle class chooses. See the field comments in the old
  *  vehicle.ts (kept as the numbers' documentation) for why each is what it
  *  is; a spec is measurements, not opinions written twice. */
@@ -233,12 +278,13 @@ export class Vehicle {
   }
 
   /**
-   * The springs are stiff enough that a sixtieth of a second is a coarse step
-   * for them, so the whole thing is integrated in quarters. Four times the
-   * work on a body that costs a few microseconds is not worth economising.
+   * The springs are stiff enough that a frame is a coarse step for them, so
+   * the whole thing is integrated in substeps of at most `SUBSTEP`. It was
+   * quarters of whatever `dt` was, which is only as fine as the frame rate
+   * makes it — see `SUBSTEP` for what that cost.
    */
   step(dt: number, drive: Drive) {
-    const n = 4;
+    const n = Math.max(1, Math.ceil(dt / SUBSTEP - 1e-6));
     for (let i = 0; i < n; i++) this.substep(dt / n, drive);
   }
 

@@ -723,7 +723,8 @@ async function main() {
   let chaseAzimuth = 0;
 
   const followShip = (dt: number) => {
-    const t = arena.truck;
+    const t = arena.shown;
+    const { vx, vy } = arena.truck;
     if (chase) {
       // behind means opposite the nose: the orbit's azimuth is measured from
       // the target out to the camera
@@ -743,8 +744,8 @@ async function main() {
     // the yaw through a corner. A third of it, and a target that catches up
     // twice as fast.
     const lead = chase ? CHASE_LEAD : LEAD_TIME;
-    const wantX = t.x + t.vx * lead;
-    const wantY = t.y + t.vy * lead;
+    const wantX = t.x + vx * lead;
+    const wantY = t.y + vy * lead;
     const k = Math.min(1, dt * (chase ? 9 : 4.5));
     aim[0] += (wantX - aim[0]) * k;
     aim[1] += (wantY - aim[1]) * k;
@@ -797,8 +798,8 @@ async function main() {
     // frame. A wheel drawn anywhere but where the ray found the ground is a
     // wheel you can see floating.
     drawn.length = 0;
-    drawn.push(arena.truck);
-    const past = arena.ghost.poseAt(arena.lapTime);
+    drawn.push(arena.shown);
+    const past = arena.ghost.poseAt(arena.shownLapTime);
     if (past) drawn.push(past);
     drawn.forEach((truck: Pose, ci: number) => {
       const yaw = truck.yaw, pitch = truck.pitch, roll = truck.roll;
@@ -902,7 +903,7 @@ async function main() {
         // the long way round, on a switch that should be barely a movement.
         const cam = renderer.camera;
         const now = Math.atan2(cam.position[1] - cam.target[1], cam.position[0] - cam.target[0]);
-        let d = (arena.truck.yaw + Math.PI) - now;
+        let d = (arena.shown.yaw + Math.PI) - now;
         while (d > Math.PI) d -= Math.PI * 2;
         while (d < -Math.PI) d += Math.PI * 2;
         chaseAzimuth = now + d;
@@ -918,7 +919,7 @@ async function main() {
     // The circuit chooser holds the race: the arena is drawn behind it, but
     // nothing steps and the lights do not count down. A countdown that ran
     // while you were picking a track would be over before you picked one.
-    if (racing) arena.step(dt, input.read());
+    if (racing) arena.advance(dt, input.read());
     updateSunShadow(renderer.camera.target[0], renderer.camera.target[1]);
 
     const effects = upload();
@@ -1184,8 +1185,8 @@ function buildMinimap(race: Race) {
   return {
     redraw,
     update() {
-      const past = race.ghost.poseAt(race.lapTime);
-      const at = [race.truck, past];
+      const past = race.ghost.poseAt(race.shownLapTime);
+      const at = [race.shown, past];
       dots.forEach((dot, i) => {
         const p = at[i];
         dot.setAttribute('visibility', p ? 'visible' : 'hidden');

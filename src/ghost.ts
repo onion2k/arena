@@ -45,6 +45,24 @@ function turnTo(a: number, b: number, t: number): number {
   return a + d * t;
 }
 
+/** A pose with nothing in it yet, to be written into. */
+export function blankPose(): Pose {
+  return { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, wheels: [0, 1, 2, 3].map(() => ({ drop: 0, steer: 0, spin: 0 })) };
+}
+
+/** Write `t` of the way from `a` to `b` into `out`: 0 is `a`, 1 is `b`. */
+export function blendPose(a: Pose, b: Pose, t: number, out: Pose): Pose {
+  const mix = (p: number, q: number) => p + (q - p) * t;
+  out.x = mix(a.x, b.x); out.y = mix(a.y, b.y); out.z = mix(a.z, b.z);
+  out.yaw = turnTo(a.yaw, b.yaw, t);
+  out.pitch = mix(a.pitch, b.pitch); out.roll = mix(a.roll, b.roll);
+  for (let i = 0; i < out.wheels.length; i++) {
+    const wa = a.wheels[i], wb = b.wheels[i], wo = out.wheels[i];
+    wo.drop = mix(wa.drop, wb.drop); wo.steer = mix(wa.steer, wb.steer); wo.spin = mix(wa.spin, wb.spin);
+  }
+  return out;
+}
+
 export class Ghost {
   /** The lap being driven now, and how many samples of it are down. */
   private live = new Float32Array(CAPACITY * STRIDE);
@@ -56,10 +74,7 @@ export class Ghost {
   private clock = 0;
   private since = 0;
   /** Scratch, handed back by `poseAt`: one object, rewritten every frame. */
-  private out: Pose = {
-    x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0,
-    wheels: [0, 1, 2, 3].map(() => ({ drop: 0, steer: 0, spin: 0 })),
-  };
+  private out: Pose = blankPose();
 
   /** Whether there is a lap to run beside you yet. */
   get has(): boolean { return this.best !== null; }

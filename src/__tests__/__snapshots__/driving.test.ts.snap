@@ -2,14 +2,14 @@
 
 exports[`a scripted drive > matches the recorded trajectories 1`] = `
 {
-  "#0 M desert technical": "abe5655d",
-  "#0 M forest f1": "7052197f",
-  "#0 M forest lmp": "332ea1d7",
-  "#0 M forest rally": "86602fe8",
-  "#0 M forest technical": "6a53dfc9",
-  "#0 M marsh technical": "ac3a43b6",
-  "#0 M snow technical": "eafd3e72",
-  "#63 S forest rally": "3c3ec99f",
-  "#63 XL snow f1": "481631dc",
+  "#0 M desert technical": "883f02b1",
+  "#0 M forest f1": "2c539c24",
+  "#0 M forest lmp": "d50b88df",
+  "#0 M forest rally": "f49d583f",
+  "#0 M forest technical": "4764aded",
+  "#0 M marsh technical": "3da731ef",
+  "#0 M snow technical": "cdbc644c",
+  "#63 S forest rally": "54eaca12",
+  "#63 XL snow f1": "ffa1f726",
 }
 `;

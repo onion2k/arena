@@ -48,16 +48,25 @@ export function fold(hash: number, values: number[]): number {
 }
 export const FNV_OFFSET = 2166136261;
 
+/** Where the truck is and how it is moving, as one hash. */
+export function stateOf(race: Race): string {
+  const t = race.truck;
+  const values = [t.x, t.y, t.z, t.yaw, t.pitch, t.roll, t.vx, t.vy, t.vz, t.wYaw, t.wPitch, t.wRoll];
+  for (const w of t.wheels) values.push(w.compression, w.spin, w.load);
+  return fold(FNV_OFFSET, values).toString(16).padStart(8, '0');
+}
+
 /**
  * Drive a race the way the page's frame loop does for `seconds`, at a
- * display's frame rate, hashing where the truck is after every frame.
+ * display's frame rate — `advance`, one input a frame — hashing where the
+ * truck is after every frame.
  */
 export function drive(race: Race, seconds: number, hz: number, input: (t: number) => Input = script): string {
   let h = FNV_OFFSET;
   const dt = 1 / hz;
   const frames = Math.round(seconds * hz);
   for (let f = 0; f < frames; f++) {
-    race.step(dt, input(f * dt));
+    race.advance(dt, input(f * dt));
     const t = race.truck;
     h = fold(h, [t.x, t.y, t.z, t.yaw, t.vx, t.vy]);
   }
