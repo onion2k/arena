@@ -13,7 +13,8 @@ import { Orbit } from 'artshape-render/gpu/camera';
 import { bakeEnvironment } from 'artshape-render/render/env';
 import { GameRenderer, EFFECT_STRIDE, type GameGroup } from 'artshape-render/game/renderer';
 import { LightPool } from 'artshape-render/game/lights';
-import { PAINT, Race, TRUCKS, type Input } from './game';
+import { COUNTDOWN, PAINT, Race, TRUCKS, type Input } from './game';
+import { STONES, filigree, gemMesh, plinthRadius, plinthRim, plinthVelvet, presentation, type Filigree } from './concours';
 import type { Pose } from './ghost';
 import type { VehicleSpec } from './vehicle';
 import { CONTROLS, SETTINGS, restoreDefaults, save, type SliderKey } from './settings';
@@ -26,7 +27,7 @@ import { wheelEffects } from './particles';
 import { Skids, markMesh } from './skids';
 import { VEHICLES, VEHICLE_KEYS, type VehicleKey } from './vehicles';
 import { bench } from './bench';
-import { START_BULBS, TRACK_HALF, centreline, circuitFor, difficultyBand, gantry, generateTrack, measureShape, radialToAcross, rateTrack, scaleShape, shapePreview, tangentAt, where } from './track';
+import { START_BULBS, TRACK_HALF, centreline, circuitFor, difficultyBand, drawnLift, gantry, generateTrack, measureShape, radialToAcross, rateTrack, scaleShape, shapePreview, tangentAt, where } from './track';
 import { height as groundAt } from './terrain';
 import { ARENA_X, ARENA_Y, COLUMNS, MESHES, arenaMatrices } from './scene';
 import { placeOnSlope, placeVehicleFacing, placeVehiclePart, placeVehicleWheel, project } from './matrix';
@@ -37,6 +38,12 @@ import { SIZE, SIZES, labelOf, sizeOf, type SizeKey } from './world';
 const FOV = 40;
 /** Where the dynamic groups sit, in the order they are handed over. */
 const CHASSIS = 0, CAB = 1, WHEELS_GROUP = 2, LAMPS = 3, START_LAMPS = 4, SKIDS = 5;
+/** The Concours groups: filigree, stones, and the plinth's rim and velvet. */
+const ORNAMENT = 6, GEMS = 7, PLINTH = 8, VELVET = 9;
+/** The Concours d'Élégance's gold. */
+const CONCOURS_GOLD: [number, number, number] = [1.0, 0.70, 0.22];
+/** The most stones a car can wear. */
+const GEM_CAPACITY = 32;
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
@@ -45,6 +52,7 @@ const pregameMap = document.getElementById('pregameMap')!;
 const pregameBiome = document.getElementById('pregameBiome')!;
 const pregameVehicle = document.getElementById('pregameVehicle')!;
 const pregameSize = document.getElementById('pregameSize')!;
+const pregameModes = document.getElementById('pregameModes')!;
 const pregameFacts = document.getElementById('pregameFacts')!;
 const pregameWarn = document.getElementById('pregameWarn')!;
 const pregameRating = document.getElementById('pregameRating')!;
@@ -119,7 +127,7 @@ async function main() {
     // this game reaches, but silently dropping lights past a fixed capacity
     // is exactly the kind of thing that would go unnoticed until someone
     // tried an arena big enough to hit it.
-    if (COLUMNS.length + 6 > LIGHT_CAPACITY) {
+    if (COLUMNS.length + 12 > LIGHT_CAPACITY) {
       console.warn(`arena: ${COLUMNS.length} posts is close to the ${LIGHT_CAPACITY} light capacity`);
     }
   }
@@ -230,6 +238,18 @@ async function main() {
   const cabM = new Float32Array(TRUCKS * 16);
   const wheelM = new Float32Array(TRUCKS * 4 * 16);
   const lampM = new Float32Array(TRUCKS * 2 * 16);
+  const ornamentM = new Float32Array(TRUCKS * 16);
+  const gemM = new Float32Array(GEM_CAPACITY * 16);
+  const gemMat = new Float32Array(GEM_CAPACITY * 4);
+  for (let i = 0; i < GEM_CAPACITY; i++) gemMat.set(STONES[i % STONES.length], i * 4);
+  const plinthM = new Float32Array(16);
+  /** Each class's filigree and stone settings, built the first time it is shown. */
+  const filigrees = new Map<string, Filigree>();
+  const filigreeOf = (spec: VehicleSpec) => {
+    let f = filigrees.get(spec.key);
+    if (!f) { f = filigree(spec); filigrees.set(spec.key, f); }
+    return f;
+  };
   /** What is on the road this frame: the truck, and the ghost when there is one. */
   const drawn: Pose[] = [];
   const startMat = new Float32Array(2 * START_BULBS * 4);
@@ -240,6 +260,18 @@ async function main() {
    *  force. Rebuilding them is a mesh swap on the same pools above — nothing
    *  about how many buffers exist or how big they are changes with class. */
   function vehicleGroups(spec: VehicleSpec): GameGroup[] {
+    // Concours d'Élégance: gold polished to a mirror (see the paint in
+    // `upload`), onyx for everything that was glass, carbon or rubber, and
+    // diamonds for headlamps. See `concours.ts`.
+    if (SETTINGS.concours) {
+      const lampR = Math.max(...Array.from(spec.kit.lamp().positions).map(Math.abs)) * 0.9;
+      return [
+        { mesh: spec.kit.body(), matrices: chassisM, count: TRUCKS, albedo: [1.0, 0.79, 0.36], roughness: 0.05 },
+        { mesh: spec.kit.detail.mesh(), matrices: cabM, count: TRUCKS, albedo: [0.015, 0.015, 0.02], roughness: 0.04 },
+        { mesh: spec.kit.wheel(), matrices: wheelM, count: TRUCKS * 4, albedo: [0.02, 0.02, 0.025], roughness: 0.12 },
+        { mesh: gemMesh(lampR), matrices: lampM, count: TRUCKS * 2, albedo: [1, 1, 1], roughness: 0 },
+      ];
+    }
     return [
       // not a mirror: a polished metal under a near-black sky has nothing to
       // reflect and reads as a dark shape. A little roughness gives the
@@ -258,7 +290,24 @@ async function main() {
   const startBulbGroup: GameGroup = { mesh: mesh.lamp, matrices: startBulbsM, count: 2 * START_BULBS, albedo: [0.2, 0.04, 0.03], roughness: 0.12 };
   // the skid marks: a ring of dark quads on the road, laid by sliding tyres
   const skidGroup: GameGroup = { mesh: markMesh(), matrices: skids.matrices, count: 0, albedo: [0.028, 0.028, 0.032], roughness: 0.92 };
-  renderer.setDynamic([...vehicleGroups(VEHICLES[SETTINGS.vehicle]), startBulbGroup, skidGroup]);
+  /** The Concours groups for a class: its filigree, the stones, and a plinth
+   *  made to its size. Drawn with nothing in them when the mode is off. */
+  function jewelGroups(spec: VehicleSpec): GameGroup[] {
+    const r = plinthRadius(spec);
+    const scaled = (m: ReturnType<typeof plinthRim>) => {
+      const positions = m.positions.slice();
+      for (let i = 0; i < positions.length; i += 3) { positions[i] *= r; positions[i + 1] *= r; }
+      return { ...m, positions };
+    };
+    return [
+      { mesh: filigreeOf(spec).mesh, matrices: ornamentM, count: 0, albedo: [0.93, 0.93, 0.95], roughness: 0.05 },
+      { mesh: gemMesh(1), matrices: gemM, count: 0, materials: gemMat },
+      { mesh: scaled(plinthRim()), matrices: plinthM, count: 0, albedo: [1.0, 0.77, 0.32], roughness: 0.12 },
+      { mesh: scaled(plinthVelvet()), matrices: plinthM, count: 0, albedo: [0.30, 0.02, 0.07], roughness: 0.95 },
+    ];
+  }
+  const dynamicGroups = (spec: VehicleSpec) => [...vehicleGroups(spec), startBulbGroup, skidGroup, ...jewelGroups(spec)];
+  renderer.setDynamic(dynamicGroups(VEHICLES[SETTINGS.vehicle]));
 
   /**
    * A different vehicle. `setDynamic` releases the old buffers and uploads
@@ -268,7 +317,7 @@ async function main() {
    */
   function switchVehicle(spec: VehicleSpec) {
     arena.useVehicle(spec);
-    renderer.setDynamic([...vehicleGroups(spec), startBulbGroup, skidGroup]);
+    renderer.setDynamic(dynamicGroups(spec));
   }
 
   const arena = new Race();
@@ -442,6 +491,24 @@ async function main() {
     });
     pregameSize.appendChild(btn);
     sizeButtons.set(s.key, btn);
+  }
+  // The two modes: switches, kept across sessions, and nothing to do with
+  // which circuit is built — so they apply at once rather than on race.
+  const modeButtons: [HTMLButtonElement, 'disco' | 'concours'][] = [];
+  for (const [key, label] of [['disco', 'disco night'], ['concours', "concours d'élégance"]] as const) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = label;
+    btn.setAttribute('aria-pressed', String(SETTINGS[key]));
+    btn.addEventListener('click', () => {
+      SETTINGS[key] = !SETTINGS[key];
+      btn.setAttribute('aria-pressed', String(SETTINGS[key]));
+      save();
+      if (key === 'concours') renderer.setDynamic(dynamicGroups(arena.truck.spec));
+      btn.blur();
+    });
+    pregameModes.appendChild(btn);
+    modeButtons.push([btn, key]);
   }
   // The vehicle picker, the same way.
   const vehicleButtons = new Map<VehicleKey, HTMLButtonElement>();
@@ -813,6 +880,19 @@ async function main() {
     drawn.push(arena.shown);
     const past = arena.ghostShown;
     if (past) drawn.push(past);
+    // The Concours presentation: the car turning on its plinth for the
+    // countdown, then set down on the road. Only what is drawn moves.
+    const concours = SETTINGS.concours;
+    const shows = concours && racing ? presentation(arena.countdown, COUNTDOWN, arena.sinceStart, arena.running) : null;
+    let plinthShown = 0;
+    if (shows) {
+      const live = drawn[0];
+      const road = groundAt(live.x, live.y) + drawnLift(live.x, live.y);
+      drawn[0] = { ...live, yaw: live.yaw + shows.spin, z: live.z + shows.lift };
+      placeVehiclePart(plinthM, 0, live.x, live.y, road - shows.sink, live.yaw + shows.spin, 0, 0);
+      plinthShown = 1;
+    }
+    let gemsShown = 0;
     drawn.forEach((truck: Pose, ci: number) => {
       const yaw = truck.yaw, pitch = truck.pitch, roll = truck.roll;
       const cy = Math.cos(yaw); const sy = Math.sin(yaw);
@@ -833,7 +913,25 @@ async function main() {
       const spec = arena.truck.spec;
       const chassis = on(0, 0, 0);
       placeVehiclePart(chassisM, ci, chassis[0], chassis[1], chassis[2], yaw, pitch, roll);
-      chassisMat.set([...PAINT[ci], 0.24], ci * 4);
+      // a deeper, warmer gold than the paint for the Concours, which by day
+      // read as sand; the ghost keeps its own cold colour
+      chassisMat.set([...(concours && ci === 0 ? CONCOURS_GOLD : PAINT[ci]), concours ? 0.05 : 0.24], ci * 4);
+      if (concours) {
+        placeVehiclePart(ornamentM, ci, chassis[0], chassis[1], chassis[2], yaw, pitch, roll);
+        // a stone for every lap you have finished, set in the curls in order
+        if (ci === 0) {
+          const { sites } = filigreeOf(arena.truck.spec);
+          gemsShown = Math.min(arena.laps, sites.length, GEM_CAPACITY);
+          for (let g = 0; g < gemsShown; g++) {
+            const { at, side, size } = sites[g];
+            const c = on(at[0], at[1], at[2]);
+            // the table faces out of the flank: z out, x along the car
+            const zx = bl[0] * side, zy = bl[1] * side, zz = bl[2] * side;
+            const yx = zy * bf[2] - zz * bf[1], yy = zz * bf[0] - zx * bf[2], yz = zx * bf[1] - zy * bf[0];
+            gemM.set([bf[0] * size, bf[1] * size, bf[2] * size, 0, yx * size, yy * size, yz * size, 0, zx * size, zy * size, zz * size, 0, c[0], c[1], c[2], 1], g * 16);
+          }
+        }
+      }
       const [dx, dy, dz] = spec.kit.detail.at;
       const cab = on(dx, dy, dz);
       placeVehiclePart(cabM, ci, cab[0], cab[1], cab[2], yaw, pitch, roll);
@@ -871,6 +969,10 @@ async function main() {
     renderer.move(CAB, cabM, shown);
     renderer.move(WHEELS_GROUP, wheelM, shown * 4);
     renderer.move(LAMPS, lampM, shown * 2);
+    renderer.move(ORNAMENT, ornamentM, concours ? shown : 0);
+    renderer.move(GEMS, gemM, gemsShown);
+    renderer.move(PLINTH, plinthM, plinthShown);
+    renderer.move(VELVET, plinthM, plinthShown);
     if (skids.dirty) { renderer.move(SKIDS, skids.matrices, skids.count); skids.dirty = false; }
 
     // the starting lights: dark until lit, then a hot red, all out on the go

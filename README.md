@@ -1877,6 +1877,49 @@ night, twice), and at 2560×1440 it is inside the run-to-run noise of that
 frame (4.5–5.0 off, 4.6–4.7 on). Bloom at nothing skips its three passes;
 the renderer's `economy.post` turns the whole chain off.
 
+## Disco night, and the Concours d'Élégance
+
+Two switches on the track-select screen, kept across sessions, that change
+what the race looks like and nothing about how it drives.
+
+**Disco night** (`disco.ts`) turns the circuit into a dance floor at 124
+beats a minute. Every flood goes to full colour — a rainbow spread round the
+lap that chases forward three posts a beat, like the lights on a fairground
+sign — and swings its beam about, brighter on the beat and brighter again on
+the first of every bar; the lamp heads flash with their beams. The
+headlights sweep left and right out of step with each other and change
+colour as they go, and a mirror ball hangs over the start line: a silver
+glow with sparkles that turn with it, throwing six narrow coloured beams
+round the arena that the night haze turns into a laser show. The lamps are
+on whatever the clock says. It is all lights and glows on the wall clock, so
+a paused race still dances: fifty-two lights on the original circuit, well
+inside the pool's 256.
+
+![disco night](docs/disco.png)
+
+**The Concours d'Élégance** (`concours.ts`) shows the car as a jeweller
+would. The body is polished gold, deeper than the paint, which by day read
+as sand; everything that was glass, carbon or rubber is black onyx; the
+headlamps are cut diamonds. Along both flanks runs white-gold filigree — an
+art-nouveau vine, a whiplash wave with a tendril curling off every crest and
+trough — laid onto the body's own surface by casting a ray across the car at
+every point, so it follows a pickup's flat sides and an F1 car's sidepods
+alike and breaks over the wheel arches rather than bridging them. Every lap
+you finish sets another stone into the heart of a curl, ruby, sapphire,
+emerald, amethyst and topaz in turn, up to the fourteen or sixteen curls a
+class has. For the countdown the car turns a turn and a quarter on a
+crimson velvet plinth with a gold rim, square to the road when the lights
+go out, and settles onto the tarmac over the next half second.
+
+The renderer's game path has colour and roughness to work with and none of
+the engraving or the gem shading the jewellery did, so the filigree is
+geometry — 12,000 to 15,000 triangles a car, built once a class in under
+20ms — the stones are faceted meshes in glossy colour, and the plinth and
+the turn are only what is drawn: the physics sits on its springs on the
+grid the whole time.
+
+![concours d'élégance](docs/concours.png)
+
 ## What it costs
 
 Measured on a Mac mini (M-series) at 1920×1080, fenced on the queue rather
@@ -1937,6 +1980,8 @@ mysteriously got four times slower while the GPU was doing the same work.
 | `src/circuit.ts` | building a circuit: size, biome, ground, water, posts, flora, collisions |
 | `src/__tests__` | the recordings and the invariants, run in node: `npm test` |
 | `src/pilot.ts` | a driver that drives to a speed plan, for measuring classes |
+| `src/models.ts` | the vehicles' bodies and detail, built from simple solids |
+| `src/disco.ts`, `src/concours.ts` | the two modes: disco night and the Concours d'Élégance |
 | `src/calibrate.ts`, `scripts/calibrate.ts` | par from laps driven: `npm run calibrate` |
 | `src/vehicle.ts` | the truck: suspension, tyres, a body with mass |
 | `src/track.ts` | the circuit, and where on it a point is |

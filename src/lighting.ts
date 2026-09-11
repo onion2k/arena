@@ -24,6 +24,7 @@ import { gantry } from './track';
 import { project } from './matrix';
 import { SETTINGS } from './settings';
 import { skyAt } from './daylight';
+import { BALL_BEAMS, ballAt, ballBeam, discoOn, discoTime, hue as discoHue, postHue, postSwing, pulse } from './disco';
 
 export const LIGHT_CAPACITY = 256;
 export const EFFECT_CAPACITY = 512;
@@ -48,6 +49,8 @@ export const EFFECT_CAPACITY = 512;
  * makes the track read as a track.
  */
 function floods(pool: LightPool, on: number) {
+  const disco = discoOn();
+  const t = discoTime(), beat = pulse(t);
   for (let i = 0; i < COLUMNS.length; i++) {
     const post = COLUMNS[i];
     // Out of the lamp head, and along the way the arm points. Both come from
@@ -56,6 +59,19 @@ function floods(pool: LightPool, on: number) {
     // index in the list, which is the sort of thing that is right until
     // someone changes the order.
     const [x, y, z] = beamAt(post);
+    if (disco) {
+      // full colour, swinging, and brighter on the beat
+      const aim = post.aim + postSwing(i, t);
+      pool.add({
+        position: [x, y, z],
+        radius: 2900,
+        colour: discoHue(postHue(i, COLUMNS.length, t)),
+        intensity: SETTINGS.flood * on * (0.7 + 1.6 * beat),
+        direction: [Math.cos(aim) * 0.6, Math.sin(aim) * 0.6, -0.8],
+        cone: [16, 34],
+      });
+      continue;
+    }
     const inx = Math.cos(post.aim); const iny = Math.sin(post.aim);
     const hue = (i / COLUMNS.length + 0.12) % 1;
     const c = hueToRgb(hue);
@@ -111,6 +127,8 @@ function starter(pool: LightPool, arena: Race) {
 
 /** How far on the street lights and headlights are, 1 by night to 0 by day. */
 function lampsOn(arena: Race): number {
+  // disco night is night whatever the clock says
+  if (discoOn()) return 1;
   return skyAt(arena.hours, SETTINGS.ambient).lampsOn;
 }
 
@@ -210,21 +228,38 @@ export function lightsFor(pool: LightPool, arena: Race) {
   // cone — a wash over the road rather than a beam at a thing. The narrow
   // beam at a thing is the searchlight, and it is cold where these are warm.
   playerHeads = [];
+  const disco = discoOn();
+  const t = discoTime();
   for (const side of [-1, 1]) {
     playerHeads.push(pool.count);
+    // on the dance floor the headlights sweep left and right, out of step
+    // with each other, and change colour as they go
+    const sweep = disco ? Math.sin(t * 3.1 + side) * 0.35 : 0;
+    const splay = side * 0.07 + sweep;
     pool.add({
       position: at(head[0], side * head[1], head[2]),
       radius: 2400,
-      colour: hurt ? [1, 0.45, 0.4] : [1, 0.87, 0.62],
+      colour: disco ? discoHue(t * 0.35 + (side > 0 ? 0.5 : 0)) : hurt ? [1, 0.45, 0.4] : [1, 0.87, 0.62],
       // A lamp 84mm above the floor sees it almost edge-on: at 900mm out the
       // cosine between the floor's normal and the way back to the lamp is
       // 0.09, so nine tenths of the beam is thrown away by the geometry
       // before intensity is even considered. That is true of a real headlight
       // too, and a real headlight answers it by being very bright.
       intensity: 22 * on,
-      direction: facing(Math.cos(side * 0.07), Math.sin(side * 0.07), -0.20),
+      direction: facing(Math.cos(splay), Math.sin(splay), -0.20),
       cone: [10, 25],
     });
+  }
+
+  // The mirror ball's beams: narrow, coloured, turning. After the headlights,
+  // so the floods keep their post's index and the headlights their slots.
+  if (disco) {
+    const ball = ballAt();
+    const beat = pulse(t);
+    for (let k = 0; k < BALL_BEAMS; k++) {
+      const { direction, colour } = ballBeam(k, t);
+      pool.add({ position: ball, radius: 6500, colour, intensity: 10 + 22 * beat, direction, cone: [3, 8] });
+    }
   }
 
   // There was a small unconed light over the truck here, so that it was not
@@ -307,10 +342,26 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
    * a light's whole shading loop.
    */
   const on = lampsOn(arena);
+  const disco = discoOn();
+  const now = discoTime(), beat = pulse(now);
   if (on > 0) {
-    for (const post of COLUMNS) {
-      const [hx, hy, hz] = lampAt(post);
-      n = glow(out, n, vp, hx, hy, hz - 10, 46, 0.9 * on, [1, 0.93, 0.78], 2.0);
+    for (let i = 0; i < COLUMNS.length; i++) {
+      const [hx, hy, hz] = lampAt(COLUMNS[i]);
+      if (disco) n = glow(out, n, vp, hx, hy, hz - 10, 46 + 30 * beat, 1.2 + 2.4 * beat, discoHue(postHue(i, COLUMNS.length, now)), 2.0);
+      else n = glow(out, n, vp, hx, hy, hz - 10, 46, 0.9 * on, [1, 0.93, 0.78], 2.0);
+    }
+  }
+  // The mirror ball itself: a soft silver core, and sparkles round it that
+  // turn with the ball and flash in the colours of its beams.
+  if (disco) {
+    const [bx, by, bz] = ballAt();
+    n = glow(out, n, vp, bx, by, bz, 70, 1.4 + beat, [0.85, 0.88, 1], 1.6);
+    for (let k = 0; k < 14; k++) {
+      const a = now * 0.8 + k * 2.39996;
+      const el = Math.sin(k * 1.7) * 0.9;
+      const sx = bx + Math.cos(a) * Math.cos(el) * 42, sy = by + Math.sin(a) * Math.cos(el) * 42, sz = bz + Math.sin(el) * 42;
+      const flicker = 0.5 + 0.5 * Math.sin(now * 9 + k * 3.1);
+      n = glow(out, n, vp, sx, sy, sz, 14 + 10 * flicker, 2.2 * flicker + 2 * beat, discoHue(k / 14 + now * 0.07), 3.2);
     }
   }
 
