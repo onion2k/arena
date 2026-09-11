@@ -277,6 +277,67 @@ They are gone, and a recording of your own best lap runs in their place: see
 shoulder grip, the drift tuning and the racing line were all measured against
 them, and those measurements stand even though the drivers do not.
 
+### Four vehicles
+
+**Technical, rally car, Le Mans prototype, F1 car — a button on the
+track-select screen, beside the size.** Everything above this heading is the
+technical exactly as it was: every number in it moved out of bare module
+constants and onto a `VehicleSpec` (`vehicle.ts`/`vehicles.ts`), read in
+place of the constant it replaced, in the same order, with nothing about the
+arithmetic changed. Checked by more than reading it back — a script drives
+four seconds of countdown and thirty seconds of a fixed input (full
+throttle, a sine wave on the wheel, a brake tap every five seconds) and
+hashes position, heading and speed every step; the hash from before the
+change and the hash from after it are the same number, `562148294`.
+
+A class is a full spec of its own, not a multiplier on the technical's: body
+size, wheel layout, suspension, tyre grip, engine power and top speed, drift
+and handbrake behaviour, steering lock, inertia, a collision radius, and its
+own kit of meshes. The physics generalises the one thing that used to be
+hardcoded rear-wheel drive — `engine.driveFront`, 0 for all-rear, 1 for
+all-front, 0.5 for a 50/50 split — and everything else is a straight
+per-class number where the technical had a constant.
+
+| | technical | rally car | Le Mans prototype | F1 car |
+| --- | ---: | ---: | ---: | ---: |
+| body, L×W×H | 300×128×90 | 260×120×80 | 340×130×62 | 360×110×48 |
+| drive | rear | all-wheel | rear | rear |
+| top speed | 2300 | 2500 | 3000 | 3300 |
+| grip (μ) | 1.35 | 1.45 | 1.70 | 1.95 |
+| suspension travel | 26 | 34 | 18 | 12 |
+| collision radius | 98 | 90 | 105 | 110 |
+| par lap, seed 0, medium | 14.6 s | ~13.5 s | ~11.6 s | ~10.5 s |
+
+The cornering, acceleration and braking numbers that feed the lap rating
+(`rating.corner/accel/brake` — see [How hard is it](#how-hard-is-it)) are a
+first pass for the three new classes and not yet a bench result: the
+technical's own `61`/`700`/`2400` were measured off it directly, full lock
+held at a speed, the flat between two speeds under full brake and under
+throttle, and the other three are estimated from their grip and power ahead
+of the same measurement. The par times above follow from that estimate and
+will move once they are actually benched.
+
+**A kit is always the same shape.** One painted body — the thing that takes
+the gold-or-blue tint the player and the ghost are told apart by — one
+unpainted detail part, a wheel, a headlamp. Every class draws exactly two
+vehicle-shaped dynamic groups regardless of which one is in force, so
+changing class is `renderer.setDynamic` handed new meshes into the same
+pools — the same operation the arena already does for a new circuit's
+static half — and not a change to how many buffers exist or how big they
+are. Headlamp position, brake glow and the ghost's corner markers are still
+the technical's own fixed offsets for every class in this pass; a body
+noticeably longer or lower than the technical's own 300×128×90 will have
+lamps a little off where a real one's would sit, which is the next thing to
+put on the spec if it reads as wrong rather than as this game's style of
+low-poly shape.
+
+Switching class clears the ghost, the same way a new circuit does and for
+the same reason: a lap belongs to what was driven as much as to where.
+Switching keeps the road you are on — only the seed or the size rebuilds the
+arena; the vehicle is a mesh-and-physics swap on top of it.
+
+![four vehicles](docs/vehicles.png)
+
 ## Generating a circuit
 
 The circuit is a polar curve — a radius that varies with the angle — and that

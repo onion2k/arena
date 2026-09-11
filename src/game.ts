@@ -15,7 +15,8 @@
  * beside you is your own best lap: see `ghost.ts`.
  */
 import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS } from './scene';
-import { Vehicle } from './vehicle';
+import { Vehicle, type VehicleSpec } from './vehicle';
+import { VEHICLES } from './vehicles';
 import { Ghost } from './ghost';
 import { SETTINGS } from './settings';
 import { TREES } from './forest';
@@ -39,15 +40,8 @@ const BOUNCE = 0.45;
  */
 let collisionGrid: CircleGrid | null = null;
 export function setCollisionGrid(grid: CircleGrid) { collisionGrid = grid; }
-/** The widest reach worth asking the grid for: a post or a tree plus the truck. */
+/** The widest reach worth asking the grid for: a post or a tree plus a vehicle. */
 const COLLISION_REACH = 260;
-/**
- * How wide the truck is for the purpose of not being inside a post. It is
- * 250 long and 128 across, so no one circle is right; this is between the
- * two, which keeps a corner from visibly sinking into a post without making
- * the gaps between them feel narrower than they look.
- */
-const TRUCK_RADIUS = 98;
 
 /** What the driver is asking for. */
 export interface Input {
@@ -143,12 +137,28 @@ export const PAINT: [number, number, number][] = [
 export const HOURS_PER_LAP = 3;
 
 export class Race {
-  readonly truck = new Vehicle(0, 0);
+  truck: Vehicle = new Vehicle(VEHICLES.technical, 0, 0);
   readonly lap = new Progress();
   /** Your best lap, kept and replayed: see `ghost.ts`. */
   readonly ghost = new Ghost();
 
   constructor() { this.reset(); }
+
+  /**
+   * Change what you are driving. A new `Vehicle` and not a spec swapped into
+   * the old one: the wheel count, the inertia and the collision radius all
+   * come from the spec at construction, and a body mid-corner does not want
+   * to discover its own suspension travel changed under it. The ghost goes
+   * with it — a best lap belongs to the class it was driven in as much as to
+   * the circuit, and a rally car's ghost drawn as an F1 car's meshes is not
+   * a bug you would report, it is a bug you would stop trusting the ghost
+   * over. See `newTrack` in `main.ts` for the same argument about the road.
+   */
+  useVehicle(spec: VehicleSpec) {
+    this.truck = new Vehicle(spec, 0, 0);
+    this.ghost.clear();
+    this.reset();
+  }
 
   /**
    * What time it is: the setting is when the race starts, and the clock runs
@@ -297,7 +307,7 @@ export class Race {
   private keepOff(t: Vehicle, cx: number, cy: number, r: number) {
     const dx = t.x - cx;
     const dy = t.y - cy;
-    const reach = r + TRUCK_RADIUS;
+    const reach = r + t.spec.radius;
     const d2 = dx * dx + dy * dy;
     if (d2 >= reach * reach || d2 < 1e-6) return;
     const d = Math.sqrt(d2);

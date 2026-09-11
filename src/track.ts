@@ -701,11 +701,18 @@ export function shapePreview(s: Shape, steps = 400): {
  * 61, and it puts the tightest corner on the original circuit at 1541 mm/s
  * against a top speed of 2300 — which is why circuits differ at all.
  */
-const CORNER = 61;
-/** Mid-range, measured: the engine gives less the faster it is already going. */
-const ACCEL = 700;
-/** What the brakes take off, measured on the flat between 1500 and 500 mm/s. */
-const BRAKE = 2400;
+/**
+ * The three numbers above, as one record: what a class of vehicle is rated
+ * by. Every `VehicleSpec` carries its own (see `vehicles.ts`), measured the
+ * same way the technical's were — full lock at a held speed for the corner,
+ * mid-range throttle for the accel, the flat for the brake — and `rateTrack`
+ * takes whichever one belongs to the vehicle a lap is being rated for.
+ */
+export interface CornerRating { corner: number; accel: number; brake: number }
+/** The technical's own numbers, and the default while nothing else is asked
+ *  for — see the constants this replaced, just below, for how they were
+ *  measured. */
+export const DEFAULT_RATING: CornerRating = { corner: 61, accel: 700, brake: 2400 };
 
 /**
  * What an ideal point mass beats a real truck by. The estimate below is a
@@ -739,7 +746,7 @@ export function difficultyBand(d: number): { level: number; name: string } {
   return { level: 5, name: BANDS[4][1] };
 }
 
-export function rateTrack(s: Shape, topSpeed: number, steps = 720): {
+export function rateTrack(s: Shape, topSpeed: number, rating: CornerRating = DEFAULT_RATING, steps = 720): {
   /** Seconds for a lap driven perfectly. */
   lap: number;
   /** What a good lap actually comes out at: the above and a bit. */
@@ -756,7 +763,7 @@ export function rateTrack(s: Shape, topSpeed: number, steps = 720): {
     const t = -Math.PI + ((i + 1) / steps) * Math.PI * 2;
     const p = centreline(t);
     ds.push(Math.hypot(p[0] - prev[0], p[1] - prev[1]));
-    lim.push(Math.min(topSpeed, CORNER * Math.sqrt(curveRadius(t, 200))));
+    lim.push(Math.min(topSpeed, rating.corner * Math.sqrt(curveRadius(t, 200))));
     prev = p;
   }
   shape = was;
@@ -767,11 +774,11 @@ export function rateTrack(s: Shape, topSpeed: number, steps = 720): {
   for (let pass = 0; pass < 2; pass++) {
     for (let i = steps - 1; i >= 0; i--) {
       const next = v[(i + 1) % steps];
-      v[i] = Math.min(v[i], Math.sqrt(next * next + 2 * BRAKE * ds[i]));
+      v[i] = Math.min(v[i], Math.sqrt(next * next + 2 * rating.brake * ds[i]));
     }
     for (let i = 0; i < steps; i++) {
       const back = v[(i - 1 + steps) % steps];
-      v[i] = Math.min(v[i], Math.sqrt(back * back + 2 * ACCEL * ds[i]));
+      v[i] = Math.min(v[i], Math.sqrt(back * back + 2 * rating.accel * ds[i]));
     }
   }
 

@@ -17,7 +17,6 @@ import type { Post } from './track';
 import { groupByMesh } from 'artshape-render/assembly/groups';
 import type { Mesh } from 'artshape-render/mesh/types';
 import { groundMesh, height } from './terrain';
-import { BODY_LENGTH } from './vehicle';
 import { SIZE } from './world';
 
 /** Where a compiled part's origin should end up. */
@@ -148,21 +147,10 @@ export const MESHES = {
   arm: () => box(LAMP_ARM, 21, 17),
   head: () => box(78, 50, HEAD_DEPTH),
   /**
-   * The player is a technical: a flatbed with a gun on the back that aims
-   * where it likes, not where the truck is pointing. It is five parts rather
-   * than one because that is what makes it read as a vehicle — a body that
-   * leans into a turn, wheels that actually roll, and a turret that swings
-   * independently of all of it.
-   */
-  chassis: () => part(`plate(card(width: ${BODY_LENGTH}, height: 128, corner: 18), thickness: 40, bevel: 7)`),
-  cab: () => part('plate(card(width: 96, height: 116, corner: 16), thickness: 64, bevel: 8)'),
-  /** Bolts on the face, so that the spin is visible on a shape that is a circle. */
-  wheel: () => part('disc(radius: 31, thickness: 24, sides: 16, bolts: 5, boltCircle: 17, boltBore: 5, bevel: 5)'),
-  /**
-   * A headlamp. Two of them on the front of the cab, laid over to face the
-   * way the truck is going. There were two headlight beams before this and
-   * nothing on the truck they came out of, which read as one glow with no
-   * source — a lamp you can see is what makes a beam belong to the vehicle.
+   * A small lit disc, reused for the starting bulbs. The vehicle's own
+   * headlamp mesh is part of its `VehicleKit` now (see `vehicles.ts`), since
+   * different classes carry different lamps; this one never changes with the
+   * driver.
    */
   lamp: () => part('disc(radius: 17, thickness: 14, sides: 14, bevel: 4)'),
   /** The post the starting lights stand on, beside the line. */

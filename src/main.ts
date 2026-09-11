@@ -15,6 +15,7 @@ import { GameRenderer, EFFECT_STRIDE, type GameGroup } from 'artshape-render/gam
 import { LightPool } from 'artshape-render/game/lights';
 import { PAINT, Race, TRUCKS, setCollisionGrid, type Input } from './game';
 import type { Pose } from './ghost';
+import type { VehicleSpec } from './vehicle';
 import { CONTROLS, SETTINGS, restoreDefaults, save, type SliderKey } from './settings';
 import { TREES, forestBuffers, replant, treeMesh } from './forest';
 import { BOLLARDS, RAILS, SIGNS, barMesh, boardPanelMesh, chevronMarkMesh, chevronPanelMesh, drumMesh, furnitureBuffers, railMesh, railPostMesh, rebuildFurniture, signPostMesh, tyreMesh } from './furniture';
@@ -22,7 +23,7 @@ import { clockLabel, skyAt } from './daylight';
 import { WATER_LEVEL, refloodArena, underWater, waterMesh } from './water';
 import { wheelEffects } from './particles';
 import { Skids, markMesh } from './skids';
-import { WHEELS } from './vehicle';
+import { VEHICLES, VEHICLE_KEYS, type VehicleKey } from './vehicles';
 import { START_BULBS, TRACK_HALF, centreline, circuitFor, difficultyBand, gantry, generateTrack, measureShape, radialToAcross, rateTrack, scaleShape, setTrack, shapePreview, tangentAt, where } from './track';
 import { height as groundAt, seedTerrain } from './terrain';
 import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices, resizeArena, restandColumns } from './scene';
@@ -39,6 +40,7 @@ const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
 const pregame = document.getElementById('pregame')!;
 const pregameMap = document.getElementById('pregameMap')!;
+const pregameVehicle = document.getElementById('pregameVehicle')!;
 const pregameSize = document.getElementById('pregameSize')!;
 const pregameFacts = document.getElementById('pregameFacts')!;
 const pregameRating = document.getElementById('pregameRating')!;
@@ -161,14 +163,15 @@ async function main() {
   // one is worse than no loading screen at all.
   await new Promise((r) => { requestAnimationFrame(r); setTimeout(r, 50); });
 
-  // The parts that are the same on every circuit: a truck, a lamp post, a
-  // gantry. Built once. Everything the circuit decides — the ground it is
-  // cut into, the tarmac, the kerbs, the water, where the posts stand and
-  // where the trees do — is built in `buildArena` and built again whenever
-  // the circuit changes.
+  // The parts that are the same on every circuit: a lamp post, a gantry, the
+  // small disc the starting bulbs are drawn from. Built once. Everything the
+  // circuit decides — the ground it is cut into, the tarmac, the kerbs, the
+  // water, where the posts stand and where the trees do — is built in
+  // `buildArena` and built again whenever the circuit changes. The vehicle's
+  // own meshes are not here: they come from its `VehicleKit` (`vehicles.ts`)
+  // and are rebuilt whenever the vehicle is, a few lines below.
   const mesh = {
     pole: MESHES.pole(), arm: MESHES.arm(), head: MESHES.head(),
-    chassis: MESHES.chassis(), cab: MESHES.cab(), wheel: MESHES.wheel(),
     lamp: MESHES.lamp(), gantry: MESHES.gantry(),
   };
 
@@ -245,6 +248,9 @@ async function main() {
 
   // The pools. Their size is fixed here and never changes again: what moves
   // each frame is the live count, and the matrices written into the prefix.
+  // Every vehicle class has exactly four wheels and two lamps — a kit is
+  // always this shape, see `VehicleKit` — so these do not move when the
+  // class does either; only the meshes drawn from them do.
   const chassisM = new Float32Array(TRUCKS * 16);
   const chassisMat = new Float32Array(TRUCKS * 4);
   const cabM = new Float32Array(TRUCKS * 16);
@@ -254,25 +260,47 @@ async function main() {
   const drawn: Pose[] = [];
   const startMat = new Float32Array(2 * START_BULBS * 4);
   const skids = new Skids();
-  const dynamic: GameGroup[] = [
-    // not a mirror: a polished metal under a near-black sky has nothing to
-    // reflect and reads as a dark shape. A little roughness gives the point
-    // lights a highlight wide enough to see the colour in.
-    { mesh: mesh.chassis, matrices: chassisM, count: TRUCKS, albedo: [1.0, 0.79, 0.36], roughness: 0.24 },
-    { mesh: mesh.cab, matrices: cabM, count: TRUCKS, albedo: [0.86, 0.90, 0.97], roughness: 0.12 },
-    // tyres: dark and rough, the one thing out here that is not a mirror
-    { mesh: mesh.wheel, matrices: wheelM, count: TRUCKS * 4, albedo: [0.07, 0.07, 0.08], roughness: 0.62 },
-    // near white and glossy, so the lamps read as lit glass rather than as
-    // two more lumps of the same metal the truck is made of
-    { mesh: mesh.lamp, matrices: lampM, count: TRUCKS * 2, albedo: [1.0, 0.97, 0.9], roughness: 0.06 },
-    // the starting bulbs, which never move and are recoloured every frame
-    { mesh: mesh.lamp, matrices: startBulbs(), count: 2 * START_BULBS, albedo: [0.2, 0.04, 0.03], roughness: 0.12 },
-    // the skid marks: a ring of dark quads on the road, laid by sliding tyres
-    { mesh: markMesh(), matrices: skids.matrices, count: 0, albedo: [0.028, 0.028, 0.032], roughness: 0.92 },
-  ];
-  renderer.setDynamic(dynamic);
+  const startBulbsM = startBulbs();
+
+  /** The two vehicle-shaped dynamic groups, drawn from whichever kit is in
+   *  force. Rebuilding them is a mesh swap on the same pools above — nothing
+   *  about how many buffers exist or how big they are changes with class. */
+  function vehicleGroups(spec: VehicleSpec): GameGroup[] {
+    return [
+      // not a mirror: a polished metal under a near-black sky has nothing to
+      // reflect and reads as a dark shape. A little roughness gives the
+      // point lights a highlight wide enough to see the colour in. The
+      // albedo here is overwritten every frame by `PAINT`; see `upload`.
+      { mesh: spec.kit.body(), matrices: chassisM, count: TRUCKS, albedo: [1.0, 0.79, 0.36], roughness: 0.24 },
+      { mesh: spec.kit.detail.mesh(), matrices: cabM, count: TRUCKS, albedo: spec.kit.detail.albedo, roughness: spec.kit.detail.roughness },
+      // tyres: dark and rough, the one thing out here that is not a mirror
+      { mesh: spec.kit.wheel(), matrices: wheelM, count: TRUCKS * 4, albedo: [0.07, 0.07, 0.08], roughness: 0.62 },
+      // near white and glossy, so the lamps read as lit glass rather than as
+      // two more lumps of the same metal the vehicle is made of
+      { mesh: spec.kit.lamp(), matrices: lampM, count: TRUCKS * 2, albedo: [1.0, 0.97, 0.9], roughness: 0.06 },
+    ];
+  }
+  // the starting bulbs, which never move and are recoloured every frame
+  const startBulbGroup: GameGroup = { mesh: mesh.lamp, matrices: startBulbsM, count: 2 * START_BULBS, albedo: [0.2, 0.04, 0.03], roughness: 0.12 };
+  // the skid marks: a ring of dark quads on the road, laid by sliding tyres
+  const skidGroup: GameGroup = { mesh: markMesh(), matrices: skids.matrices, count: 0, albedo: [0.028, 0.028, 0.032], roughness: 0.92 };
+  renderer.setDynamic([...vehicleGroups(VEHICLES[SETTINGS.vehicle]), startBulbGroup, skidGroup]);
+
+  /**
+   * A different vehicle. `setDynamic` releases the old buffers and uploads
+   * the new meshes into the same pools — the class changes what is drawn,
+   * not how many buffers exist to draw it into, since every kit is the same
+   * shape. The truck itself is `arena`'s to replace: see `Race.useVehicle`.
+   */
+  function switchVehicle(spec: VehicleSpec) {
+    arena.useVehicle(spec);
+    renderer.setDynamic([...vehicleGroups(spec), startBulbGroup, skidGroup]);
+  }
 
   const arena = new Race();
+  // `Race` defaults to the technical; put the vehicle that was actually
+  // saved in force before anything is drawn or driven.
+  if (SETTINGS.vehicle !== 'technical') arena.useVehicle(VEHICLES[SETTINGS.vehicle]);
   /**
    * The sun's shadow map, fitted round the whole arena at medium size and
    * smaller: 2048 texels across 14 metres is seven millimetres each, which
@@ -401,7 +429,7 @@ async function main() {
    * race button is pressed, and only if the circuit actually changed.
    */
   const NS = 'http://www.w3.org/2000/svg';
-  let choice = { seed: SETTINGS.seed, size: SETTINGS.size };
+  let choice = { seed: SETTINGS.seed, size: SETTINGS.size, vehicle: SETTINGS.vehicle };
   /** What the arena is currently built for, so racing the same one is free. */
   let built = { ...choice };
   let racing = false;
@@ -430,17 +458,31 @@ async function main() {
     btn.type = 'button';
     btn.textContent = s.label;
     btn.addEventListener('click', () => {
-      preview(choice.seed, s.key);
+      preview(choice.seed, choice.vehicle, s.key);
       btn.blur();
     });
     pregameSize.appendChild(btn);
     sizeButtons.set(s.key, btn);
   }
+  // The vehicle picker, the same way.
+  const vehicleButtons = new Map<VehicleKey, HTMLButtonElement>();
+  for (const key of VEHICLE_KEYS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = VEHICLES[key].label;
+    btn.addEventListener('click', () => {
+      preview(choice.seed, key, choice.size);
+      btn.blur();
+    });
+    pregameVehicle.appendChild(btn);
+    vehicleButtons.set(key, btn);
+  }
 
   /** Draw a circuit on the select screen without building any of it. */
-  function preview(seed: number, size: SizeKey) {
-    choice = { seed, size };
+  function preview(seed: number, vehicle: VehicleKey, size: SizeKey) {
+    choice = { seed, vehicle, size };
     for (const [key, btn] of sizeButtons) btn.setAttribute('aria-pressed', String(key === size));
+    for (const [key, btn] of vehicleButtons) btn.setAttribute('aria-pressed', String(key === vehicle));
     const shape = circuitFor(seed, sizeOf(size));
     const p = shapePreview(shape);
     pregameMap.setAttribute('viewBox', p.box.join(' '));
@@ -449,15 +491,17 @@ async function main() {
     startLine.setAttribute('x1', String(p.start[0])); startLine.setAttribute('y1', String(p.start[1]));
     startLine.setAttribute('x2', String(p.start[2])); startLine.setAttribute('y2', String(p.start[3]));
     if (document.activeElement !== pregameSeed) pregameSeed.value = String(seed);
-    // Rated against the top speed in force, because that is what decides
-    // which corners are corners: turn the truck down and a circuit really
-    // does get easier, and a rating that ignored the setting would be
-    // describing somebody else's car.
-    const r = rateTrack(shape, SETTINGS.topSpeed);
+    // Rated against the chosen vehicle's own top speed and rating, because
+    // that is what decides which corners are corners: a different car
+    // really does make a circuit easier or harder, and a rating that
+    // ignored it would be describing somebody else's car.
+    const spec = VEHICLES[vehicle];
+    const r = rateTrack(shape, spec.engine.topSpeed * SETTINGS.pace, spec.rating);
     const band = difficultyBand(r.difficulty);
     pregameFacts.innerHTML =
       `${seed === 0 ? 'the original circuit' : `circuit <span>#${seed}</span>`}`
       + ` · <span>${labelOf(size)}</span>`
+      + ` · <span>${spec.label}</span>`
       + ` · <span>${(p.length / 1000).toFixed(1)}</span> m`
       + ` · about <span>${r.par.toFixed(1)}</span> s a lap`
       + ` · tightest corner <span>${Math.round(p.curve)}</span> mm`;
@@ -467,15 +511,29 @@ async function main() {
 
   function openPregame() {
     racing = false;
-    preview(SETTINGS.seed, SETTINGS.size);
+    preview(SETTINGS.seed, SETTINGS.vehicle, SETTINGS.size);
     pregame.removeAttribute('hidden');
   }
 
   function startRace() {
-    // only rebuild if it is a different road; racing the same one again is
-    // a reset, not a rebuild of the geometry
-    if (choice.seed !== built.seed || choice.size !== built.size) {
+    // Rebuild only what actually changed. Racing the same road in the same
+    // car again is a reset and costs nothing; a different road rebuilds the
+    // arena (and brings a different vehicle with it in the same pass, so a
+    // seed and a class chosen together are not two rebuilds); a different
+    // car on the same road is a mesh swap and nothing more.
+    const roadChanged = choice.seed !== built.seed || choice.size !== built.size;
+    const vehicleChanged = choice.vehicle !== built.vehicle;
+    if (roadChanged) {
       newTrack(choice.seed, choice.size);
+      if (vehicleChanged) { SETTINGS.vehicle = choice.vehicle; save(); switchVehicle(VEHICLES[choice.vehicle]); }
+      built = { ...choice };
+    } else if (vehicleChanged) {
+      // a different car on the same road: swap the meshes and the physics,
+      // and clear the ghost — its lap belongs to the vehicle it was driven
+      // in as much as to the circuit
+      SETTINGS.vehicle = choice.vehicle;
+      save();
+      switchVehicle(VEHICLES[choice.vehicle]);
       built = { ...choice };
     } else {
       arena.reset();
@@ -485,12 +543,12 @@ async function main() {
   }
 
   pregameAnother.addEventListener('click', () => {
-    preview(1 + Math.floor(Math.random() * 998), choice.size);
+    preview(1 + Math.floor(Math.random() * 998), choice.vehicle, choice.size);
     (pregameAnother as HTMLElement).blur();
   });
   pregameSeed.addEventListener('input', () => {
     const v = Math.max(0, Math.min(999999, Math.floor(Number(pregameSeed.value))));
-    if (Number.isFinite(v)) preview(v, choice.size);
+    if (Number.isFinite(v)) preview(v, choice.vehicle, choice.size);
   });
   pregameSeed.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { pregameSeed.blur(); startRace(); }
@@ -591,13 +649,14 @@ async function main() {
     return png.length;
   };
   Object.assign(globalThis as Record<string, unknown>, {
-    arena, renderer, orbit, input, lights, measure, shoot, skids, newTrack, timings,
+    arena, renderer, orbit, input, lights, measure, shoot, skids, newTrack, timings, switchVehicle,
     // the app's own copy of the circuit. A console `import('/src/track.ts')`
     // is a different module instance with a different shape in it, which
     // makes a test driver steer for a road that is not there.
     track: { centreline, tangentAt, generateTrack, where, radialToAcross, circuitFor, scaleShape, measureShape },
     furniture: { rails: () => RAILS, bollards: () => BOLLARDS, signs: () => SIGNS, buffers: furnitureBuffers },
     world: { SIZES, sizeOf, labelOf, columns: () => COLUMNS, props: () => TREES },
+    vehicles: VEHICLES,
   });
 
   /**
@@ -759,14 +818,19 @@ async function main() {
         truck.z + bf[2] * lx + bl[2] * ly + bu[2] * lz,
       ];
 
+      // Both poses drawn here belong to the vehicle in force: the ghost is
+      // cleared whenever the class changes (`Race.useVehicle`), so it is
+      // never a recording of a different kit's geometry.
+      const spec = arena.truck.spec;
       const chassis = on(0, 0, 0);
       placeVehiclePart(chassisM, ci, chassis[0], chassis[1], chassis[2], yaw, pitch, roll);
       chassisMat.set([...PAINT[ci], 0.24], ci * 4);
-      const cab = on(74, 0, 40);
+      const [dx, dy, dz] = spec.kit.detail.at;
+      const cab = on(dx, dy, dz);
       placeVehiclePart(cabM, ci, cab[0], cab[1], cab[2], yaw, pitch, roll);
 
-      for (let i = 0; i < WHEELS.length; i++) {
-        const [lx, ly, lz] = WHEELS[i];
+      for (let i = 0; i < spec.wheels.length; i++) {
+        const [lx, ly, lz] = spec.wheels[i];
         const w = truck.wheels[i];
         const hub = on(lx, ly, lz - w.drop);
         placeVehicleWheel(wheelM, ci * 4 + i, hub[0], hub[1], hub[2], yaw, pitch, roll, w.steer, w.spin);
@@ -1194,7 +1258,7 @@ function buildConfig(applied: (key: SliderKey) => void, chooseCircuit: () => voi
   const trackValue = document.createElement('output');
   const showSeed = () => {
     const seed = SETTINGS.seed === 0 ? 'the original' : `#${SETTINGS.seed}`;
-    trackValue.textContent = `${labelOf(SETTINGS.size)} · ${seed}`;
+    trackValue.textContent = `${labelOf(SETTINGS.size)} · ${seed} · ${VEHICLES[SETTINGS.vehicle].label}`;
     shuffle.textContent = 'choose circuit';
   };
   showSeed();

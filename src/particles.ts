@@ -15,7 +15,7 @@
  * lamplight and by day a white splash.
  */
 import type { GameRenderer } from 'artshape-render/game/renderer';
-import { WHEEL_RADIUS, type Vehicle, type Wheel } from './vehicle';
+import type { Vehicle, Wheel } from './vehicle';
 import { WATER_LEVEL } from './water';
 
 /** A sliding tyre smokes above this much of a slide. */
@@ -64,7 +64,7 @@ export function wheelEffects(renderer: GameRenderer, v: Vehicle, w: Wheel, hub: 
     // Smoke: from the contact patch, drifting with a share of the truck's
     // motion and up, swelling as it thins. More of it the harder the slide.
     renderer.emit({
-      position: [hub[0], hub[1], hub[2] - WHEEL_RADIUS + 8],
+      position: [hub[0], hub[1], hub[2] - v.spec.wheelRadius + 8],
       velocity: [v.vx * 0.25, v.vy * 0.25, 70],
       spread: 110,
       count: Math.max(1, Math.min(5, Math.round(w.slide * 4))),

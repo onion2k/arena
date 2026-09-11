@@ -15,6 +15,7 @@
 
 import { clockLabel } from './daylight';
 import { SIZES, type SizeKey } from './world';
+import { VEHICLE_KEYS, type VehicleKey } from './vehicles';
 
 export interface Settings {
   /** How much the environment lights everything, before any lamp does. */
@@ -27,8 +28,13 @@ export interface Settings {
    * The ambient above is the night's; by day it is set by the daylight.
    */
   time: number;
-  /** Where the engine and the drag balance, in mm/s. */
-  topSpeed: number;
+  /**
+   * A multiplier on the vehicle's own top speed: under one holds it back,
+   * over lets it carry more into the drag. Not an absolute mm/s any more —
+   * each class balances the engine and the drag at a different speed of its
+   * own, so a shared slider has to scale that rather than replace it.
+   */
+  pace: number;
   /** A multiplier on the steering lock: under one turns wider, over tighter. */
   steering: number;
   /**
@@ -57,13 +63,15 @@ export interface Settings {
    * chosen on the track-select screen and pressed for, not dragged through.
    */
   size: SizeKey;
+  /** Which vehicle class. Kept across sessions the same way as the size. */
+  vehicle: VehicleKey;
 }
 
 export const DEFAULTS: Readonly<Settings> = {
   ambient: 0.035,
   flood: 5.8,
   time: 22,
-  topSpeed: 2300,
+  pace: 1,
   steering: 1,
   bloom: 0.35,
   vignette: 0.3,
@@ -71,13 +79,14 @@ export const DEFAULTS: Readonly<Settings> = {
   mist: 1,
   seed: 0,
   size: 'M',
+  vehicle: 'technical',
 };
 
 /**
  * A setting a slider can drive: everything except the seed and the size,
  * which are buttons and not ranges — see `SliderKey`.
  */
-export type SliderKey = Exclude<keyof Settings, 'seed' | 'size'>;
+export type SliderKey = Exclude<keyof Settings, 'seed' | 'size' | 'vehicle'>;
 
 /** One row of the panel: which setting, what to call it, how far it goes. */
 export interface Control {
@@ -94,7 +103,7 @@ export const CONTROLS: Control[] = [
   { key: 'ambient', label: 'ambient light', min: 0, max: 0.3, step: 0.005, show: (v) => v.toFixed(3) },
   { key: 'flood', label: 'floodlights', min: 0, max: 14, step: 0.2, show: (v) => v.toFixed(1) },
   { key: 'time', label: 'time of day', min: 0, max: 24, step: 0.25, show: clockLabel },
-  { key: 'topSpeed', label: 'top speed', min: 1200, max: 3400, step: 50, show: (v) => `${v} mm/s` },
+  { key: 'pace', label: 'pace', min: 0.6, max: 1.4, step: 0.02, show: (v) => `×${v.toFixed(2)}` },
   { key: 'steering', label: 'steering', min: 0.5, max: 1.6, step: 0.05, show: (v) => `×${v.toFixed(2)}` },
   { key: 'bloom', label: 'bloom', min: 0, max: 1.5, step: 0.05, show: (v) => v.toFixed(2) },
   { key: 'vignette', label: 'vignette', min: 0, max: 0.8, step: 0.05, show: (v) => v.toFixed(2) },
@@ -128,6 +137,10 @@ function load(): Partial<Settings> {
     if (typeof saved.size === 'string' && SIZES.some((s) => s.key === saved.size)) {
       out.size = saved.size as SizeKey;
     }
+    // and the vehicle: a button, checked against the classes that exist
+    if (typeof saved.vehicle === 'string' && VEHICLE_KEYS.includes(saved.vehicle as VehicleKey)) {
+      out.vehicle = saved.vehicle as VehicleKey;
+    }
     for (const c of CONTROLS) {
       const v = saved[c.key];
       if (typeof v === 'number' && Number.isFinite(v)) {
@@ -152,6 +165,7 @@ export function save() {
 export function restoreDefaults() {
   const seed = SETTINGS.seed;
   const size = SETTINGS.size;
-  Object.assign(SETTINGS, DEFAULTS, { seed, size });
+  const vehicle = SETTINGS.vehicle;
+  Object.assign(SETTINGS, DEFAULTS, { seed, size, vehicle });
   save();
 }
