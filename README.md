@@ -306,16 +306,73 @@ per-class number where the technical had a constant.
 | grip (μ) | 1.35 | 1.45 | 1.70 | 1.95 |
 | suspension travel | 26 | 34 | 18 | 12 |
 | collision radius | 98 | 90 | 105 | 110 |
-| par lap, seed 0, medium | 14.6 s | ~13.5 s | ~11.6 s | ~10.5 s |
+| corner / accel / brake rating | 61 / 700 / 2400 | 73 / 785 / 2627 | 69 / 852 / 2915 | 60 / 1015 / 3410 |
+| par lap, seed 0, medium | 14.6 s | 13.3 s | 11.9 s | 12.7 s |
+
+### Benching the three new classes
 
 The cornering, acceleration and braking numbers that feed the lap rating
-(`rating.corner/accel/brake` — see [How hard is it](#how-hard-is-it)) are a
-first pass for the three new classes and not yet a bench result: the
-technical's own `61`/`700`/`2400` were measured off it directly, full lock
-held at a speed, the flat between two speeds under full brake and under
-throttle, and the other three are estimated from their grip and power ahead
-of the same measurement. The par times above follow from that estimate and
-will move once they are actually benched.
+(`rating.corner/accel/brake` — see [How hard is it](#how-hard-is-it)) are
+now a bench result, `bench.ts`, for all four classes — the three new ones
+were a guess before this.
+
+Benching found two bugs in the bench before it found any numbers. First:
+driven down the shipped circuit's own straight for the run, every class's
+acceleration swung through thousands of mm/s² from one sample to the next,
+because that straight is not flat — it rides `terrain.ts`'s swell and ramp
+waves, and the suspension was reporting them back exactly as it should.
+`setBenchFlat` takes the ground out of the way. Second: a full-throttle run
+long enough to reach top speed covers ground `where`'s polar offset was
+never meant to answer for on a loop a few metres across, and reads as
+running wide within a few seconds — `setBenchGrip` holds grip at 1 for the
+run instead.
+
+A third thing surfaced once those two were out of the way, and it is not a
+bench bug: held dead straight at full throttle for long enough, every
+vehicle here — the technical too, untouched by any of this — settles into a
+sustained pitch-and-heave oscillation that does not damp out, tens of
+millimetres of ride height and tenths of a radian of pitch, sample to
+sample. It is a real mode of the suspension, excited by a perfectly
+symmetric, perfectly sustained input gameplay never actually supplies — a
+human corrects a line rather than holding millimetre-straight for twenty
+seconds, and the real terrain's bumps are irregular rather than tuned to
+the resonance. Fixing the mode is out of scope here; the bench instead
+measures quantities an integral is robust to it, rather than an instant
+reading. Accel and brake are `v² = u² + 2as` over a window wide enough to
+span several cycles of it, which averages the oscillation out rather than
+sampling whatever phase a run happens to end on. Corner turned out to want
+a different fix again: held at a *fixed* speed, the same oscillation (or a
+throttle servo fighting it) corrupted the reading; run instead at full lock
+and a fixed, moderate throttle with nothing held constant, every class
+settles cleanly — no oscillation at all, cornering hard turns out to be
+exactly the asymmetric input that damps the straight-line mode out — onto
+its own steady circle, and that settled speed is what gets sampled.
+
+None of this reproduced the technical's own shipped rating: benched the
+same way, it reads nearer `55` / `3090` / `5500` against its shipped
+`61` / `700` / `2400`. That gap is not a bug in either number — `rateTrack`'s
+own comment says its ideal-point-mass lap is checked against real driven
+laps and runs 8 to 16% quick, and a rating tuned down from the raw physics
+toward what a lap actually takes is exactly what that comparison would
+produce, which this bench cannot redo without twenty real recorded laps to
+check against. So the three new classes are not rated at the raw bench
+number: each is scaled by the same factor the technical's shipped rating
+already carries against its own bench result — corner ×1.113, accel
+×0.227, brake ×0.437 — the only calibration available to check this bench
+against at all.
+
+One finding worth keeping rather than tuning away: the F1 car's benched
+corner rating, 54.3 raw, comes out barely above the technical's own 54.8
+despite having by far the most tyre grip of the four (μ 1.95). The bench
+holds every class at full lock at roughly half its own top speed, and at
+the F1's own settled 1559 mm/s there its steering — the tightest lock and
+the widest fall-off of the four — has already wound off most of what it
+had, and its 276mm wheelbase widens the geometric circle on top of that.
+This class is limited by its own steering geometry at that speed, not by
+what its tyres could hold — which happens to be true of a real F1 car too:
+fast in a flowing corner, not nimble in a hairpin. It is why the Le Mans
+prototype, not the F1, has the shortest par lap on the tight, original
+circuit above.
 
 **A kit is always the same shape.** One painted body — the thing that takes
 the gold-or-blue tint the player and the ghost are told apart by — one

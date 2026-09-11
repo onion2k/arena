@@ -25,6 +25,7 @@ import { WATER_LEVEL, refloodArena, underWater, waterMesh } from './water';
 import { wheelEffects } from './particles';
 import { Skids, markMesh } from './skids';
 import { VEHICLES, VEHICLE_KEYS, type VehicleKey } from './vehicles';
+import { bench } from './bench';
 import { START_BULBS, TRACK_HALF, centreline, circuitFor, difficultyBand, gantry, generateTrack, measureShape, radialToAcross, rateTrack, scaleShape, setTrack, shapePreview, tangentAt, where } from './track';
 import { height as groundAt, seedTerrain } from './terrain';
 import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices, resizeArena, restandColumns } from './scene';
@@ -710,7 +711,7 @@ async function main() {
     furniture: { rails: () => RAILS, bollards: () => BOLLARDS, signs: () => SIGNS, buffers: furnitureBuffers },
     world: { SIZES, sizeOf, labelOf, columns: () => COLUMNS, props: () => PROPS },
     biomes: BIOMES,
-    vehicles: VEHICLES,
+    vehicles: VEHICLES, bench,
   });
 
   /**

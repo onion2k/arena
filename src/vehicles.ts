@@ -5,10 +5,23 @@
  * `vehicle.ts` one constant at a time — nothing about how it drives has
  * changed. The other three are new: a rally car, a Le Mans prototype, an F1
  * car, each a full `VehicleSpec` of its own rather than a multiplier on the
- * technical's. Their numbers are a first pass, not a bench result — `corner`,
- * `accel` and `brake` in `rating` are exactly the kind of thing this file's
- * own comment on the technical says should be measured and not guessed, and
- * `bench.ts` is what does that once a class exists to point it at.
+ * technical's.
+ *
+ * Their `rating` fields are `bench.ts` results now, not the guess this
+ * comment used to call them. A bench run on flat, full-grip ground (see
+ * that file for why) reads a class's raw physical limit, which is well
+ * above what any of these three are actually rated at here — the
+ * technical's own bench comes out near 55/3090/5500 against its shipped
+ * 61/700/2400, and `rateTrack`'s own comment says why: its ideal-point-mass
+ * lap is checked against real driven laps and runs 8 to 16% quick, so a
+ * rating equal to the raw physics would make every circuit's par time
+ * optimistic by more than that. Rather than leave the new three at the raw
+ * number or re-guess a correction, each is scaled by the same factor the
+ * technical's own rating already carries against its own bench — corner
+ * ×1.113, accel ×0.227, brake ×0.437 — which is the only calibration this
+ * bench has anything to check itself against. `bench(vehicles.rally)` and
+ * so on from the console (`bench.ts`) reproduce the raw numbers next to
+ * each `rating` below; the scaled result is what is committed.
  *
  * A kit is always the same shape — one painted body, one unpainted detail
  * part, a wheel, a lamp — so switching class is a mesh swap on two dynamic
@@ -45,6 +58,8 @@ const TECHNICAL: VehicleSpec = {
   inertia: { gyration: 1.3, antiSquat: 0.82, tiltLimit: 0.7, airSpinDamp: 1.1 },
   maxSpeed: 4200,
   radius: 98,
+  // bench: corner 54.8, accel 3087, brake 5497 at top speed 2300 — the
+  // shipped rating below is not this; see the file comment above.
   rating: { corner: 61, accel: 700, brake: 2400 },
   kit: {
     body: () => part('plate(card(width: 300, height: 128, corner: 18), thickness: 40, bevel: 7)'),
@@ -83,7 +98,8 @@ const RALLY: VehicleSpec = {
   inertia: { gyration: 1.25, antiSquat: 0.8, tiltLimit: 0.7, airSpinDamp: 1.1 },
   maxSpeed: 4400,
   radius: 90,
-  rating: { corner: 66, accel: 760, brake: 2500 },
+  // bench: corner 65.6, accel 3462, brake 6016 at top speed 2500
+  rating: { corner: 73, accel: 785, brake: 2627 },
   kit: {
     body: () => part('plate(card(width: 260, height: 120, corner: 22), thickness: 56, bevel: 9)'),
     detail: {
@@ -121,7 +137,8 @@ const LMP: VehicleSpec = {
   inertia: { gyration: 1.2, antiSquat: 0.85, tiltLimit: 0.6, airSpinDamp: 1.0 },
   maxSpeed: 4800,
   radius: 105,
-  rating: { corner: 74, accel: 820, brake: 2900 },
+  // bench: corner 62.0, accel 3755, brake 6676 at top speed 3000
+  rating: { corner: 69, accel: 852, brake: 2915 },
   kit: {
     body: () => part('plate(card(width: 340, height: 130, corner: 20), thickness: 30, bevel: 6)'),
     detail: {
@@ -160,7 +177,17 @@ const F1: VehicleSpec = {
   inertia: { gyration: 1.1, antiSquat: 0.88, tiltLimit: 0.5, airSpinDamp: 0.9 },
   maxSpeed: 5200,
   radius: 110,
-  rating: { corner: 82, accel: 900, brake: 3300 },
+  // bench: corner 54.3, accel 4477, brake 7809 at top speed 3300. Corner
+  // comes out barely above the technical's own 61 despite this having by
+  // far the most tyre grip of the four (mu 1.95) — the bench holds every
+  // class at full lock at roughly half its own top speed, and at F1's
+  // 1559 mm/s there `steering.lock` (0.48, the tightest here) and
+  // `steering.falloff` (3800, the widest) have already wound most of the
+  // lock off, and the 276mm wheelbase widens the geometric circle on top
+  // of that — so this class is limited by its own steering geometry at
+  // this speed, not by what its tyres could hold. Real F1 cars are built
+  // the same way: fast in a flowing corner, not nimble in a hairpin.
+  rating: { corner: 60, accel: 1015, brake: 3410 },
   kit: {
     body: () => part('plate(card(width: 360, height: 110, corner: 16), thickness: 22, bevel: 5)'),
     detail: {

@@ -191,7 +191,23 @@ const BASE = WAVES.map((w) => ({
   env: w.env ? { angle: w.env.angle, phase: w.env.phase } : undefined,
 }));
 
+/**
+ * Flat, for benching a vehicle rather than driving it. `CORNER`/`ACCEL`/
+ * `BRAKE` (`track.ts`) are a vehicle's cornering, acceleration and braking
+ * limits in isolation — what the tyres and the engine can do — and the
+ * shipped circuit is not isolation: coasting the technical down a straight
+ * at full throttle put its acceleration through swings of ±2000mm/s² sample
+ * to sample as its wheels rode the swell and the ramp waves, which is the
+ * suspension working exactly as it should and is not the number a bench
+ * wants. `setBenchFlat` takes the ground out of the way; `bench.ts` is what
+ * uses it. Nothing else may turn this on — a race with it on would be a
+ * race with no hills in it.
+ */
+let benchFlat = false;
+export function setBenchFlat(flat: boolean) { benchFlat = flat; }
+
 export function height(x: number, y: number): number {
+  if (benchFlat) return 0;
   let h = 0;
   for (const w of WAVES) {
     const k = (Math.PI * 2) / w.len;
@@ -207,6 +223,7 @@ export function height(x: number, y: number): number {
  * a normal belonging to a hill they are not on.
  */
 export function normal(x: number, y: number): [number, number, number] {
+  if (benchFlat) return [0, 0, 1];
   let dx = 0; let dy = 0;
   for (const w of WAVES) {
     const k = (Math.PI * 2) / w.len;

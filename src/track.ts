@@ -112,8 +112,20 @@ export function where(x: number, y: number): { lap: number; offset: number } {
   };
 }
 
+/**
+ * Full grip everywhere, for a bench that wants a vehicle in isolation and
+ * not this circuit's shoulder. `where`'s offset is polar and the circuit is
+ * a few metres across; a bench drives straight for a full top-speed run,
+ * which in a few seconds covers ground the polar model was never meant to
+ * answer for and reads as running wide long before it actually would on
+ * the real loop. See `bench.ts`.
+ */
+let benchGrip = false;
+export function setBenchGrip(full: boolean) { benchGrip = full; }
+
 /** How much grip the surface gives, 1 on the tarmac and less off it. */
 export function gripAt(x: number, y: number): number {
+  if (benchGrip) return 1;
   const off = Math.abs(where(x, y).offset);
   if (off <= TRACK_HALF) return 1;
   // A shoulder that lets go over 200mm rather than at a line, so running wide
