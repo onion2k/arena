@@ -30,6 +30,31 @@ Needs a browser with WebGPU.
 | wheel | in, or out until the whole circuit is in frame |
 | **C** | put the camera back |
 
+### Tests
+
+```bash
+npm test
+```
+
+No browser: the circuit, the ground, the water, the vehicle and the race are
+all CPU, and `circuit.ts` builds a circuit exactly as the page does without a
+canvas in sight. `src/__tests__` drives a vehicle round one with a script and
+checks what happened.
+
+Two kinds of test. The **recordings** are snapshots: what `useTrack` lays out
+for every size and biome on two circuits — props, posts, rails, bollards,
+how deep the water came out — and a hash of where the vehicle was after every
+frame of a 34-second scripted drive, for each class and a spread of circuits.
+A change meant to leave the driving alone must leave every hash alone; one
+meant to change it updates them with `npx vitest -u`, and the diff says which
+runs moved. The vehicle refactor was checked this way by hand, against a
+worktree at the commit before it, and the check went with the worktree; it
+only ever drove seed 0 in the forest, which is how the fords draining on most
+other circuits got past it. The **invariants** say what has to hold whatever
+the numbers are: the water is as deep as the biome asks unless the grid would
+be under it, and every class holds four wheels on the ground flat out at any
+frame rate.
+
 ## The ghost
 
 There were three rivals with a driving model of their own. They were
@@ -1530,6 +1555,8 @@ mysteriously got four times slower while the GPU was doing the same work.
 | --- | --- |
 | `src/main.ts` | wiring: device, meshes, pools, the frame loop, the camera |
 | `src/game.ts` | the race: the truck, the walls, the lap and the clock |
+| `src/circuit.ts` | building a circuit: size, biome, ground, water, posts, flora, collisions |
+| `src/__tests__` | the recordings and the invariants, run in node: `npm test` |
 | `src/vehicle.ts` | the truck: suspension, tyres, a body with mass |
 | `src/track.ts` | the circuit, and where on it a point is |
 | `src/terrain.ts` | the ground, as one function everything reads |

@@ -24,7 +24,7 @@ import type { Mesh } from 'artshape-render/mesh/types';
 export const FORD_DEPTH = 20;
 
 /** The lowest the road surface gets, measured round the whole lap. */
-function lowestRoad(): number {
+export function lowestRoad(): number {
   let lo = Infinity;
   const n = 3000;
   for (let i = 0; i < n; i++) {

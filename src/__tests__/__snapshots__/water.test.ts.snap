@@ -1,0 +1,38 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the arena as built > matches the recorded layout 1`] = `
+{
+  "#0 L desert": "3139 props, 62 posts, 14 rails, 112 bollards, water dry",
+  "#0 L forest": "3307 props, 62 posts, 13 rails, 97 bollards, water 0mm",
+  "#0 L marsh": "691 props, 62 posts, 5 rails, 41 bollards, water 20mm",
+  "#0 L snow": "3061 props, 62 posts, 13 rails, 97 bollards, water 0mm",
+  "#0 M desert": "1651 props, 42 posts, 55 rails, 105 bollards, water dry",
+  "#0 M forest": "1549 props, 42 posts, 43 rails, 93 bollards, water 20mm",
+  "#0 M marsh": "388 props, 42 posts, 20 rails, 43 bollards, water 20mm",
+  "#0 M snow": "1397 props, 42 posts, 43 rails, 93 bollards, water 20mm",
+  "#0 S desert": "818 props, 32 posts, 48 rails, 88 bollards, water dry",
+  "#0 S forest": "713 props, 32 posts, 39 rails, 68 bollards, water 20mm",
+  "#0 S marsh": "155 props, 32 posts, 19 rails, 40 bollards, water 20mm",
+  "#0 S snow": "646 props, 32 posts, 39 rails, 68 bollards, water 20mm",
+  "#0 XL desert": "4602 props, 84 posts, 7 rails, 131 bollards, water dry",
+  "#0 XL forest": "4348 props, 84 posts, 4 rails, 115 bollards, water 20mm",
+  "#0 XL marsh": "1215 props, 84 posts, 3 rails, 64 bollards, water 20mm",
+  "#0 XL snow": "4061 props, 84 posts, 4 rails, 115 bollards, water 20mm",
+  "#63 L desert": "3198 props, 58 posts, 0 rails, 99 bollards, water dry",
+  "#63 L forest": "2813 props, 58 posts, 0 rails, 89 bollards, water 20mm",
+  "#63 L marsh": "281 props, 58 posts, 0 rails, 27 bollards, water 20mm",
+  "#63 L snow": "2560 props, 58 posts, 0 rails, 89 bollards, water 20mm",
+  "#63 M desert": "1760 props, 38 posts, 25 rails, 84 bollards, water dry",
+  "#63 M forest": "1685 props, 38 posts, 18 rails, 73 bollards, water 20mm",
+  "#63 M marsh": "314 props, 38 posts, 5 rails, 42 bollards, water 20mm",
+  "#63 M snow": "1522 props, 38 posts, 18 rails, 73 bollards, water 20mm",
+  "#63 S desert": "889 props, 30 posts, 26 rails, 70 bollards, water dry",
+  "#63 S forest": "1079 props, 30 posts, 26 rails, 70 bollards, water 0mm",
+  "#63 S marsh": "370 props, 30 posts, 7 rails, 40 bollards, water 20mm",
+  "#63 S snow": "972 props, 30 posts, 26 rails, 70 bollards, water 0mm",
+  "#63 XL desert": "4667 props, 76 posts, 0 rails, 129 bollards, water dry",
+  "#63 XL forest": "4115 props, 76 posts, 0 rails, 104 bollards, water 0mm",
+  "#63 XL marsh": "314 props, 76 posts, 0 rails, 29 bollards, water 20mm",
+  "#63 XL snow": "3759 props, 76 posts, 0 rails, 104 bollards, water 0mm",
+}
+`;
