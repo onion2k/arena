@@ -35,6 +35,9 @@ export interface PropKind {
   sink: number;
   /** Share of plantings this kind takes when a biome has more than one. */
   weight: number;
+  /** Stands in water. Where the ground is under it, only these kinds are
+   *  planted; nothing else ever is. */
+  wet?: boolean;
   /**
    * Either one colour for the whole kind, or a per-instance rule — the
    * forest's is a rule, so every tree gets its own green the way it always
@@ -51,7 +54,14 @@ export interface Biome {
   kerb: [[number, number, number], [number, number, number]];
   /** `depth` is over the lowest point of the road, the way `FORD_DEPTH`
    *  always was; `null` is no water at all. */
-  water: { depth: number | null; albedo: [number, number, number]; roughness: number };
+  water: {
+    depth: number | null;
+    albedo: [number, number, number];
+    roughness: number;
+    /** Frozen: the share of a tyre's grip left on it, or null for water a
+     *  wheel goes through. Ice has no drag and throws no spray. */
+    ice: number | null;
+  };
   /** One factor per row of `terrain.ts`'s `WAVES`, in order: swell, swell,
    *  roll, roll, ramp. */
   terrain: { ampScale: number[] };
@@ -82,7 +92,7 @@ const FOREST: Biome = {
   ground: { albedo: [0.042, 0.048, 0.066], roughness: 0.62 },
   tarmac: { albedo: [0.058, 0.062, 0.072], roughness: 0.85 },
   kerb: [[0.62, 0.075, 0.055], [0.80, 0.80, 0.82]],
-  water: { depth: 20, albedo: [0.02, 0.045, 0.07], roughness: 0.06 },
+  water: { depth: 20, albedo: [0.02, 0.045, 0.07], roughness: 0.06, ice: null },
   terrain: { ampScale: [1, 1, 1, 1, 1] },
   offTrackLoss: 0.32,
   sky: { tint: [1, 1, 1], ambientScale: 1 },
@@ -102,7 +112,7 @@ const DESERT: Biome = {
   ground: { albedo: [0.32, 0.24, 0.15], roughness: 0.78 },
   tarmac: { albedo: [0.10, 0.09, 0.08], roughness: 0.82 },
   kerb: [[0.58, 0.10, 0.06], [0.78, 0.74, 0.62]],
-  water: { depth: null, albedo: [0, 0, 0], roughness: 1 },
+  water: { depth: null, albedo: [0, 0, 0], roughness: 1, ice: null },
   // long dunes, soft ramps: the long-swell slope at 1.6x is 6.7 degrees,
   // well under the shoulder's 24-degree climb limit — a bigger dune and
   // still ground a truck can leave at a jog if it runs wide
@@ -136,9 +146,8 @@ const SNOW: Biome = {
   tarmac: { albedo: [0.05, 0.055, 0.065], roughness: 0.8 },
   kerb: [[0.55, 0.08, 0.06], [0.85, 0.86, 0.90]],
   // frozen: real water, drawn pale and semi-gloss rather than a black
-  // mirror, and the ice's own grip loss is on the vehicle side (see
-  // `track.ts`'s surface read) rather than here
-  water: { depth: 20, albedo: [0.75, 0.82, 0.90], roughness: 0.28 },
+  // mirror, and a third of the grip on it (see the README, "Ice")
+  water: { depth: 20, albedo: [0.75, 0.82, 0.90], roughness: 0.28, ice: 0.35 },
   terrain: { ampScale: [1, 1, 1, 1, 1] },
   offTrackLoss: 0.4,
   sky: { tint: [0.95, 1.0, 1.08], ambientScale: 1.25 },
@@ -168,7 +177,7 @@ const MARSH: Biome = {
   // under the opaque water a car's length from the grid, and nothing
   // planted, because nothing grows in water. A marsh that is mostly water
   // needs a road that stays visible in it and reeds that stand in it first.
-  water: { depth: 20, albedo: [0.05, 0.08, 0.06], roughness: 0.15 },
+  water: { depth: 20, albedo: [0.07, 0.11, 0.09], roughness: 0.12, ice: null },
   // flatter, so the deeper water spreads into wide shallows rather than a
   // few deep lakes
   terrain: { ampScale: [0.5, 0.5, 0.4, 0.3, 0.6] },
@@ -179,7 +188,7 @@ const MARSH: Biome = {
     kinds: [
       {
         name: 'reed', mesh: reedMesh, scaleRange: [0.7, 1.4],
-        radiusOf: () => 0, sink: 40, weight: 0.65,
+        radiusOf: () => 0, sink: 40, weight: 0.65, wet: true,
         material: { albedo: [0.24, 0.30, 0.14], roughness: 0.7 },
       },
       {

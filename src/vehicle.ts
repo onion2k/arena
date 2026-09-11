@@ -43,6 +43,7 @@
 import { height, normal } from './terrain';
 import { TRACK_LIFT, gripAt, type CornerRating } from './track';
 import { WATER_DRAG, WATER_LEVEL } from './water';
+import { BIOME } from './biomes';
 import { SETTINGS } from './settings';
 import type { Mesh } from 'artshape-render/mesh/types';
 
@@ -433,19 +434,23 @@ export class Vehicle {
       // and falls away over a shoulder either side of it.
       const rear = i >= 2;
       const surface = gripAt(mx, my);
+      // In the water, or on it. The wheel rides the terrain and the tarmac is
+      // drawn 22mm above it, so on the road the surface the water is measured
+      // against is the road's — without that the vehicle was wet for a sixth
+      // of every lap, on ground that was dry to look at.
+      const surfaceZ = w.ground + (surface >= 1 ? TRACK_LIFT : 0);
+      w.wet = surfaceZ < WATER_LEVEL;
+      // Frozen water is the other way round from a ford: no drag, and very
+      // little grip. See `Biome.water.ice`.
+      const ice = w.wet ? BIOME.water.ice : null;
       let grip = spec.tyres.mu * load * surface * (rear ? spec.tyres.rearGrip : 1);
+      if (ice !== null) grip *= ice;
       if (hand > 0 && rear) grip *= 1 - (1 - spec.handbrake.grip) * hand;
       if (drift > 0 && rear) grip *= 1 - (1 - spec.drift.grip) * drift;
       let wantSide = -vSide / spec.tyres.lateralTau;
       // Rolling resistance, more off the tarmac, and more again with the
-      // wheel in the water: a ford is felt, not just seen. The wheel rides
-      // the terrain and the tarmac is drawn 22mm above it, so on the road
-      // the surface the water is measured against is the road's — without
-      // that the vehicle was wet for a sixth of every lap, on ground that was
-      // dry to look at.
-      const surfaceZ = w.ground + (surface >= 1 ? TRACK_LIFT : 0);
-      w.wet = surfaceZ < WATER_LEVEL;
-      let wantFwd = -vFwd * (spec.tyres.rollResist + spec.tyres.roughDrag * (1 - surface) + (w.wet ? WATER_DRAG : 0));
+      // wheel in the water: a ford is felt, not just seen.
+      let wantFwd = -vFwd * (spec.tyres.rollResist + spec.tyres.roughDrag * (1 - surface) + (w.wet && ice === null ? WATER_DRAG : 0));
       if (drive.hold) {
         // uncapped, unlike the brake pedal: a handbrake locks the wheels and
         // is limited by the tyres rather than by the brakes, which is what

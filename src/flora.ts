@@ -73,6 +73,8 @@ export function plantFlora(seed: number, biome: Biome): Prop[] {
   const x1 = ARENA_X + APRON, y1 = ARENA_Y + APRON;
   const { spacing, kinds } = biome.flora;
   const totalWeight = kinds.reduce((s, k) => s + k.weight, 0);
+  const wetKinds = kinds.filter((k) => k.wet);
+  const wetWeight = wetKinds.reduce((s, k) => s + k.weight, 0);
   for (let gy = -y1; gy <= y1; gy += spacing) {
     for (let gx = -x1; gx <= x1; gx += spacing) {
       const x = gx + (rand() - 0.5) * spacing;
@@ -83,12 +85,17 @@ export function plantFlora(seed: number, biome: Biome): Prop[] {
       // thin, beyond where anything reaches, so the count grows with the
       // lap's length and not the arena's area
       if (off > NEAR && rand() >= 1 / SIZE) continue;
-      // not in a lake, nor on its shore
-      if (underWater(x, y, 30)) continue;
-      let kind = kinds[0];
-      if (kinds.length > 1) {
-        let r = rand() * totalWeight;
-        for (const k of kinds) { if (r < k.weight) { kind = k; break; } r -= k.weight; }
+      // In a lake, or on its shore, only what stands in water — a marsh's
+      // reeds — and nothing at all in a biome without such a thing. The
+      // forest's draws are the same in the same order as before there was a
+      // choice here.
+      const wet = underWater(x, y, 30);
+      const choices = wet ? wetKinds : kinds;
+      if (choices.length === 0) continue;
+      let kind = choices[0];
+      if (choices.length > 1) {
+        let r = rand() * (wet ? wetWeight : totalWeight);
+        for (const k of choices) { if (r < k.weight) { kind = k; break; } r -= k.weight; }
       }
       const [lo, hi] = kind.scaleRange;
       const scale = lo + rand() * (hi - lo);

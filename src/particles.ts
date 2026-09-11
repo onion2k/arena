@@ -32,6 +32,26 @@ export function wheelEffects(renderer: GameRenderer, v: Vehicle, w: Wheel, hub: 
   if (speed < STILL) return;
   const lit = 0.45 + 0.55 * day;
 
+  if (w.wet && BIOME.water.ice !== null) {
+    // Ice: nothing to throw up unless the tyre is sliding on it, and then a
+    // little of the biome's own powder rather than rubber smoke — a tyre
+    // spinning on ice is not hot enough to burn.
+    if (w.slide > SMOKE_FROM && BIOME.dust) {
+      renderer.emit({
+        position: [hub[0], hub[1], hub[2] - v.spec.wheelRadius + 6],
+        velocity: [v.vx * 0.3, v.vy * 0.3, 60],
+        spread: 120,
+        count: Math.max(1, Math.min(4, Math.round(w.slide * 3))),
+        life: 0.6, lifeSpread: 0.3,
+        size: 16, growth: 30,
+        colour: [BIOME.dust[0] * lit, BIOME.dust[1] * lit, BIOME.dust[2] * lit],
+        alpha: 0.35,
+        gravity: -0.02,
+      });
+    }
+    return;
+  }
+
   if (w.wet) {
     // Droplets: thrown up and forward off the tyre, bright and additive,
     // falling under gravity and dying where they meet the water again.

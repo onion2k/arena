@@ -1505,10 +1505,10 @@ and its own trackside kinds in place of the pine.
 | | forest | desert | snow | marsh |
 | --- | --- | --- | --- | --- |
 | ground | dark, cold | sand | white | dark, wet |
-| water | fords, 20mm | none | frozen, 20mm | 20mm, over flatter ground |
+| water | fords, 20mm | none | ice, 20mm, 35% grip | 20mm, over flatter ground |
 | terrain scale | 1× throughout | 1.6× long dunes, soft ramps | 1× throughout | 0.5×, flat |
 | off-track loss | 0.32 | 0.45 (sand) | 0.4 (snow) | 0.4 (mud) |
-| flora | pine | cactus, rock | fir | reed (no collision), deadwood |
+| flora | pine | cactus, rock | fir | reed (no collision, stands in water), deadwood |
 | dust | none | tan | white | mud brown |
 
 **No environment bake of its own, and no sky table of its own.** The
@@ -1533,6 +1533,39 @@ marsh is 20mm over flatter ground now — see [Off the grid](#off-the-grid).)*
 return zero, which `keepOneInside` and the collision grid both treat as
 nothing to check against — a wheel goes through a reed bed rather than off
 it, the way it goes through long grass and not through a rock.
+
+### Ice, reeds, and what water costs
+
+Two things the biomes claimed and did not do. **Snow's water was not ice.**
+Its comment sent the reader to a grip loss in `track.ts` that did not exist:
+a frozen lake dragged at a wheel like a ford and threw spray. Now a biome's
+water can be `ice`, the share of grip left on it — 0.35 for snow — with no
+drag and no spray; a tyre sliding on it throws the biome's own powder rather
+than rubber smoke, and lays no skid mark, as water never did. **The marsh
+had nothing in its water.** The planting keeps out of water, so a marsh was
+reed beds between bare pools. A kind can be `wet` now, and where the ground
+is under water only those kinds are planted: reeds stand in the marsh's
+pools, 2,308 plants on the original circuit where there were 388. The forest
+plants exactly what it did, draw for draw. Marsh water is a shade lighter
+and glossier, so by day the pools read as water among the reeds; at night
+they are what the lamps glint in, which is as much as the ground there
+shows of anything.
+
+How much ice should cost was measured rather than chosen. The pilot drove
+twenty-six snow circuits dry and with the water frozen at three grips,
+median and worst lap change:
+
+| grip on ice | technical | rally car | Le Mans prototype | F1 car |
+| --- | --- | --- | --- | --- |
+| 0.5 | +0.7%, 2.6% | +0.1%, 3.4% | +0.3%, 9.7% | +0.3%, 11.1% |
+| 0.35 | +1.3%, 4.6% | +0.3%, 2.8% | +0.6%, 10.1% | +0.8%, 15.5% |
+| 0.2 | +2.1%, 7.9% | +0.9%, 3.7% | +1.2%, 10.9% | +1.6%, 43.6% |
+
+A third of the grip is something you feel on the 4% of a lap that is ice and
+rarely something that ends a lap; a fifth put the F1 43% down on one
+circuit. The forest's fords, against the same circuits dry, cost a median
+0.1 to 0.3%. **Neither is in the par time**: both are inside par's own 2 to
+4%, and neither would be a better number for being modelled.
 
 ![four biomes](docs/desert.png)
 ![](docs/snow.png)
