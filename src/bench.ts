@@ -105,6 +105,30 @@ function cornerAt(spec: VehicleSpec, throttle: number): { corner: number; speed:
   return { corner: samples.reduce((a, b) => a + b, 0) / Math.max(1, samples.length), speed: v.speed };
 }
 
+/**
+ * The tightest circle a class can drive, in millimetres of radius: full lock,
+ * a creeping throttle, flat ground and full grip, averaged over the settled
+ * half of ten seconds. This is the circle's radius at walking pace, which is
+ * the smallest it gets — the lock winds off with speed. `VehicleSpec.
+ * turnCircle` is this, and a test holds the two together.
+ */
+export function turnCircle(spec: VehicleSpec): number {
+  setBenchFlat(true);
+  setBenchGrip(true);
+  try {
+    const v = fresh(spec);
+    let sum = 0, n = 0;
+    for (let f = 0; f < 1200; f++) {
+      v.step(1 / 120, { steer: 1, throttle: 0.08, brake: 0 });
+      if (f >= 600 && Math.abs(v.wYaw) > 1e-4) { sum += v.speed / Math.abs(v.wYaw); n++; }
+    }
+    return sum / Math.max(1, n);
+  } finally {
+    setBenchFlat(false);
+    setBenchGrip(false);
+  }
+}
+
 export interface BenchResult extends Omit<CornerRating, 'par'> {
   topSpeed: number;
   accelWindow: [number, number];

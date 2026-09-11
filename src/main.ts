@@ -46,6 +46,7 @@ const pregameBiome = document.getElementById('pregameBiome')!;
 const pregameVehicle = document.getElementById('pregameVehicle')!;
 const pregameSize = document.getElementById('pregameSize')!;
 const pregameFacts = document.getElementById('pregameFacts')!;
+const pregameWarn = document.getElementById('pregameWarn')!;
 const pregameRating = document.getElementById('pregameRating')!;
 const pregameSeed = document.getElementById('pregameSeed') as HTMLInputElement;
 const pregameAnother = document.getElementById('pregameAnother')!;
@@ -499,6 +500,17 @@ async function main() {
       + ` · <span>${(p.length / 1000).toFixed(1)}</span> m`
       + ` · about <span>${r.par.toFixed(1)}</span> s a lap`
       + ` · tightest corner <span>${Math.round(p.curve)}</span> mm`;
+    // A circuit with a corner the chosen car cannot turn is not undrivable —
+    // there is the width of the road, and reverse — but it is where the long
+    // cars come unstuck: on circuits like it the F1 laps a median 9% over par
+    // and badly on three in ten, against 3% and two in ten where it fits.
+    // Said as a fact, not a verdict, because the tightest corner on its own
+    // predicts trouble only that loosely. See the README, "Cars and sizes".
+    pregameWarn.hidden = p.curve >= spec.turnCircle;
+    if (!pregameWarn.hidden) {
+      pregameWarn.innerHTML = `tighter than the ${spec.label} can turn: a <span>${Math.round(p.curve)}</span> mm corner, `
+        + `and the car's tightest circle is <span>${spec.turnCircle}</span> mm`;
+    }
     pregameRating.innerHTML =
       `<b>${'\u25cf'.repeat(band.level)}${'\u25cb'.repeat(5 - band.level)}</b> ${band.name}`;
   }

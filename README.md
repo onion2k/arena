@@ -813,6 +813,50 @@ carries a shadow map from a capacity of 256, so `useTrack` warns rather than
 silently drops one if a circuit's post count is ever close to it — it never
 is, at any size this game reaches.
 
+### Cars and sizes
+
+Sizes scale the circuit, not the cars, and the generator's corner limit was
+the technical's turning circle — which small does not honour even for the
+technical. The long cars turn wider still, so the question was whether small
+circuits are a trap for them in particular. The pilot (`calibrate.ts`) drove
+thirteen circuits the par fit never saw, at three sizes, three plans each,
+best lap against par:
+
+| | small | medium | large |
+| --- | --- | --- | --- |
+| technical | +1.0%, 1 of 13 bad | −0.4%, none | +0.4%, none |
+| rally car | +0.9%, 1 of 13 bad | −0.6%, none | +0.3%, none |
+| Le Mans prototype | +6.4%, 3 of 13 bad | +0.7%, none | −1.9%, none |
+| F1 car | +10.1%, 4 of 13 bad | +1.9%, none | −2.5%, none |
+
+Median over par; *bad* is more than 15% over it or never finishing three
+laps. Medium and large are fine for everything. Small is fine for the two
+short cars and is not for the two long ones, and the one circuit that is bad
+for everyone at small (#18) has a 569mm corner.
+
+**The tightest corner is a weak predictor of which circuits.** Over every
+circuit of the first forty at small and medium with a corner under 800mm, the
+F1 loses 158% to one whose tightest corner is 712mm and 1% to one at 516mm;
+the technical has bad circuits at 507, 569, 573 and 712. What goes wrong is a
+sequence — an S the car cannot straighten out of in time — not one radius.
+Against each class's own turning circle it does divide them, loosely:
+
+| | corner tighter than the car turns | not |
+| --- | --- | --- |
+| Le Mans prototype (561mm) | 18 circuits, 28% bad, median +9% | 49 circuits, 18% bad, +3% |
+| F1 car (691mm) | 51 circuits, 29% bad, median +9% | 16 circuits, 19% bad, +3% |
+| technical (360mm) | never | 67 circuits, 6% bad, +0% |
+
+So the track-select screen does not refuse a combination or change the
+circuit — a seed is the same shape at every size and in every car, and the
+width of the road and a reverse gear get any of these round. It says what is
+true: when the circuit has a corner tighter than the chosen car's tightest
+circle, a line under the facts gives both numbers. The circle is measured,
+`turnCircle` in `bench.ts` — full lock at a crawl on flat ground, 360, 318,
+561 and 691mm — and a test holds each spec's `turnCircle` to within 2% of
+it. It fires on the original circuit at medium for the F1, whose 638mm
+corner it cannot make.
+
 ## The circuit
 
 A closed loop 29 metres round, defined in polar form — a radius that varies

@@ -55,6 +55,7 @@ const TECHNICAL: VehicleSpec = {
   inertia: { gyration: 1.3, antiSquat: 0.82, tiltLimit: 0.7, airSpinDamp: 1.1 },
   maxSpeed: 4200,
   radius: 98,
+  turnCircle: 360,
   // bench: corner 54.8, accel 3087, brake 5497 at top speed 2300 — the
   // shipped rating below is not this; see the file comment above.
   rating: { corner: 61, accel: 700, brake: 2400, par: 1.086 },
@@ -95,6 +96,7 @@ const RALLY: VehicleSpec = {
   inertia: { gyration: 1.25, antiSquat: 0.8, tiltLimit: 0.7, airSpinDamp: 1.1 },
   maxSpeed: 4400,
   radius: 90,
+  turnCircle: 318,
   // bench: corner 65.6, accel 3462, brake 6016 at top speed 2500
   rating: { corner: 73, accel: 785, brake: 2627, par: 1.058 },
   kit: {
@@ -134,6 +136,7 @@ const LMP: VehicleSpec = {
   inertia: { gyration: 1.2, antiSquat: 0.85, tiltLimit: 0.6, airSpinDamp: 1.0 },
   maxSpeed: 4800,
   radius: 105,
+  turnCircle: 561,
   // bench: corner 62.0, accel 3755, brake 6676 at top speed 3000
   rating: { corner: 69, accel: 852, brake: 2915, par: 1.132 },
   kit: {
@@ -174,6 +177,7 @@ const F1: VehicleSpec = {
   inertia: { gyration: 1.1, antiSquat: 0.88, tiltLimit: 0.5, airSpinDamp: 0.9 },
   maxSpeed: 5200,
   radius: 110,
+  turnCircle: 691,
   // bench: corner 63.9, accel 4484, brake 7741 at top speed 3300. It read
   // 54.3/4477/7809 when this class was first benched, and the comment here
   // explained the low corner as steering geometry winning over grip. It was

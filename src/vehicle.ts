@@ -136,6 +136,12 @@ export interface VehicleSpec {
 
   /** The collision circle `game.ts` keeps other things off. */
   radius: number;
+  /**
+   * The tightest circle it drives, radius in millimetres: full lock at a
+   * crawl, measured by `turnCircle` in `bench.ts` and held to it by a test.
+   * The track-select screen says so when a circuit has a corner tighter.
+   */
+  turnCircle: number;
   /** Measured cornering, acceleration and braking numbers for `rateTrack` —
    *  see `bench.ts`. Not derived: the file that reads them explains why. */
   rating: CornerRating;

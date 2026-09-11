@@ -4,6 +4,7 @@ import { setTrack, circuitFor, centreline, tangentAt, setBenchGrip, rateTrack } 
 import { setBenchFlat } from '../terrain';
 import { SUBSTEP, Vehicle, rollDamping } from '../vehicle';
 import { driveTo } from '../calibrate';
+import { turnCircle } from '../bench';
 import { VEHICLES, VEHICLE_KEYS } from '../vehicles';
 import type { BiomeKey } from '../biomes';
 import type { SizeKey } from '../world';
@@ -64,6 +65,13 @@ describe('every vehicle class', () => {
         expect(lean, `${key} at ${hz}Hz: load across an axle`).toBeLessThan(0.02);
         expect(Math.abs(speed - fine.speed) / fine.speed, `${key} at ${hz}Hz: ${speed.toFixed(0)} against ${fine.speed.toFixed(0)}`).toBeLessThan(0.01);
       }
+    }
+  });
+
+  it('turns the circle its spec says it does', () => {
+    for (const key of VEHICLE_KEYS) {
+      const measured = turnCircle(VEHICLES[key]);
+      expect(Math.abs(measured / VEHICLES[key].turnCircle - 1), `${key}: measured ${measured.toFixed(0)}`).toBeLessThan(0.02);
     }
   });
 
