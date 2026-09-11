@@ -439,32 +439,6 @@ export function curveRadius(theta: number, span: number): number {
 }
 
 /**
- * Which way is the outside of the bend at an angle, and how tight it is:
- * the unit vector pointing away from the centre of the circle the centreline
- * is following there, and that circle's radius.
- *
- * A driver aiming at a point some way up the road drives the chord and not
- * the arc, and so passes inside the centreline by the sagitta of that chord —
- * at the tightest corner here, with a normal look-ahead, 178mm of a track
- * whose half width is 380. This is what a driver needs to put that back.
- */
-export function curveOutward(theta: number, span: number): [number, number, number] {
-  const dt = span / Math.max(radiusAt(theta), 200);
-  const [ax, ay] = centreline(theta - dt);
-  const [bx, by] = centreline(theta);
-  const [cx, cy] = centreline(theta + dt);
-  // the circumcentre of the three points
-  const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-  if (Math.abs(d) < 1e-9) return [0, 0, 1e9];
-  const a2 = ax * ax + ay * ay, b2 = bx * bx + by * by, c2 = cx * cx + cy * cy;
-  const ux = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / d;
-  const uy = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / d;
-  const ox = bx - ux, oy = by - uy;
-  const r = Math.hypot(ox, oy) || 1;
-  return [ox / r, oy / r, r];
-}
-
-/**
  * Generating a circuit.
  *
  * A seed in, a shape out, and the shape is always drivable — which is the

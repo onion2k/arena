@@ -9,14 +9,14 @@
  *
  * A `rating` is two things. `par` is measured: a driven lap over the lap
  * at flat out, fitted to the pilot's laps of thirteen circuits and checked
- * on thirteen more (`npm run calibrate`, `calibrate.ts`) — within 2% for the
- * technical and the rally car and within 4% for the other two on the
- * circuits it was not fitted to. The corner, accel and brake numbers are
+ * on thirteen more (`npm run calibrate`, `calibrate.ts`) — within 1.2 to
+ * 2.2% on average by class on the circuits it was not fitted to, and 4.9%
+ * at the worst. The corner, accel and brake numbers are
  * only what the track-select screen's difficulty is worked out from. They
  * are `bench.ts` results for the three new classes, scaled by the ratio
  * between the technical's bench and its shipped rating (corner ×1.113,
  * accel ×0.227, brake ×0.437), and the difficulty they give follows how
- * much of a lap the pilot lifts for with r = 0.4 to 0.84 by class. Driven
+ * much of a lap the pilot lifts for with r = 0.15 to 0.90 by class. Driven
  * laps could not improve on them for that: fitted to lap times, they
  * collapse to "never lift", because lifting costs a lap almost nothing.
  *
@@ -60,7 +60,7 @@ const TECHNICAL: VehicleSpec = {
   turnCircle: 360,
   // bench: corner 54.8, accel 3087, brake 5497 at top speed 2300 — the
   // shipped rating below is not this; see the file comment above.
-  rating: { corner: 61, accel: 700, brake: 2400, par: 1.086 },
+  rating: { corner: 61, accel: 700, brake: 2400, par: 1.11 },
   kit: {
     body: technicalBody,
     detail: { mesh: technicalDetail, at: [0, 0, 0], albedo: [0.075, 0.08, 0.085], roughness: 0.38 },
@@ -96,7 +96,7 @@ const RALLY: VehicleSpec = {
   radius: 90,
   turnCircle: 318,
   // bench: corner 65.6, accel 3462, brake 6016 at top speed 2500
-  rating: { corner: 73, accel: 785, brake: 2627, par: 1.058 },
+  rating: { corner: 73, accel: 785, brake: 2627, par: 1.073 },
   kit: {
     body: rallyBody,
     detail: { mesh: rallyDetail, at: [0, 0, 0], albedo: [0.05, 0.05, 0.06], roughness: 0.3 },
@@ -133,7 +133,7 @@ const LMP: VehicleSpec = {
   radius: 105,
   turnCircle: 561,
   // bench: corner 62.0, accel 3755, brake 6676 at top speed 3000
-  rating: { corner: 69, accel: 852, brake: 2915, par: 1.132 },
+  rating: { corner: 69, accel: 852, brake: 2915, par: 1.139 },
   kit: {
     body: lmpBody,
     detail: { mesh: lmpDetail, at: [0, 0, 0], albedo: [0.04, 0.045, 0.05], roughness: 0.16 },
@@ -178,7 +178,7 @@ const F1: VehicleSpec = {
   // (`SUBSTEP` in `vehicle.ts`). Re-benched at a 480th, scaled by the same
   // factors as before. The other three classes moved by under 1.5% and are
   // left as they were.
-  rating: { corner: 71, accel: 1018, brake: 3383, par: 1.171 },
+  rating: { corner: 71, accel: 1018, brake: 3383, par: 1.159 },
   kit: {
     body: f1Body,
     detail: { mesh: f1Detail, at: [0, 0, 0], albedo: [0.035, 0.035, 0.04], roughness: 0.24 },

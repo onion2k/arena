@@ -501,9 +501,9 @@ async function main() {
       + ` · about <span>${r.par.toFixed(1)}</span> s a lap`
       + ` · tightest corner <span>${Math.round(p.curve)}</span> mm`;
     // A circuit with a corner the chosen car cannot turn is not undrivable —
-    // there is the width of the road, and reverse — but it is where the long
-    // cars come unstuck: on circuits like it the F1 laps a median 9% over par
-    // and badly on three in ten, against 3% and two in ten where it fits.
+    // there is the width of the road, and reverse — but it is what the long
+    // cars pay for: on circuits like it the F1 laps a median 8% over par and
+    // badly on one in twelve, against 6% and none where it fits.
     // Said as a fact, not a verdict, because the tightest corner on its own
     // predicts trouble only that loosely. See the README, "Cars and sizes".
     pregameWarn.hidden = p.curve >= spec.turnCircle;

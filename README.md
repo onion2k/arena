@@ -332,8 +332,8 @@ per-class number where the technical had a constant.
 | suspension travel | 26 | 34 | 18 | 12 |
 | collision radius | 98 | 90 | 105 | 110 |
 | corner / accel / brake rating | 61 / 700 / 2400 | 73 / 785 / 2627 | 69 / 852 / 2915 | 71 / 1018 / 3383 |
-| par factor | 1.086 | 1.058 | 1.132 | 1.171 |
-| par lap, seed 0, medium | 13.7 s | 12.3 s | 11.0 s | 10.3 s |
+| par factor | 1.110 | 1.073 | 1.139 | 1.159 |
+| par lap, seed 0, medium | 14.0 s | 12.5 s | 11.0 s | 10.2 s |
 
 ### Benching the three new classes
 
@@ -644,12 +644,12 @@ ratios, and the par time was the point-mass lap times 1.13 — a number taken
 from the rivals, who were tuned to be beatable and never braked. Nothing had
 checked either against a lap actually driven in any class but the technical.
 
-**A pilot** (`pilot.ts`) does that now. It is the rivals' steering with the
-vehicle's own wheelbase and lock in place of the technical's constants —
-aim at the centreline up the road, moved out by the sagitta of the chord,
-and ask for a yaw rate rather than a wheel angle — and new pedals that drive
-to a speed plan: the point-mass lap's corner limits and braking, from a
-rating it is handed (`speedPlan` in `track.ts`). The rivals' way out of a
+**A pilot** (`pilot.ts`) does that now: a path follower that asks for a
+yaw rate through the vehicle's own wheelbase and lock — see [The pilot on
+#4, #10 and #12](#the-pilot-on-4-10-and-12), which replaced the rivals'
+steering it started with — and pedals that drive to a speed plan: the
+point-mass lap's corner limits and braking, from a rating it is handed
+(`speedPlan` in `track.ts`). The rivals' way out of a
 crash reversed only while the car was slow, so it backed off a post by a
 car's width and drove straight back into it; this one commits to backing out
 for 0.8s.
@@ -675,34 +675,71 @@ What the laps said, in the order it was found:
 
 | | technical | rally car | Le Mans prototype | F1 car |
 | --- | ---: | ---: | ---: | ---: |
-| par factor | 1.086 | 1.058 | 1.132 | 1.171 |
-| error, fitted factor | 1.6% (4.7% worst) | 2.2% (5.9%) | 2.9% (7.6%) | 3.8% (7.7%) |
-| error, point mass × 1.13 | 9.1% (17.1%) | 10.9% (15.1%) | 14.1% (24.8%) | 15.4% (25.8%) |
+| par factor | 1.110 | 1.073 | 1.139 | 1.159 |
+| error, fitted factor | 1.2% (3.9% worst) | 1.6% (4.9%) | 2.2% (4.5%) | 1.9% (3.8%) |
+| error, point mass × 1.13, first pilot | 9.1% (17.1%) | 10.9% (15.1%) | 14.1% (24.8%) | 15.4% (25.8%) |
 
   What is left of a lap time after the length hardly follows the corners:
   its correlation with the tightest corner on each circuit is -0.18 to 0.15
   for three classes and -0.33 for the rally car.
 - **The difficulty is still worth having**, from the corner, accel and brake
   numbers as before: it tracks how much of each lap the pilot spends off
-  full throttle, r = 0.40 for the technical — which lifts for 0 to 1% of a
-  lap on any circuit — and 0.62 to 0.84 for the other three. It says how
+  full throttle, r = 0.15 for the technical — which lifts for 0 to 1% of a
+  lap on any circuit — and 0.73 to 0.90 for the other three. It says how
   often you lift. It does not say it will cost you, because it barely does.
 - **A steering limit did not help.** The plan and the par both tried a
   corner speed capped by the lock the car has left at that speed, for the
   long cars' sake; neither the laps nor the fit improved for any class, and
   it came back out.
-- **The pilot is not good at everything.** The prototype and the F1 lap
-  circuits #4, #10 and #12 19 to 30% slower than par — off the road for half
-  the lap and into the scenery, the technical 14% of it on #4 — and the par
-  fit leaves out any circuit a tenth slower than the median rather than
-  letting three bad laps drag the constant up. Those three are in the
-  fitting set by chance; on the checking set the long cars' worst miss is 8%.
-  The prototype's and F1's factors move by 3% between the two halves, which
-  is how far to trust the third decimal place.
+- **The first pilot was not good at everything.** The prototype and the F1
+  lapped circuits #4, #10 and #12 19 to 30% slower than par — off the road
+  for half the lap and into the scenery — and the par fit learned to leave
+  out any circuit a tenth slower than the median. That was the pilot's
+  steering, and it is fixed: see below. Refitted with the new pilot no
+  circuit is left out, the worst miss for any class is 4.9%, and the factors
+  above are that fit.
 
 `rating.par` is the constant. The test suite drives the original circuit in
 every class to one plan and holds the lap within 6% of par, so a change to
 the vehicles, the pilot or the par model that pulls them apart fails.
+
+### The pilot on #4, #10 and #12
+
+Logged round those three circuits, the pilot left the road in the same way
+every time: on the inside, 400 to 500mm of it, on the way into a corner,
+with the steering nowhere near full lock. It was cutting the corner. The
+technical got away with it; the long cars, a few millimetres wider, found
+the drums at the apex, stopped there at full lock and backed out.
+
+The steering it had was the rivals': aim at the centreline two metres up
+the road and allow for the arc by the sagitta of the chord to it, capped at
+300mm so it could never aim off the tarmac. In a tight corner taken fast
+the allowance it needed was more than the cap, so it aimed short and drove
+across the inside. #8, which it lapped cleanly, has no corner under 988mm.
+
+It is a path follower now: the yaw rate the road's bend a tenth of a second
+ahead needs at this speed, plus a share of the error between its heading and
+the road's, plus a turn back toward the middle for however far off it is —
+the polar track gives all three for the car's own angle, with no search.
+The three gains were swept on seven circuits in every class. A preview of a
+quarter of a second is unstable outright (29% of the time off the road); at
+a tenth, with a heading gain of 4.5:
+
+| to the brisk plan (corner 70) | off the tarmac | unfinished | mean lap |
+| --- | ---: | ---: | ---: |
+| the rivals' steering | 20.8% | 3 | 11.58s |
+| the path follower | 0.0% | 0 | 11.30s |
+
+To the reckless plan it is 0.3% off the tarmac with every lap finished, and
+the prototype and F1 lap #4, #10 and #12 within a few tenths of what they
+lap the other circuits in. The technical is a few tenths slower than it was
+on those three — cutting the corner was quicker, for the one car narrow
+enough to get away with it — which is why its par factor went up.
+
+The measurements the first pilot took elsewhere in this file were run again
+with this one, and the tables in [Cars and sizes](#cars-and-sizes) and
+[Ice, reeds, and what water costs](#ice-reeds-and-what-water-costs) are the
+new numbers.
 
 **The start line is put on a straight.** The grid sits at an angle of -pi
 whatever the circuit does there, and on a random one that is as likely to be
@@ -870,28 +907,33 @@ best lap against par:
 
 | | small | medium | large |
 | --- | --- | --- | --- |
-| technical | +1.0%, 1 of 13 bad | −0.4%, none | +0.4%, none |
-| rally car | +0.9%, 1 of 13 bad | −0.6%, none | +0.3%, none |
-| Le Mans prototype | +6.4%, 3 of 13 bad | +0.7%, none | −1.9%, none |
-| F1 car | +10.1%, 4 of 13 bad | +1.9%, none | −2.5%, none |
+| technical | +1.5%, none bad | −0.4%, none | −0.9%, none |
+| rally car | +2.3%, none | −0.4%, none | −0.6%, none |
+| Le Mans prototype | +7.4%, none | +1.4%, none | −2.1%, none |
+| F1 car | +10.0%, 2 of 13 bad | +3.5%, none | −1.6%, none |
 
 Median over par; *bad* is more than 15% over it or never finishing three
-laps. Medium and large are fine for everything. Small is fine for the two
-short cars and is not for the two long ones, and the one circuit that is bad
-for everyone at small (#18) has a 569mm corner.
+laps. Medium and large are fine for everything. On small the long cars lap
+7 to 10% over a par that is only length and top speed — the tight corners
+cost them what they do not cost the short cars — but they get round: the
+F1's two bad circuits are 16 and 18% over. With the first pilot this table
+had three and four bad circuits for the long cars at small, one for each
+short car, most of it the pilot cutting corners.
 
 **The tightest corner is a weak predictor of which circuits.** Over every
 circuit of the first forty at small and medium with a corner under 800mm, the
-F1 loses 158% to one whose tightest corner is 712mm and 1% to one at 516mm;
-the technical has bad circuits at 507, 569, 573 and 712. What goes wrong is a
-sequence — an S the car cannot straighten out of in time — not one radius.
-Against each class's own turning circle it does divide them, loosely:
+F1 loses 25% on one whose tightest corner is 573mm and 1% on one at 516mm.
+What costs is a sequence of corners, not one radius. Against each class's
+own turning circle it divides them, loosely:
 
 | | corner tighter than the car turns | not |
 | --- | --- | --- |
-| Le Mans prototype (561mm) | 18 circuits, 28% bad, median +9% | 49 circuits, 18% bad, +3% |
-| F1 car (691mm) | 51 circuits, 29% bad, median +9% | 16 circuits, 19% bad, +3% |
-| technical (360mm) | never | 67 circuits, 6% bad, +0% |
+| Le Mans prototype (561mm) | 18 circuits, 6% bad, median +7% | 49 circuits, 2% bad, +4% |
+| F1 car (691mm) | 51 circuits, 8% bad, median +8% | 16 circuits, none bad, +6% |
+| technical (360mm) | never | 67 circuits, none bad, +1% |
+
+With the first pilot these were 28 and 29% bad against 18 and 19% — the
+same direction, and much of the size of it the pilot.
 
 So the track-select screen does not refuse a combination or change the
 circuit — a seed is the same shape at every size and in every car, and the
@@ -1603,14 +1645,17 @@ median and worst lap change:
 
 | grip on ice | technical | rally car | Le Mans prototype | F1 car |
 | --- | --- | --- | --- | --- |
-| 0.5 | +0.7%, 2.6% | +0.1%, 3.4% | +0.3%, 9.7% | +0.3%, 11.1% |
-| 0.35 | +1.3%, 4.6% | +0.3%, 2.8% | +0.6%, 10.1% | +0.8%, 15.5% |
-| 0.2 | +2.1%, 7.9% | +0.9%, 3.7% | +1.2%, 10.9% | +1.6%, 43.6% |
+| 0.5 | +1.1%, 2.2% | +0.1%, 0.5% | +0.7%, 1.7% | +0.6%, 1.5% |
+| 0.35 | +1.9%, 3.7% | +0.4%, 1.1% | +1.2%, 2.8% | +1.0%, 2.5% |
+| 0.2 | +2.8%, 5.8% | +1.3%, 3.3% | +2.0%, 4.7% | +1.8%, 4.0% |
 
 A third of the grip is something you feel on the 4% of a lap that is ice and
-rarely something that ends a lap; a fifth put the F1 43% down on one
-circuit. The forest's fords, against the same circuits dry, cost a median
-0.1 to 0.3%. **Neither is in the par time**: both are inside par's own 2 to
+never something that ends a lap. The first pilot's run of this had a fifth
+of the grip putting the F1 43% down on one circuit, which is why the third
+was chosen; driven by the path follower the worst at a fifth is 5.8%, so
+harsher ice is affordable now, and 0.35 is a choice rather than a limit.
+The forest's fords, against the same circuits dry, cost a median 0.2 to
+0.3%. **Neither is in the par time**: both are inside par's own 2 to
 4%, and neither would be a better number for being modelled.
 
 ![four biomes](docs/desert.png)

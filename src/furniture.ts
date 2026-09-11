@@ -245,10 +245,10 @@ export function rebuildFurniture(seed = 5) {
   /**
    * Which way is out, and how hard the road is turning.
    *
-   * From the tangent and the sign of the turn, not from `curveOutward`. That
-   * returns the direction away from the circumcentre of three points on the
-   * road, which is exactly right in a corner and means nothing on a straight
-   * — three nearly collinear points have a circumcentre anywhere at all. The
+   * From the tangent and the sign of the turn, not from the direction away
+   * from the circumcentre of three points on the road, which is exactly right
+   * in a corner and means nothing on a straight — three nearly collinear
+   * points have a circumcentre anywhere at all. The
    * first version used it for the lead-in samples either side of each corner,
    * which are straights by definition, and put lengths of barrier across the
    * road.

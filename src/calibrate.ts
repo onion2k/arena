@@ -107,9 +107,10 @@ export function score(spec: VehicleSpec, m: Measured, rating: CornerRating): Sco
  * The par constant: the median of lap over a flat-out lap, over the circuits
  * the pilot got round cleanly. A circuit it lapped more than a tenth slower
  * than that median is left out and the median taken again — a lap like that
- * is the pilot in trouble (#4, #10 and #12 for the two long cars, off the
- * road for half of each lap and into the scenery), and a par time should be
- * a clean lap's, not a median dragged up by three bad ones.
+ * is the pilot in trouble, and a par time should be a clean lap's. The first
+ * pilot left out #4, #10 and #12 for the long cars; the path follower leaves
+ * out nothing, and the rule stays for the next pilot that finds a circuit
+ * it cannot drive.
  */
 export function fitPar(spec: VehicleSpec, m: Measured): number {
   const median = (a: number[]) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];

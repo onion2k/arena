@@ -10,20 +10,45 @@
  * it stays on the tarmac lap after lap the rating is one the car can hold,
  * and if it does not, it is not.
  *
- * The steering is the rivals' driver from before the ghost replaced them,
- * given the vehicle's own geometry instead of the technical's constants: it
- * aims at the centreline some way up the road, moved out by the sagitta of
- * the chord it drives, and asks for the yaw rate that heading error wants
- * rather than a wheel angle. The pedals are new. The rivals lifted by feel
- * and never braked; this reads the plan at where it is about to be.
+ * It steers by asking for a yaw rate, converted to a wheel angle through the
+ * vehicle's own wheelbase and lock: the rate the road's bend a tenth of a
+ * second ahead needs at this speed, plus a share of the error between the car's
+ * heading and the road's, plus a turn back toward the middle for however far
+ * off it the car is. That is a path follower. It was the rivals' old driver,
+ * which aimed at the centreline two metres up the road and allowed for the
+ * arc by the sagitta of the chord — capped at 300mm, so in a tight corner
+ * taken fast it could not allow enough and cut across the inside, 400 to
+ * 500mm of it, into the apex drums. On #4, #10 and #12 that was a fifth of
+ * every lap off the road and three classes that did not finish. The pedals
+ * read the plan where the car is about to be.
  */
 import type { Input } from './game';
 import { SETTINGS } from './settings';
-import { TRACK_HALF, centreline, curveOutward, radiusAt, where } from './track';
+import { centreline, curveRadius, radiusAt, tangentAt, where } from './track';
 import { wheelbaseOf, type Vehicle, type VehicleSpec } from './vehicle';
 
-/** How hard it converges on the heading it wants, as a yaw rate per radian. */
-const HEADING_GAIN = 3.0;
+/** The span a bend's curvature is read over. */
+const CURVE_SPAN = 200;
+/** Keeps the cross-track correction from growing without limit at a crawl. */
+const CROSS_SOFT = 300;
+
+/** How it steers: see `drive`. */
+export interface PilotTune {
+  /** Seconds ahead it reads the road's direction and bend. */
+  preview: number;
+  /** Yaw rate asked for per radian of heading error. */
+  heading: number;
+  /** How hard it steers back toward the middle, per millimetre off it. */
+  cross: number;
+}
+/**
+ * Swept on seven circuits in every class, #4, #10 and #12 among them: a
+ * shorter preview is steadier, and 0.25s of it is unstable outright — 29% of
+ * the time off the road; a harder heading gain holds the line and laps
+ * quicker. At these, the time off the tarmac is 0.0% to a brisk plan and
+ * 0.3% to a reckless one, with every lap finished.
+ */
+export const PILOT_TUNE: PilotTune = { preview: 0.1, heading: 4.5, cross: 2.5 };
 /** The most yaw it will ask for, which is what stops a spin at speed. */
 const YAW_LIMIT = 2.4;
 /** How much of its own yaw rate it subtracts back off, which damps the weave. */
@@ -48,7 +73,7 @@ export class Pilot {
    * `plan` is a target speed at each of its steps round the lap, from the
    * line (angle -π) anticlockwise — `speedPlan` in `track.ts`.
    */
-  constructor(readonly spec: VehicleSpec, readonly plan: ArrayLike<number>) {}
+  constructor(readonly spec: VehicleSpec, readonly plan: ArrayLike<number>, readonly tune: PilotTune = PILOT_TUNE) {}
 
   /** The target speed at an angle round the circuit. */
   private planned(theta: number): number {
@@ -62,27 +87,24 @@ export class Pilot {
   drive(car: Vehicle, dt: number): Input {
     const theta = Math.atan2(car.y, car.x);
     const r = radiusAt(theta);
-    // further up the road the faster it goes, which stops it sawing at the
-    // wheel on a straight
-    const ahead = (900 + car.speed * 0.42) / Math.max(r, 500);
-    const a = theta + ahead;
-    const ra = radiusAt(a);
+    const v = Math.max(car.speed, 220);
+    const t = this.tune;
 
-    // back toward the middle, hard, when it is off the road
+    // The road a little way ahead: which way it runs, and how hard it turns.
+    // Close, not far — this is feed-forward for the steering's own lag, not
+    // a point to aim at.
+    const ahead = theta + (v * t.preview) / Math.max(r, 500);
+    const [tx, ty] = tangentAt(ahead);
+    const bend = signedCurvature(ahead);
+    // How far off the middle, positive outside, which on a loop driven
+    // anticlockwise is to the right: steer back left by an angle that
+    // shrinks as the speed grows, so a correction at speed is gentle.
     const off = where(car.x, car.y).offset;
-    const line = Math.abs(off) > TRACK_HALF * 0.8 ? -Math.sign(off) * TRACK_HALF * 0.3 : 0;
-
-    // the centreline that far ahead, moved out by the sagitta of the chord,
-    // or it passes inside every corner
-    const [ox, oy, bendR] = curveOutward(a, 420);
-    const chord = Math.hypot(Math.cos(a) * ra - car.x, Math.sin(a) * ra - car.y);
-    const sag = Math.min((chord * chord) / (8 * bendR), TRACK_HALF * 0.8);
-    const [px, py] = centreline(a);
-    const tx = px + Math.cos(a) * line + ox * sag;
-    const ty = py + Math.sin(a) * line + oy * sag;
-    let d = Math.atan2(ty - car.y, tx - car.x) - car.yaw;
+    const back = Math.atan2(t.cross * off, v + CROSS_SOFT);
+    let d = Math.atan2(ty, tx) + back - car.yaw;
     while (d > Math.PI) d -= Math.PI * 2;
     while (d < -Math.PI) d += Math.PI * 2;
+    const wanted = v * bend + t.heading * d;
 
     // Stopped, or pointing the wrong way: back out, and keep backing out for
     // a moment. The rivals' version reversed only while it was slow, so it
@@ -103,24 +125,32 @@ export class Pilot {
     let throttle = 1, brake = 0;
     if (car.speed > target * 1.03) { throttle = 0; brake = clamp((car.speed / target - 1) * 6, 0.2, 1); }
     else if (car.speed > target) { throttle = 0.3; }
-    return { turn: this.steerFor(car, d), throttle, brake };
+    return { turn: this.steerFor(car, wanted), throttle, brake };
   }
 
   /**
-   * The input that gives the yaw rate this heading error wants: a road wheel
-   * angle of atan(wheelbase · ω / v) turns at ω, scaled back up by the
-   * falloff the vehicle applies to its lock, less a share of the yaw it
-   * already has.
+   * The input that gives a yaw rate: a road wheel angle of
+   * atan(wheelbase · ω / v) turns at ω, scaled back up by the falloff the
+   * vehicle applies to its lock, less a share of the yaw it already has.
    */
-  private steerFor(car: Vehicle, headingError: number): number {
+  private steerFor(car: Vehicle, yawRate: number): number {
     const spec = this.spec;
-    const wanted = clamp(headingError * HEADING_GAIN, -YAW_LIMIT, YAW_LIMIT);
+    const wanted = clamp(yawRate, -YAW_LIMIT, YAW_LIMIT);
     const v = Math.max(car.speed, 220);
     const delta = Math.atan((wheelbaseOf(spec) * wanted) / v);
     const lock = spec.steering.lock * SETTINGS.steering;
     const input = (delta * (1 + v / spec.steering.falloff)) / lock;
     return clamp(input - YAW_DAMP * (car.wYaw - wanted), -1, 1);
   }
+}
+
+/** How hard the road turns at an angle, per millimetre: positive to the
+ *  left of travel, which is most of an anticlockwise loop. */
+function signedCurvature(theta: number): number {
+  const d = CURVE_SPAN / Math.max(radiusAt(theta), 200);
+  const a = centreline(theta - d), b = centreline(theta), c = centreline(theta + d);
+  const turn = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+  return Math.sign(turn) / curveRadius(theta, CURVE_SPAN);
 }
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
