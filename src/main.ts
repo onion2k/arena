@@ -811,7 +811,7 @@ async function main() {
     // wheel you can see floating.
     drawn.length = 0;
     drawn.push(arena.shown);
-    const past = arena.ghost.poseAt(arena.shownLapTime);
+    const past = arena.ghostShown;
     if (past) drawn.push(past);
     drawn.forEach((truck: Pose, ci: number) => {
       const yaw = truck.yaw, pitch = truck.pitch, roll = truck.roll;
@@ -1198,7 +1198,7 @@ function buildMinimap(race: Race) {
   return {
     redraw,
     update() {
-      const past = race.ghost.poseAt(race.shownLapTime);
+      const past = race.ghostShown;
       const at = [race.shown, past];
       dots.forEach((dot, i) => {
         const p = at[i];

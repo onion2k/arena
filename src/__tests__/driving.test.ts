@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { drive, raceOn, stateOf } from './sim';
-import { setTrack, circuitFor, centreline, tangentAt, setBenchGrip, rateTrack } from '../track';
+import { setTrack, circuitFor, centreline, tangentAt, setBenchGrip, rateTrack, TRACK_LIFT } from '../track';
+import { height } from '../terrain';
 import { setBenchFlat } from '../terrain';
 import { SUBSTEP, Vehicle, rollDamping } from '../vehicle';
 import { driveTo } from '../calibrate';
@@ -72,6 +73,39 @@ describe('every vehicle class', () => {
     for (const key of VEHICLE_KEYS) {
       const measured = turnCircle(VEHICLES[key]);
       expect(Math.abs(measured / VEHICLES[key].turnCircle - 1), `${key}: measured ${measured.toFixed(0)}`).toBeLessThan(0.02);
+    }
+  });
+
+  // Drawn on the grid, which is on the tarmac: the tyres meet the road you
+  // can see rather than sinking into it, and the body clears it. The physics
+  // rides the terrain and the road is drawn above it, so this is what
+  // `drawnLift` is for.
+  it('sits on the drawn road with its body clear of it', () => {
+    for (const key of VEHICLE_KEYS) {
+      const race = raceOn(0, 'M', 'forest', key);
+      for (let f = 0; f < 240; f++) race.advance(1 / 60, { turn: 0, throttle: 0, brake: 0 });
+      const spec = VEHICLES[key];
+      const pose = race.shown;
+      // the body's frame, as the drawing places a wheel in it
+      const cy = Math.cos(pose.yaw), sy = Math.sin(pose.yaw);
+      const cp = Math.cos(pose.pitch), sp = Math.sin(pose.pitch);
+      const cr = Math.cos(pose.roll), sr = Math.sin(pose.roll);
+      const f = [cy * cp, sy * cp, -sp];
+      const l = [cy * sp * sr - sy * cr, sy * sp * sr + cy * cr, cp * sr];
+      const u = [cy * sp * cr + sy * sr, sy * sp * cr - cy * sr, cp * cr];
+      spec.wheels.forEach(([lx, ly, lz], i) => {
+        const hz = lz - pose.wheels[i].drop;
+        const x = pose.x + f[0] * lx + l[0] * ly + u[0] * hz;
+        const y = pose.y + f[1] * lx + l[1] * ly + u[1] * hz;
+        const bottom = pose.z + f[2] * lx + l[2] * ly + u[2] * hz - spec.wheelRadius;
+        const road = height(x, y) + TRACK_LIFT;
+        expect(Math.abs(bottom - road), `${key} wheel ${i}: ${bottom.toFixed(1)} against the road at ${road.toFixed(1)}`).toBeLessThan(3);
+      });
+      const body = spec.kit.body().positions;
+      let lowest = Infinity;
+      for (let k = 2; k < body.length; k += 3) lowest = Math.min(lowest, body[k]);
+      const road = height(pose.x, pose.y) + TRACK_LIFT;
+      expect(pose.z + lowest, `${key}: body's underside against the road`).toBeGreaterThan(road);
     }
   });
 

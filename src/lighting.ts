@@ -355,7 +355,7 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
    * across the circuit, not enough to be mistaken for a car with its lamps
    * on. They are glows, so they cost a screen quad each and light nothing.
    */
-  const past = arena.ghost.poseAt(arena.shownLapTime);
+  const past = arena.ghostShown;
   if (past) {
     const gcy = Math.cos(past.yaw), gsy = Math.sin(past.yaw);
     // Four, at the corners of the body rather than two on the shoulders: two

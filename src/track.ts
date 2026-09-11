@@ -4,6 +4,28 @@ import { BIOME } from './biomes';
 
 /** How far the tarmac sits above the ground it follows: see `scene`. */
 export const TRACK_LIFT = 22;
+
+/** Over how far past the kerbs a drawn vehicle comes back down to the ground. */
+const LIFT_EASE = 120;
+
+/**
+ * How far above the terrain to draw a vehicle whose wheels are on it at a
+ * point: the tarmac's lift on the road and its kerbs, easing to nothing
+ * just past them.
+ *
+ * The physics rides the terrain, and the road is drawn `TRACK_LIFT` above
+ * it — a rendering matter, enough for the ribbon to win the depth test
+ * against the ground mesh's facets, and not a step anything should drive
+ * over. So nothing about the driving changes with it; a car drawn where its
+ * physics is sat 22mm into the tarmac, and with bodies modelled round the
+ * ride height that put the sills on the road. This is what is drawn instead.
+ */
+export function drawnLift(x: number, y: number): number {
+  const off = Math.abs(where(x, y).offset);
+  const edge = TRACK_HALF * KERB_OUTER;
+  if (off <= edge) return TRACK_LIFT;
+  return TRACK_LIFT * Math.max(0, 1 - (off - edge) / LIFT_EASE);
+}
 /**
  * The circuit: a closed loop the truck races round.
  *

@@ -21,7 +21,7 @@ import { Ghost, blankPose, blendPose, type Pose } from './ghost';
 import { SETTINGS } from './settings';
 import { PROPS } from './flora';
 import { BOLLARDS, RAILS, RAIL_DEEP } from './furniture';
-import { START_BULBS, radiusAt, tangentAt, where } from './track';
+import { START_BULBS, drawnLift, radiusAt, tangentAt, where } from './track';
 import type { CircleGrid } from './spatial';
 
 /** How long the lights hold you before the lap starts. */
@@ -225,9 +225,22 @@ export class Race {
    * 60Hz one would see nothing wrong — which is how it would go unnoticed.
    * Everything that places something on the truck reads this: the body, the
    * wheels, the lamps and their beams, the camera. Speed, slide and the
-   * wheels' own state read the truck, which is where the physics is.
+   * wheels' own state read the truck, which is where the physics is. It is
+   * also lifted onto the drawn tarmac: see `drawnLift`.
    */
-  get shown(): Pose { return blendPose(this.before, this.truck, this.clock.alpha, this.between); }
+  get shown(): Pose {
+    const p = blendPose(this.before, this.truck, this.clock.alpha, this.between);
+    p.z += drawnLift(p.x, p.y);
+    return p;
+  }
+
+  /** The ghost where it is drawn: at `shownLapTime`, and lifted onto the
+   *  tarmac the same way `shown` is. Null before there is a lap to show. */
+  get ghostShown(): Pose | null {
+    const p = this.ghost.poseAt(this.shownLapTime);
+    if (p) p.z += drawnLift(p.x, p.y);
+    return p;
+  }
 
   /** The lap clock at the moment `shown` is drawn at, for the ghost to be
    *  read at the same instant rather than up to a step ahead of the truck. */

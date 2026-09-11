@@ -440,6 +440,16 @@ it settles to:
 The models are only what is drawn: the physics' body box, wheels and
 collision radius are untouched, and every recorded trajectory is the same.
 
+**They are drawn 22mm up on the road.** The physics rides the terrain, and
+the tarmac is drawn `TRACK_LIFT` above it — enough for the ribbon to win the
+depth test against the ground mesh's facets, not a step anything drives
+over. So every car was drawn with its tyres 22mm into the road, which the old
+plates hid and the new bodies, modelled round the ride height, did not: the
+sills sat on the tarmac. `drawnLift` lifts what is drawn — the car, the
+ghost, their lamps and glows — by the same 22mm on the road and its kerbs,
+easing back to the ground over 120mm past them, and a test holds every
+class's tyres to the drawn road on the grid and its body clear of it.
+
 ![the four vehicles at noon](docs/vehicles.png)
 
 Switching class clears the ghost, the same way a new circuit does and for
