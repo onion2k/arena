@@ -75,12 +75,29 @@ describe('every vehicle class', () => {
     }
   });
 
-  // The technical's lights were bare constants before they were a kit's; the
-  // proportions every class's are worked out from have to give its old ones.
-  it('puts the technical\'s lights where they always were', () => {
-    expect(VEHICLES.technical.kit.lights).toEqual({
-      head: [142, 46, 32], tail: [-168, 48, 6], exhaust: [-180, -10], markers: [104, 58, 62],
-    });
+  // A beam comes out of a lamp you can see: every light a class carries has
+  // to sit on its model, not in the air beside it. The headlamps toward the
+  // front, the tail and exhaust glows toward the back.
+  it('carries its lights on its own body', () => {
+    for (const key of VEHICLE_KEYS) {
+      const kit = VEHICLES[key].kit;
+      const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+      for (const mesh of [kit.body(), kit.detail.mesh()]) {
+        for (let i = 0; i < mesh.positions.length; i += 3) {
+          for (let k = 0; k < 3; k++) {
+            lo[k] = Math.min(lo[k], mesh.positions[i + k]);
+            hi[k] = Math.max(hi[k], mesh.positions[i + k]);
+          }
+        }
+      }
+      const within = ([x, y, z]: number[]) =>
+        x >= lo[0] - 6 && x <= hi[0] + 6 && Math.abs(y) <= hi[1] + 6 && z >= lo[2] - 6 && z <= hi[2] + 6;
+      const { head, tail, exhaust, markers } = kit.lights;
+      expect(within(head) && head[0] > hi[0] * 0.6, `${key} headlamp ${head}`).toBe(true);
+      expect(within(tail) && tail[0] < lo[0] * 0.6, `${key} tail light ${tail}`).toBe(true);
+      expect(within([exhaust[0], 0, exhaust[1]]), `${key} exhaust ${exhaust}`).toBe(true);
+      expect(within(markers), `${key} markers ${markers}`).toBe(true);
+    }
   });
 
   // Why the test above holds, per class, before anyone has to drive one: a

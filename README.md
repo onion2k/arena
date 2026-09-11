@@ -413,18 +413,39 @@ changing class is `renderer.setDynamic` handed new meshes into the same
 pools — the same operation the arena already does for a new circuit's
 static half — and not a change to how many buffers exist or how big they
 are. Each kit carries its own lights — headlamps, brake glows, the exhaust
-glow and the ghost's corner markers — from the same proportions of its own
-length, width and body plate as the technical's (`lightsFor` in
-`vehicles.ts`; a test holds the technical's to the constants they were).
-They were the technical's offsets for every class until then, and the F1's
-48mm-tall body carried its lamps in the air above its nose.
+glow and the ghost's corner markers — placed on its own model, and a test
+holds every one of them to that model's bounds, headlamps at the front and
+tail lights at the back.
+
+**The models** (`models.ts`) were a card-shaped plate each with one block on
+it. They are built now from a few simple solids merged into the two groups
+— a side profile swept across the car with a half width at every point, so
+a roof can be narrower than a sill; a plan outline swept up, for wings; a
+rod between two points — round each class's real wheels, at the ride height
+it settles to:
+
+- **The technical** is a crew-cab pickup: a long bonnet, a raked windscreen,
+  flared arches, an open bed, a roll bar behind the cab and a heavy machine
+  gun on a pedestal in the bed with its barrel over the roof.
+- **The rally car** is a World Rally hatchback: blistered arches, a sloping
+  hatch, a roof scoop, a rear wing on stalks, a splitter, a light pod and mud
+  flaps behind every wheel.
+- **The Le Mans prototype** is a closed endurance car: a low nose between
+  high fenders, a teardrop canopy, a shark fin to a rear wing on swan necks,
+  a splitter and a straked diffuser.
+- **The F1 car** is open-wheeled: a needle nose off a full-width front wing,
+  a survival cell with a halo, pinched sidepods, an airbox, a high rear wing,
+  a helmet in the cockpit and wishbones out to every wheel.
+
+The models are only what is drawn: the physics' body box, wheels and
+collision radius are untouched, and every recorded trajectory is the same.
+
+![the four vehicles at noon](docs/vehicles.png)
 
 Switching class clears the ghost, the same way a new circuit does and for
 the same reason: a lap belongs to what was driven as much as to where.
 Switching keeps the road you are on — only the seed or the size rebuilds the
 arena; the vehicle is a mesh-and-physics swap on top of it.
-
-![four vehicles](docs/vehicles.png)
 
 ### A step is a 120th
 
@@ -1642,7 +1663,11 @@ five.
 
 The truck carries two headlamps that wash the road ahead, an exhaust glow
 under power and brake lights, all bolted to a body that pitches and rolls, so
-they are placed and aimed in its frame rather than on a plane at zero.
+they are placed and aimed in its frame rather than on a plane at zero. The
+headlamps had a glow each as well, and a glow the size of the lamp hanging in
+front of a car reads as a ball of light rather than a lamp; they are gone,
+and what shows the headlights is their beams and the cones they throw
+through the haze.
 
 ## The mist
 

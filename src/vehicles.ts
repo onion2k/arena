@@ -24,30 +24,16 @@
  * part, a wheel, a lamp — so switching class is a mesh swap on two dynamic
  * groups and not a change to how many of them exist. See `main.ts`.
  */
-import { box, part } from './scene';
-import type { VehicleLights, VehicleSpec } from './vehicle';
+import { part } from './scene';
+import type { VehicleSpec } from './vehicle';
+import { f1Body, f1Detail, lmpBody, lmpDetail, rallyBody, rallyDetail, technicalBody, technicalDetail } from './models';
 
-/**
- * Lights in the same places on any body as on the technical's, as shares of
- * its length and width and of the thickness of its body plate: just inside
- * the nose and a finger's width over the plate for the lamps, just off the
- * tail for the glows. The technical's own numbers are what these give for its
- * 300 × 128 body on a 40mm plate.
- */
-export function lightsFor(length: number, width: number, plate: number): VehicleLights {
-  return {
-    head: [length / 2 - 8, Math.round(width * 0.36), plate / 2 + 12],
-    tail: [-(length / 2 + 18), Math.round(width * 0.375), Math.round(plate * 0.15)],
-    exhaust: [-(length / 2 + 30), -plate / 4],
-    markers: [Math.round(length * 0.347), Math.round(width * 0.453), plate / 2 + 42],
-  };
-}
 
 export type VehicleKey = 'technical' | 'rally' | 'lmp' | 'f1';
 export const VEHICLE_KEYS: VehicleKey[] = ['technical', 'rally', 'lmp', 'f1'];
 
 /**
- * The technical: a flatbed pickup. Every number here is the one the old
+ * The technical: a pickup with a gun in the back (see `models.ts`). Every number here is the one the old
  * `vehicle.ts` had as a bare constant — see that file's git history for the
  * measurements and the reasoning behind each. `rating` is `CORNER`/`ACCEL`/
  * `BRAKE` from `track.ts`, likewise unchanged.
@@ -76,23 +62,18 @@ const TECHNICAL: VehicleSpec = {
   // shipped rating below is not this; see the file comment above.
   rating: { corner: 61, accel: 700, brake: 2400, par: 1.086 },
   kit: {
-    body: () => part('plate(card(width: 300, height: 128, corner: 18), thickness: 40, bevel: 7)'),
-    detail: {
-      mesh: () => part('plate(card(width: 96, height: 116, corner: 16), thickness: 64, bevel: 8)'),
-      at: [74, 0, 40],
-      albedo: [0.86, 0.90, 0.97], roughness: 0.12,
-    },
+    body: technicalBody,
+    detail: { mesh: technicalDetail, at: [0, 0, 0], albedo: [0.075, 0.08, 0.085], roughness: 0.38 },
     wheel: () => part('disc(radius: 31, thickness: 24, sides: 16, bolts: 5, boltCircle: 17, boltBore: 5, bevel: 5)'),
-    lamp: () => part('disc(radius: 17, thickness: 14, sides: 14, bevel: 4)'),
-    lights: lightsFor(300, 128, 40),
+    lamp: () => part('disc(radius: 9, thickness: 6, sides: 12, bevel: 2)'),
+    lights: { head: [197, 50, 0], tail: [-198, 64, 30], exhaust: [-202, -32], markers: [160, 76, 64] },
   },
 };
 
 /**
  * A rally car: shorter and lower than the technical, all-wheel drive, softer
  * and taller suspension for the same rough ground, and grip and steering
- * both sharper. The roof scoop and rear wing bar are what read as "rally"
- * from behind at speed, which is most of when you see one.
+ * both sharper. A World Rally hatchback to look at: see `models.ts`.
  */
 const RALLY: VehicleSpec = {
   key: 'rally', label: 'rally car',
@@ -117,15 +98,11 @@ const RALLY: VehicleSpec = {
   // bench: corner 65.6, accel 3462, brake 6016 at top speed 2500
   rating: { corner: 73, accel: 785, brake: 2627, par: 1.058 },
   kit: {
-    body: () => part('plate(card(width: 260, height: 120, corner: 22), thickness: 56, bevel: 9)'),
-    detail: {
-      mesh: () => box(110, 88, 30),
-      at: [-6, 0, 52],
-      albedo: [0.10, 0.10, 0.12], roughness: 0.4,
-    },
+    body: rallyBody,
+    detail: { mesh: rallyDetail, at: [0, 0, 0], albedo: [0.05, 0.05, 0.06], roughness: 0.3 },
     wheel: () => part('disc(radius: 28, thickness: 30, sides: 14, bolts: 6, boltCircle: 15, boltBore: 4, bevel: 4)'),
-    lamp: () => part('disc(radius: 16, thickness: 13, sides: 12, bevel: 4)'),
-    lights: lightsFor(260, 120, 56),
+    lamp: () => part('disc(radius: 8, thickness: 6, sides: 12, bevel: 2)'),
+    lights: { head: [175, 50, -4], tail: [-168, 58, 12], exhaust: [-174, -40], markers: [140, 76, 52] },
   },
 };
 
@@ -133,7 +110,7 @@ const RALLY: VehicleSpec = {
  * A Le Mans prototype: long, low and flat, rear drive with everything the
  * engine has, and the stiffest, shallowest suspension of the four — this is
  * the class that will fly off the ramps, which is the point of having one.
- * The canopy and the tall rear wing on a fin are the silhouette.
+ * A closed endurance car to look at: see `models.ts`.
  */
 const LMP: VehicleSpec = {
   key: 'lmp', label: 'Le Mans prototype',
@@ -158,15 +135,11 @@ const LMP: VehicleSpec = {
   // bench: corner 62.0, accel 3755, brake 6676 at top speed 3000
   rating: { corner: 69, accel: 852, brake: 2915, par: 1.132 },
   kit: {
-    body: () => part('plate(card(width: 340, height: 130, corner: 20), thickness: 30, bevel: 6)'),
-    detail: {
-      mesh: () => part('plate(card(width: 130, height: 92, corner: 30), thickness: 46, bevel: 10)'),
-      at: [40, 0, 34],
-      albedo: [0.05, 0.06, 0.08], roughness: 0.1,
-    },
+    body: lmpBody,
+    detail: { mesh: lmpDetail, at: [0, 0, 0], albedo: [0.04, 0.045, 0.05], roughness: 0.16 },
     wheel: () => part('disc(radius: 30, thickness: 26, sides: 16, bolts: 5, boltCircle: 16, boltBore: 4, bevel: 4)'),
-    lamp: () => part('disc(radius: 15, thickness: 12, sides: 12, bevel: 3)'),
-    lights: lightsFor(340, 130, 30),
+    lamp: () => part('disc(radius: 7, thickness: 5, sides: 12, bevel: 2)'),
+    lights: { head: [214, 52, -22], tail: [-222, 58, -8], exhaust: [-226, -36], markers: [184, 78, 32] },
   },
 };
 
@@ -174,8 +147,8 @@ const LMP: VehicleSpec = {
  * An F1 car: narrow, the lowest of the four, the most grip and the least
  * suspension travel by a wide margin — a kerb here is a jolt, not a bump.
  * Rear drive, the sharpest brakes, the tightest standstill lock and the
- * fastest fall-off with speed of any of them. The nose and the two wings are
- * what make the silhouette read as open-wheel rather than as a wedge.
+ * fastest fall-off with speed of any of them. Open-wheeled, with wings and a
+ * halo: see `models.ts`.
  */
 const F1: VehicleSpec = {
   key: 'f1', label: 'F1 car',
@@ -207,15 +180,11 @@ const F1: VehicleSpec = {
   // left as they were.
   rating: { corner: 71, accel: 1018, brake: 3383, par: 1.171 },
   kit: {
-    body: () => part('plate(card(width: 360, height: 110, corner: 16), thickness: 22, bevel: 5)'),
-    detail: {
-      mesh: () => part('plate(card(width: 90, height: 40, corner: 12), thickness: 20, bevel: 4)'),
-      at: [186, 0, 8],
-      albedo: [0.08, 0.08, 0.09], roughness: 0.2,
-    },
+    body: f1Body,
+    detail: { mesh: f1Detail, at: [0, 0, 0], albedo: [0.035, 0.035, 0.04], roughness: 0.24 },
     wheel: () => part('disc(radius: 34, thickness: 34, sides: 16, bolts: 5, boltCircle: 19, boltBore: 5, bevel: 3)'),
-    lamp: () => part('disc(radius: 13, thickness: 11, sides: 12, bevel: 3)'),
-    lights: lightsFor(360, 110, 22),
+    lamp: () => part('disc(radius: 5, thickness: 4, sides: 10, bevel: 1)'),
+    lights: { head: [214, 9, -26], tail: [-236, 5, -30], exhaust: [-240, -22], markers: [204, 98, 20] },
   },
 };
 

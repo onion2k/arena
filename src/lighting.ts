@@ -274,8 +274,8 @@ export function setProjectionScale(fovDegrees: number) {
 }
 
 /**
- * The glows over the top: the lamps on the truck, its exhaust under power and
- * its brake lights when it is stopping. The tracers and the explosions went
+ * The glows over the top: the truck's exhaust under power and its brake
+ * lights when it is stopping. The tracers and the explosions went
  * with the gun.
  */
 export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): number {
@@ -331,19 +331,17 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
     }
   }
 
-  // the truck's own lamps and brake lights, so they are bright points rather
-  // than dark discs with light appearing in front of them
-  {
+  // The truck's brake lights, as bright points. The headlamps had glows here
+  // too, and a glow is a ball of light the size of the lamp hanging in front
+  // of the car: the beams and their cones in the air are the headlights now,
+  // and the lamps themselves are the glossy discs on the body.
+  if (arena.braking > 0) {
     const v = arena.shown;
     const vcy = Math.cos(v.yaw), vsy = Math.sin(v.yaw);
     const put = (lx: number, ly: number) => [v.x + lx * vcy - ly * vsy, v.y + lx * vsy + ly * vcy];
     for (const side of [-1, 1]) {
-      const [lx, ly] = put(lights.head[0] + 6, side * lights.head[1]);
-      if (on > 0) n = glow(out, n, vp, lx, ly, v.z + lights.head[2], 24, 2.2 * on, [1, 0.9, 0.7], 2.8);
-      if (arena.braking > 0) {
-        const [bx2, by2] = put(lights.tail[0], side * lights.tail[1]);
-        n = glow(out, n, vp, bx2, by2, v.z + lights.tail[2], 22, 1.6 * arena.braking, [1, 0.15, 0.08], 2.6);
-      }
+      const [bx2, by2] = put(lights.tail[0], side * lights.tail[1]);
+      n = glow(out, n, vp, bx2, by2, v.z + lights.tail[2], 22, 1.6 * arena.braking, [1, 0.15, 0.08], 2.6);
     }
   }
 
