@@ -58,6 +58,7 @@ const pregameWarn = document.getElementById('pregameWarn')!;
 const pregameRating = document.getElementById('pregameRating')!;
 const pregameSeed = document.getElementById('pregameSeed') as HTMLInputElement;
 const pregameAnother = document.getElementById('pregameAnother')!;
+const pregameWild = document.getElementById('pregameWild')!;
 const pregameGo = document.getElementById('pregameGo')!;
 const bootMsg = document.getElementById('bootMsg')!;
 const scorePanel = document.getElementById('score')!;
@@ -120,8 +121,8 @@ async function main() {
 
   /** A circuit in force, built on the CPU — see `circuit.ts` — and a warning
    *  if it would ever be more lamps than the light pool holds. */
-  function useTrack(seed: number, size: SizeKey, biome: BiomeKey) {
-    timings.track = buildCircuit(seed, size, biome);
+  function useTrack(seed: number, size: SizeKey, biome: BiomeKey, wild = SETTINGS.wild) {
+    timings.track = buildCircuit(seed, size, biome, wild);
     // Every post carries a floodlight, and the ghost-corner and start-line
     // glows are on top of that: both pools have room to spare at any size
     // this game reaches, but silently dropping lights past a fixed capacity
@@ -432,12 +433,13 @@ async function main() {
    * the trees — which is not a bug you would report, it is a bug you would
    * simply stop trusting the ghost over.
    */
-  function newTrack(seed: number, size: SizeKey, biome: BiomeKey) {
+  function newTrack(seed: number, size: SizeKey, biome: BiomeKey, wild = SETTINGS.wild) {
     SETTINGS.seed = seed;
     SETTINGS.size = size;
     SETTINGS.biome = biome;
+    SETTINGS.wild = wild;
     save();
-    useTrack(seed, size, biome);
+    useTrack(seed, size, biome, wild);
     buildArena();
     minimap.redraw();
     skids.clear();
@@ -457,7 +459,7 @@ async function main() {
    * race button is pressed, and only if the circuit actually changed.
    */
   const NS = 'http://www.w3.org/2000/svg';
-  let choice = { seed: SETTINGS.seed, size: SETTINGS.size, vehicle: SETTINGS.vehicle, biome: SETTINGS.biome };
+  let choice = { seed: SETTINGS.seed, size: SETTINGS.size, vehicle: SETTINGS.vehicle, biome: SETTINGS.biome, wild: SETTINGS.wild };
   /** What the arena is currently built for, so racing the same one is free. */
   let built = { ...choice };
   let racing = false;
@@ -538,12 +540,13 @@ async function main() {
   }
 
   /** Draw a circuit on the select screen without building any of it. */
-  function preview(seed: number, vehicle: VehicleKey, size: SizeKey, biome: BiomeKey) {
-    choice = { seed, vehicle, size, biome };
+  function preview(seed: number, vehicle: VehicleKey, size: SizeKey, biome: BiomeKey, wild = choice.wild) {
+    choice = { seed, vehicle, size, biome, wild };
+    pregameWild.setAttribute('aria-pressed', String(wild));
     for (const [key, btn] of sizeButtons) btn.setAttribute('aria-pressed', String(key === size));
     for (const [key, btn] of vehicleButtons) btn.setAttribute('aria-pressed', String(key === vehicle));
     for (const [key, btn] of biomeButtons) btn.setAttribute('aria-pressed', String(key === biome));
-    const shape = circuitFor(seed, sizeOf(size));
+    const shape = circuitFor(seed, sizeOf(size), wild);
     const p = shapePreview(shape);
     pregameMap.setAttribute('viewBox', p.box.join(' '));
     road.setAttribute('stroke', BIOMES[biome].map.road);
@@ -560,7 +563,7 @@ async function main() {
     const r = rateTrack(shape, spec.engine.topSpeed * SETTINGS.pace, spec.rating);
     const band = difficultyBand(r.difficulty);
     pregameFacts.innerHTML =
-      `${seed === 0 ? 'the original circuit' : `circuit <span>#${seed}</span>`}`
+      `${seed === 0 && !wild ? 'the original circuit' : `${wild ? 'wild circuit' : 'circuit'} <span>#${seed}</span>`}`
       + ` · <span>${labelOf(size)}</span>`
       + ` · <span>${labelOfBiome(biome)}</span>`
       + ` · <span>${spec.label}</span>`
@@ -584,7 +587,7 @@ async function main() {
 
   function openPregame() {
     racing = false;
-    preview(SETTINGS.seed, SETTINGS.vehicle, SETTINGS.size, SETTINGS.biome);
+    preview(SETTINGS.seed, SETTINGS.vehicle, SETTINGS.size, SETTINGS.biome, SETTINGS.wild);
     pregame.removeAttribute('hidden');
   }
 
@@ -595,10 +598,10 @@ async function main() {
     // with it in the same pass, so choosing several at once is not several
     // rebuilds); a different car on the same road is a mesh swap and
     // nothing more.
-    const roadChanged = choice.seed !== built.seed || choice.size !== built.size || choice.biome !== built.biome;
+    const roadChanged = choice.seed !== built.seed || choice.size !== built.size || choice.biome !== built.biome || choice.wild !== built.wild;
     const vehicleChanged = choice.vehicle !== built.vehicle;
     if (roadChanged) {
-      newTrack(choice.seed, choice.size, choice.biome);
+      newTrack(choice.seed, choice.size, choice.biome, choice.wild);
       if (vehicleChanged) { SETTINGS.vehicle = choice.vehicle; save(); switchVehicle(VEHICLES[choice.vehicle]); }
       built = { ...choice };
     } else if (vehicleChanged) {
@@ -616,6 +619,12 @@ async function main() {
     racing = true;
   }
 
+  // Wild or smooth: the same seed in the other style is a different circuit
+  // entirely, so this redraws the preview like a new seed does.
+  pregameWild.addEventListener('click', () => {
+    preview(choice.seed, choice.vehicle, choice.size, choice.biome, !choice.wild);
+    (pregameWild as HTMLElement).blur();
+  });
   pregameAnother.addEventListener('click', () => {
     preview(1 + Math.floor(Math.random() * 998), choice.vehicle, choice.size, choice.biome);
     (pregameAnother as HTMLElement).blur();
@@ -1372,7 +1381,7 @@ function buildConfig(applied: (key: SliderKey) => void, chooseCircuit: () => voi
   shuffle.type = 'button'; shuffle.className = 'wide';
   const trackValue = document.createElement('output');
   const showSeed = () => {
-    const seed = SETTINGS.seed === 0 ? 'the original' : `#${SETTINGS.seed}`;
+    const seed = SETTINGS.wild ? `wild #${SETTINGS.seed}` : SETTINGS.seed === 0 ? 'the original' : `#${SETTINGS.seed}`;
     trackValue.textContent = `${labelOf(SETTINGS.size)} · ${seed} · ${labelOfBiome(SETTINGS.biome)} · ${VEHICLES[SETTINGS.vehicle].label}`;
     shuffle.textContent = 'choose circuit';
   };

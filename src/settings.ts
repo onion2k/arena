@@ -68,6 +68,9 @@ export interface Settings {
   vehicle: VehicleKey;
   /** Which biome. Kept across sessions the same way. */
   biome: BiomeKey;
+  /** Wild circuits: straights and tight corners in place of the smooth
+   *  loops. A property of the circuit, chosen with the seed. */
+  wild: boolean;
   /** Disco night: the lamps chase through colour to a beat, and a mirror
    *  ball over the line throws beams across the arena. See `disco.ts`. */
   disco: boolean;
@@ -90,6 +93,7 @@ export const DEFAULTS: Readonly<Settings> = {
   size: 'M',
   vehicle: 'technical',
   biome: 'forest',
+  wild: false,
   disco: false,
   concours: false,
 };
@@ -98,7 +102,7 @@ export const DEFAULTS: Readonly<Settings> = {
  * A setting a slider can drive: everything except the seed and the size,
  * which are buttons and not ranges — see `SliderKey`.
  */
-export type SliderKey = Exclude<keyof Settings, 'seed' | 'size' | 'vehicle' | 'biome' | 'disco' | 'concours'>;
+export type SliderKey = Exclude<keyof Settings, 'seed' | 'size' | 'vehicle' | 'biome' | 'wild' | 'disco' | 'concours'>;
 
 /** One row of the panel: which setting, what to call it, how far it goes. */
 export interface Control {
@@ -158,6 +162,7 @@ function load(): Partial<Settings> {
       out.biome = saved.biome as BiomeKey;
     }
     // and the two modes, which are switches
+    if (typeof saved.wild === 'boolean') out.wild = saved.wild;
     if (typeof saved.disco === 'boolean') out.disco = saved.disco;
     if (typeof saved.concours === 'boolean') out.concours = saved.concours;
     for (const c of CONTROLS) {
@@ -186,7 +191,7 @@ export function restoreDefaults() {
   const size = SETTINGS.size;
   const vehicle = SETTINGS.vehicle;
   const biome = SETTINGS.biome;
-  const { disco, concours } = SETTINGS;
-  Object.assign(SETTINGS, DEFAULTS, { seed, size, vehicle, biome, disco, concours });
+  const { wild, disco, concours } = SETTINGS;
+  Object.assign(SETTINGS, DEFAULTS, { seed, size, vehicle, biome, wild, disco, concours });
   save();
 }

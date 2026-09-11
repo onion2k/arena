@@ -50,6 +50,23 @@ export interface Shape {
   r0: number;
   /** Harmonic, amplitude, phase — one triple per term. */
   terms: [number, number, number][];
+  /**
+   * A wild circuit's radius and its rate of change with the angle, sampled
+   * evenly round the lap from -π: straights and tight corners are not a
+   * handful of harmonics, so a wild shape is carried as the numbers the rest
+   * of this file reads rather than as a formula. See `generateWild`. When it
+   * is here, `r0` and `terms` are not used.
+   */
+  table?: { r: Float64Array; d: Float64Array };
+}
+
+/** A sampled table read at an angle, linearly between samples. */
+function sampled(values: Float64Array, theta: number): number {
+  const n = values.length;
+  let u = ((theta + Math.PI) / (Math.PI * 2)) * n;
+  u = ((u % n) + n) % n;
+  const i = Math.floor(u), f = u - i;
+  return values[i] * (1 - f) + values[(i + 1) % n] * f;
 }
 
 /**
@@ -72,6 +89,7 @@ export const TRACK_HALF = 380;
 
 /** The radius of the centreline at an angle. */
 export function radiusAt(theta: number): number {
+  if (shape.table) return sampled(shape.table.r, theta);
   let r = shape.r0;
   for (const [k, amp, phase] of shape.terms) r += amp * Math.sin(k * theta + phase);
   return r;
@@ -79,6 +97,7 @@ export function radiusAt(theta: number): number {
 
 /** How fast the radius is changing with the angle. */
 function dRadius(theta: number): number {
+  if (shape.table) return sampled(shape.table.d, theta);
   let d = 0;
   for (const [k, amp, phase] of shape.terms) d += k * amp * Math.cos(k * theta + phase);
   return d;
@@ -101,6 +120,37 @@ function dRadius(theta: number): number {
 export function radialToAcross(theta: number): number {
   const r = radiusAt(theta);
   return r / Math.hypot(r, dRadius(theta));
+}
+
+/**
+ * How far a point is from the centreline, measured to the nearest point of
+ * it and not along the radius. `where().offset` is the radial measure, which
+ * is exact on a circle and close on a smooth circuit; on the inside of a
+ * corner tighter than the thing being placed is far from the road, the
+ * nearest road can be the other leg of the corner, at another angle. The
+ * road near a point is never far round the loop from it, so this searches the
+ * angles either side and refines.
+ */
+export function roadDistance(x: number, y: number): number {
+  const theta = Math.atan2(y, x);
+  let best = Infinity, at = theta;
+  const span = 0.9, steps = 180;
+  for (let i = 0; i <= steps; i++) {
+    const t = theta - span + (i / steps) * span * 2;
+    const [cx, cy] = centreline(t);
+    const d = Math.hypot(cx - x, cy - y);
+    if (d < best) { best = d; at = t; }
+  }
+  let h = span / steps;
+  for (let k = 0; k < 12; k++) {
+    for (const t of [at - h, at + h]) {
+      const [cx, cy] = centreline(t);
+      const d = Math.hypot(cx - x, cy - y);
+      if (d < best) { best = d; at = t; }
+    }
+    h /= 2;
+  }
+  return best;
 }
 
 /** A point on the centreline. */
@@ -643,12 +693,139 @@ export function setTrack(s: Shape) { shape = s; }
  * the same.
  */
 export function scaleShape(s: Shape, k: number): Shape {
-  return { r0: s.r0 * k, terms: s.terms.map(([kk, amp, phase]) => [kk, amp * k, phase]) };
+  const scaled: Shape = { r0: s.r0 * k, terms: s.terms.map(([kk, amp, phase]) => [kk, amp * k, phase]) };
+  if (s.table) scaled.table = { r: s.table.r.map((v) => v * k), d: s.table.d.map((v) => v * k) };
+  return scaled;
 }
 
-/** A circuit for a seed, at a size. Same seed, same shape, any size. */
-export function circuitFor(seed: number, size: number): Shape {
-  return scaleShape(generateTrack(seed), size);
+/** A circuit for a seed, at a size, smooth or wild. Same seed, same shape, any size. */
+export function circuitFor(seed: number, size: number, wild = false): Shape {
+  return scaleShape(wild ? generateWild(seed) : generateTrack(seed), size);
+}
+
+/**
+ * What a wild circuit has to clear. The same arena and the same road as a
+ * smooth one — the radius bounds and how square the radius stays to the road
+ * are unchanged — but corners down to 380mm, near the technical's own circle,
+ * a lap that may run a little longer, and at least one straight worth the name.
+ */
+const WILD = {
+  curve: 380,
+  maxLength: 38000,
+  longestStraight: 5500,
+  /** How finely the radius is sampled round the lap. */
+  samples: 4096,
+};
+
+type P = [number, number];
+
+/**
+ * A wild circuit: straights, and corners that are arcs where the smooth
+ * circuits have waves.
+ *
+ * Five to eight corner points are thrown round the middle of the arena at
+ * increasing angles and different distances from it, which makes a polygon
+ * that every ray from the middle crosses once — what the polar form needs.
+ * Each corner is rounded off with an arc, most of them tight, some sweeping,
+ * as far as the straights either side leave room for, and the lap is sampled
+ * as the radius a ray at each angle meets it at. A proposal that a ray meets
+ * twice — a rounded corner can bulge back past the middle's line of sight —
+ * or that misses a limit is thrown away and another thrown; after two hundred
+ * it falls back to a smooth circuit for the seed, which has never happened
+ * in the seeds tested.
+ *
+ * The start line goes on the middle of the longest straight.
+ */
+export function generateWild(seed: number): Shape {
+  const rnd = random((seed * 2654435761) ^ 0x5bd1e995);
+  const n = WILD.samples;
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const corners = 5 + Math.floor(rnd() * 4);
+    const turn = rnd() * Math.PI * 2;
+    const pts: P[] = [];
+    for (let i = 0; i < corners; i++) {
+      const a = turn + ((i + (rnd() - 0.5) * 0.55) / corners) * Math.PI * 2;
+      const r = 3300 + rnd() * 1900;
+      pts.push([Math.cos(a) * r, Math.sin(a) * r]);
+    }
+
+    // round every corner off: an arc tangent to both straights
+    type Arc = { c: P; rho: number; from: number; sweep: number; t1: P; t2: P };
+    const arcs: Arc[] = [];
+    let ok = true;
+    for (let i = 0; i < corners; i++) {
+      const A = pts[(i + corners - 1) % corners], B = pts[i], C = pts[(i + 1) % corners];
+      const la = Math.hypot(B[0] - A[0], B[1] - A[1]), lc = Math.hypot(C[0] - B[0], C[1] - B[1]);
+      const u: P = [(B[0] - A[0]) / la, (B[1] - A[1]) / la], v: P = [(C[0] - B[0]) / lc, (C[1] - B[1]) / lc];
+      const cross = u[0] * v[1] - u[1] * v[0];
+      const phi = Math.acos(Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1])));
+      if (phi < 0.05 || phi > 2.6) { ok = false; break; }
+      const want = rnd() < 0.55 ? 380 + rnd() * 340 : rnd() < 0.8 ? 900 + rnd() * 800 : 1800 + rnd() * 1400;
+      let t = want * Math.tan(phi / 2);
+      t = Math.min(t, 0.46 * Math.min(la, lc));
+      const rho = t / Math.tan(phi / 2);
+      const t1: P = [B[0] - u[0] * t, B[1] - u[1] * t], t2: P = [B[0] + v[0] * t, B[1] + v[1] * t];
+      const side = cross > 0 ? 1 : -1;
+      const c: P = [t1[0] - u[1] * rho * side, t1[1] + u[0] * rho * side];
+      arcs.push({ c, rho, from: Math.atan2(t1[1] - c[1], t1[0] - c[0]), sweep: phi * side, t1, t2 });
+    }
+    if (!ok) continue;
+    const straights = arcs.map((arc, i) => [arcs[(i + corners - 1) % corners].t2, arc.t1] as [P, P]);
+
+    // where a ray from the middle meets the lap, at every sampled angle
+    const r = new Float64Array(n);
+    for (let j = 0; j < n && ok; j++) {
+      const th = -Math.PI + (j / n) * Math.PI * 2;
+      const dx = Math.cos(th), dy = Math.sin(th);
+      const hits: number[] = [];
+      for (const [a, b] of straights) {
+        const ex = b[0] - a[0], ey = b[1] - a[1];
+        const den = dx * ey - dy * ex;
+        if (Math.abs(den) < 1e-12) continue;
+        const dist = (a[0] * ey - a[1] * ex) / den;
+        const w = (a[0] * dy - a[1] * dx) / den;
+        if (dist > 0 && w >= -1e-9 && w <= 1 + 1e-9) hits.push(dist);
+      }
+      for (const arc of arcs) {
+        const b = dx * arc.c[0] + dy * arc.c[1];
+        const disc = b * b - (arc.c[0] ** 2 + arc.c[1] ** 2 - arc.rho ** 2);
+        if (disc < 0) continue;
+        for (const dist of [b - Math.sqrt(disc), b + Math.sqrt(disc)]) {
+          if (dist <= 0) continue;
+          let ang = Math.atan2(dy * dist - arc.c[1], dx * dist - arc.c[0]) - arc.from;
+          ang = arc.sweep > 0 ? ((ang % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) : -(((-ang % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2));
+          if (Math.abs(ang) <= Math.abs(arc.sweep) + 1e-9) hits.push(dist);
+        }
+      }
+      hits.sort((p, q) => p - q);
+      const distinct = hits.filter((h, k) => k === 0 || h - hits[k - 1] > 0.5);
+      if (distinct.length !== 1) ok = false;
+      else r[j] = distinct[0];
+    }
+    if (!ok) continue;
+
+    // the start line on the middle of the longest straight
+    let longest = 0, mid: P = [1, 0];
+    for (const [a, b] of straights) {
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (len > longest) { longest = len; mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; }
+    }
+    if (longest < WILD.longestStraight) continue;
+    const shift = Math.round(((Math.atan2(mid[1], mid[0]) + Math.PI) / (Math.PI * 2)) * n);
+    const turned = new Float64Array(n);
+    for (let j = 0; j < n; j++) turned[j] = r[(j + shift) % n];
+    const d = new Float64Array(n);
+    const step = (Math.PI * 2) / n;
+    for (let j = 0; j < n; j++) d[j] = (turned[(j + 1) % n] - turned[(j + n - 1) % n]) / (2 * step);
+
+    const candidate: Shape = { r0: 0, terms: [], table: { r: turned, d } };
+    const m = measureShape(candidate);
+    if (m.curve >= WILD.curve && m.minRadius >= LIMITS.minRadius && m.maxRadius <= LIMITS.maxRadius
+      && m.across >= LIMITS.across && m.length >= LIMITS.minLength && m.length <= WILD.maxLength) {
+      return candidate;
+    }
+  }
+  return generateTrack(seed);
 }
 
 /**

@@ -96,12 +96,12 @@ function floodForBiome() {
  * this backwards plants a forest in last circuit's lake, or hands the
  * truck a grid with nothing in it.
  */
-export function useTrack(seed: number, size: SizeKey, biome: BiomeKey): number {
+export function useTrack(seed: number, size: SizeKey, biome: BiomeKey, wild = false): number {
   const t0 = performance.now();
   setSize(size);
   setBiome(biome);
   resizeArena();
-  setTrack(circuitFor(seed, SIZE));
+  setTrack(circuitFor(seed, SIZE, wild));
   seedTerrain(seed, BIOME.terrain.ampScale);
   floodForBiome();
   restandColumns();

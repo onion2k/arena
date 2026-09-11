@@ -770,6 +770,54 @@ on, and replaying one over a different road would put a truck through the
 trees — which is not a bug anyone would report, it is a bug that quietly
 stops you trusting the ghost. The skid marks go too, and the race restarts.
 
+### Wild circuits
+
+A switch beside **another** on the track-select screen: the same seeds, and a
+different kind of circuit — straights, and corners that are arcs where the
+smooth circuits have waves.
+
+The polar form stays. Every system that reads the circuit — the lap and the
+ghost, the road and the kerbs, the posts and the barriers, the planting, the
+pilot, par — asks it for a radius at an angle, and a wild circuit answers that
+from a table instead of a formula (`Shape.table`, 4,096 samples round the
+lap, read linearly between them). A figure of eight cannot be a polar curve;
+that is a different project, with a bridge in it.
+
+`generateWild` throws five to eight corner points round the middle of the
+arena at increasing angles and between 3.3 and 5.2 metres out, which makes a
+polygon every ray from the middle crosses once. Each corner is rounded off
+with an arc tangent to the straights either side — over half of them tight,
+380 to 720mm, the rest sweeping — as far as the straights leave room for, and
+the lap is sampled as the distance a ray at each angle meets it. A proposal
+a ray meets twice, or one that misses a limit, is thrown away and another
+thrown. The limits are the smooth circuits' arena and road, with corners
+down to 380mm, a lap up to 38m, and a straight of at least 5.5m; the start
+line goes on the middle of the longest. Over forty seeds: no fallbacks, 18ms
+a circuit at the median and 138 at the worst, the tightest corner 387 to
+520mm, the longest straight 5.2 to 6.1m, a lap of about 25.6m.
+
+Two things measured before they shipped:
+
+- **Nothing stands on the road.** Placed along the radius, a thing on the
+  inside of a corner tighter than its own offset lands toward the other leg
+  of the corner. Measured to the nearest road (`roadDistance`), posts, trees,
+  barriers and signs were clear on twenty wild circuits, and nine drums and
+  tyre stacks were not — up to 16mm onto the tarmac. Bollards now need a
+  drum's width of clearance to the nearest road before they are placed, which
+  no smooth circuit's bollard is anywhere near, so their layouts are
+  unchanged.
+- **The pilot gets round, and par nearly holds.** Every class finishes all
+  thirteen wild circuits it was given. Par is fitted on smooth circuits and
+  is length at top speed; on wild ones it comes out 1.0 to 2.8% optimistic
+  on average by class, most for the F1, and 7% at the worst. The difficulty
+  reads high — 0.04 to 0.30 against the smooth circuits' 0.02 to 0.06 — and a
+  wild circuit is nearly always *relentless*, which is true.
+
+On the tightest corners, where the centreline's radius is barely more than
+the road's half width, the inside kerb pinches to a point at the apex.
+
+![a wild circuit](docs/wild.png)
+
 ### Choosing one
 
 The game opens on a track-select screen rather than on the grid: the circuit

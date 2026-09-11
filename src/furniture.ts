@@ -24,7 +24,7 @@
  * holding anything.
  */
 import type { Mesh } from 'artshape-render/mesh/types';
-import { TRACK_HALF, TRACK_LIFT, centreline, curveRadius, radialToAcross, radiusAt, tangentAt } from './track';
+import { TRACK_HALF, TRACK_LIFT, centreline, curveRadius, radialToAcross, radiusAt, roadDistance, tangentAt } from './track';
 import { part } from './scene';
 import { height, normal } from './terrain';
 import { COLUMNS } from './scene';
@@ -163,6 +163,17 @@ function random(seed: number): () => number {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/**
+ * Clear of the tarmac by a drum's width at least, measured to the nearest
+ * road and not along the radius. On a wild circuit's tightest corners the
+ * apex drums' offset reaches past the corner's own centre and toward the
+ * other leg of it; this is what keeps them off it. No smooth circuit has a
+ * bollard this close, so it moves nothing there.
+ */
+function clearOfRoad(x: number, y: number, r: number): boolean {
+  return roadDistance(x, y) - r >= TRACK_HALF + 100;
 }
 
 /** Too near a lamp post to stand something else there. */
@@ -343,7 +354,7 @@ export function rebuildFurniture(seed = 5) {
     const ay = ey - s.left[1] * side * (TYRE_R + RAIL_DEEP);
     for (let k = -1; k <= 1; k++) {
       const x = ax + tx * k * (TYRE_R * 2.1), y = ay + ty * k * (TYRE_R * 2.1);
-      if (underWater(x, y, 10)) continue;
+      if (underWater(x, y, 10) || !clearOfRoad(x, y, TYRE_R)) continue;
       BOLLARDS.push({ x, y, r: TYRE_R, kind: 'tyre', turn: rnd() * Math.PI });
     }
     /*
@@ -401,7 +412,7 @@ export function rebuildFurniture(seed = 5) {
       const out = TRACK_HALF + 265 + rnd() * 90;
       const x = s.b[0] - s.left[0] * side * out + tx * k * 150;
       const y = s.b[1] - s.left[1] * side * out + ty * k * 150;
-      if (underWater(x, y, 10) || !clearOfPosts(x, y, 150)) continue;
+      if (underWater(x, y, 10) || !clearOfPosts(x, y, 150) || !clearOfRoad(x, y, DRUM_R)) continue;
       BOLLARDS.push({ x, y, r: DRUM_R, kind: 'drum', turn: rnd() * Math.PI * 2 });
     }
   }
@@ -417,7 +428,7 @@ export function rebuildFurniture(seed = 5) {
     const bx = s.b[0] + s.left[0] * side * out, by = s.b[1] + s.left[1] * side * out;
     for (let k = 0; k < 2 + Math.floor(rnd() * 2); k++) {
       const x = bx + (rnd() - 0.5) * 130, y = by + (rnd() - 0.5) * 130;
-      if (underWater(x, y, 10) || !clearOfPosts(x, y, 130)) continue;
+      if (underWater(x, y, 10) || !clearOfPosts(x, y, 130) || !clearOfRoad(x, y, DRUM_R)) continue;
       BOLLARDS.push({ x, y, r: DRUM_R, kind: 'drum', turn: rnd() * Math.PI * 2 });
     }
   }

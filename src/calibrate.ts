@@ -47,11 +47,11 @@ export interface Drive {
 
 /** The pilot round one circuit to one plan: its best flying lap, and how
  *  much of the flying laps it lifted for. A medium forest unless asked. */
-export function driveTo(spec: VehicleSpec, seed: number, corner: number, size: SizeKey = 'M', biome: BiomeKey = 'forest'): Drive {
-  useTrack(seed, size, biome);
+export function driveTo(spec: VehicleSpec, seed: number, corner: number, size: SizeKey = 'M', biome: BiomeKey = 'forest', wild = false): Drive {
+  useTrack(seed, size, biome, wild);
   const race = new Race();
   race.useVehicle(spec);
-  const plan = speedPlan(circuitFor(seed, sizeOf(size)), spec.engine.topSpeed, { corner, accel: 1, brake: PLAN_BRAKE, par: 1 }, false).v;
+  const plan = speedPlan(circuitFor(seed, sizeOf(size), wild), spec.engine.topSpeed, { corner, accel: 1, brake: PLAN_BRAKE, par: 1 }, false).v;
   const pilot = new Pilot(spec, plan);
   const laps: number[] = [];
   let flying = 0, lifted = 0;

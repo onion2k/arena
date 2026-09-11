@@ -55,7 +55,7 @@
   #pregame .warn span { font-variant-numeric: tabular-nums; }
   #pregame .picks { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
   #pregame .seg { display: flex; gap: 6px; }
-  #pregame .seg button[aria-pressed="true"] { background: #e8b74a; border-color: #e8b74a; color: #14131a; font-weight: 600; }
+  #pregame .seg button[aria-pressed="true"], #pregame .picks button[aria-pressed="true"] { background: #e8b74a; border-color: #e8b74a; color: #14131a; font-weight: 600; }
   #pregame input { font: inherit; width: 84px; text-align: center; color: var(--ink);
                    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14);
                    border-radius: 6px; padding: 5px 8px; }
@@ -88,6 +88,7 @@
   <div class="seg" id="pregameSize" role="group" aria-label="track size"></div>
   <div class="seg" id="pregameModes" role="group" aria-label="modes"></div>
   <div class="picks">
+    <button type="button" id="pregameWild" aria-pressed="false">wild</button>
     <button type="button" id="pregameAnother">another</button>
     <input id="pregameSeed" type="number" min="0" max="999999" step="1" aria-label="circuit seed">
     <button type="button" class="go" id="pregameGo">race</button>
