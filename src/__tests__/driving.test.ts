@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { drive, raceOn, stateOf } from './sim';
-import { setTrack, circuitFor, centreline, tangentAt, setBenchGrip } from '../track';
+import { setTrack, circuitFor, centreline, tangentAt, setBenchGrip, rateTrack } from '../track';
 import { setBenchFlat } from '../terrain';
 import { SUBSTEP, Vehicle, rollDamping } from '../vehicle';
+import { driveTo } from '../calibrate';
 import { VEHICLES, VEHICLE_KEYS } from '../vehicles';
 import type { BiomeKey } from '../biomes';
 import type { SizeKey } from '../world';
@@ -108,5 +109,22 @@ describe('the race clock', () => {
       lastX = x; lastY = y;
     }
     expect(still).toBe(0);
+  });
+});
+
+describe('par', () => {
+  // The pilot round the original circuit in every class, to one brisk plan:
+  // its best flying lap has to be within 6% of the par the track-select
+  // screen quotes. `npm run calibrate` is the full check, over twenty-six
+  // circuits and every plan; this is the part of it quick enough to run
+  // every time, and it fails if the vehicles, the pilot or the par model
+  // drift apart.
+  it('is what the pilot laps the original circuit in, for every class', () => {
+    for (const key of VEHICLE_KEYS) {
+      const spec = VEHICLES[key];
+      const { lap } = driveTo(spec, 0, 80);
+      const { par } = rateTrack(circuitFor(0, 1), spec.engine.topSpeed, spec.rating);
+      expect(Math.abs(par / lap - 1), `${key}: par ${par.toFixed(2)}, driven ${lap.toFixed(2)}`).toBeLessThan(0.06);
+    }
   });
 });

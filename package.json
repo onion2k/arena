@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "calibrate": "vite-node scripts/calibrate.ts"
   },
   "dependencies": {
     "artshape-render": "github:onion2k/artshape-render#v0.11.0"

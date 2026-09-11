@@ -41,7 +41,7 @@
  * taken before the change.
  */
 import { height, normal } from './terrain';
-import { TRACK_LIFT, gripAt } from './track';
+import { TRACK_LIFT, gripAt, type CornerRating } from './track';
 import { WATER_DRAG, WATER_LEVEL } from './water';
 import { SETTINGS } from './settings';
 import type { Mesh } from 'artshape-render/mesh/types';
@@ -101,6 +101,11 @@ export function rollDamping(spec: VehicleSpec): number {
   return (spec.suspension.damper * arm) / iRoll;
 }
 
+/** A class's wheelbase, from its own wheel layout. */
+export function wheelbaseOf(spec: VehicleSpec): number {
+  return spec.wheels[0][0] - spec.wheels[2][0];
+}
+
 /** Everything a vehicle class chooses. See the field comments in the old
  *  vehicle.ts (kept as the numbers' documentation) for why each is what it
  *  is; a spec is measurements, not opinions written twice. */
@@ -133,7 +138,7 @@ export interface VehicleSpec {
   radius: number;
   /** Measured cornering, acceleration and braking numbers for `rateTrack` —
    *  see `bench.ts`. Not derived: the file that reads them explains why. */
-  rating: { corner: number; accel: number; brake: number };
+  rating: CornerRating;
 
   kit: VehicleKit;
 }

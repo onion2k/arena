@@ -7,21 +7,18 @@
  * car, each a full `VehicleSpec` of its own rather than a multiplier on the
  * technical's.
  *
- * Their `rating` fields are `bench.ts` results now, not the guess this
- * comment used to call them. A bench run on flat, full-grip ground (see
- * that file for why) reads a class's raw physical limit, which is well
- * above what any of these three are actually rated at here — the
- * technical's own bench comes out near 55/3090/5500 against its shipped
- * 61/700/2400, and `rateTrack`'s own comment says why: its ideal-point-mass
- * lap is checked against real driven laps and runs 8 to 16% quick, so a
- * rating equal to the raw physics would make every circuit's par time
- * optimistic by more than that. Rather than leave the new three at the raw
- * number or re-guess a correction, each is scaled by the same factor the
- * technical's own rating already carries against its own bench — corner
- * ×1.113, accel ×0.227, brake ×0.437 — which is the only calibration this
- * bench has anything to check itself against. `bench(vehicles.rally)` and
- * so on from the console (`bench.ts`) reproduce the raw numbers next to
- * each `rating` below; the scaled result is what is committed.
+ * A `rating` is two things. `par` is measured: a driven lap over the lap
+ * at flat out, fitted to the pilot's laps of thirteen circuits and checked
+ * on thirteen more (`npm run calibrate`, `calibrate.ts`) — within 2% for the
+ * technical and the rally car and within 4% for the other two on the
+ * circuits it was not fitted to. The corner, accel and brake numbers are
+ * only what the track-select screen's difficulty is worked out from. They
+ * are `bench.ts` results for the three new classes, scaled by the ratio
+ * between the technical's bench and its shipped rating (corner ×1.113,
+ * accel ×0.227, brake ×0.437), and the difficulty they give follows how
+ * much of a lap the pilot lifts for with r = 0.4 to 0.84 by class. Driven
+ * laps could not improve on them for that: fitted to lap times, they
+ * collapse to "never lift", because lifting costs a lap almost nothing.
  *
  * A kit is always the same shape — one painted body, one unpainted detail
  * part, a wheel, a lamp — so switching class is a mesh swap on two dynamic
@@ -60,7 +57,7 @@ const TECHNICAL: VehicleSpec = {
   radius: 98,
   // bench: corner 54.8, accel 3087, brake 5497 at top speed 2300 — the
   // shipped rating below is not this; see the file comment above.
-  rating: { corner: 61, accel: 700, brake: 2400 },
+  rating: { corner: 61, accel: 700, brake: 2400, par: 1.086 },
   kit: {
     body: () => part('plate(card(width: 300, height: 128, corner: 18), thickness: 40, bevel: 7)'),
     detail: {
@@ -99,7 +96,7 @@ const RALLY: VehicleSpec = {
   maxSpeed: 4400,
   radius: 90,
   // bench: corner 65.6, accel 3462, brake 6016 at top speed 2500
-  rating: { corner: 73, accel: 785, brake: 2627 },
+  rating: { corner: 73, accel: 785, brake: 2627, par: 1.058 },
   kit: {
     body: () => part('plate(card(width: 260, height: 120, corner: 22), thickness: 56, bevel: 9)'),
     detail: {
@@ -138,7 +135,7 @@ const LMP: VehicleSpec = {
   maxSpeed: 4800,
   radius: 105,
   // bench: corner 62.0, accel 3755, brake 6676 at top speed 3000
-  rating: { corner: 69, accel: 852, brake: 2915 },
+  rating: { corner: 69, accel: 852, brake: 2915, par: 1.132 },
   kit: {
     body: () => part('plate(card(width: 340, height: 130, corner: 20), thickness: 30, bevel: 6)'),
     detail: {
@@ -185,7 +182,7 @@ const F1: VehicleSpec = {
   // (`SUBSTEP` in `vehicle.ts`). Re-benched at a 480th, scaled by the same
   // factors as before. The other three classes moved by under 1.5% and are
   // left as they were.
-  rating: { corner: 71, accel: 1018, brake: 3383 },
+  rating: { corner: 71, accel: 1018, brake: 3383, par: 1.171 },
   kit: {
     body: () => part('plate(card(width: 360, height: 110, corner: 16), thickness: 22, bevel: 5)'),
     detail: {

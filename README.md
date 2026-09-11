@@ -332,7 +332,8 @@ per-class number where the technical had a constant.
 | suspension travel | 26 | 34 | 18 | 12 |
 | collision radius | 98 | 90 | 105 | 110 |
 | corner / accel / brake rating | 61 / 700 / 2400 | 73 / 785 / 2627 | 69 / 852 / 2915 | 71 / 1018 / 3383 |
-| par lap, seed 0, medium | 14.6 s | 13.3 s | 11.9 s | 11.3 s |
+| par factor | 1.086 | 1.058 | 1.132 | 1.171 |
+| par lap, seed 0, medium | 13.7 s | 12.3 s | 11.0 s | 10.3 s |
 
 ### Benching the three new classes
 
@@ -582,6 +583,8 @@ easier.
 
 Two things this is worth, and one it is not:
 
+*(The lap estimate below is superseded: see [Par, driven](#par-driven).)*
+
 - **The lap estimate is good.** Against a driver that brakes for the same
   corners, over twenty circuits, the estimate correlates at **r = 0.85** and
   comes in a consistent 1.08 to 1.16 times fast — tight enough round 1.13 to
@@ -602,6 +605,73 @@ Two things this is worth, and one it is not:
   does not promise that a *relentless* one will beat you and a *flowing* one
   will not. Worth saying because the tightest corner on its own correlates
   0.03, which is no signal at all — the profile is what earns the number.
+
+### Par, driven
+
+The three new classes' ratings were the bench scaled by the technical's
+ratios, and the par time was the point-mass lap times 1.13 — a number taken
+from the rivals, who were tuned to be beatable and never braked. Nothing had
+checked either against a lap actually driven in any class but the technical.
+
+**A pilot** (`pilot.ts`) does that now. It is the rivals' steering with the
+vehicle's own wheelbase and lock in place of the technical's constants —
+aim at the centreline up the road, moved out by the sagitta of the chord,
+and ask for a yaw rate rather than a wheel angle — and new pedals that drive
+to a speed plan: the point-mass lap's corner limits and braking, from a
+rating it is handed (`speedPlan` in `track.ts`). The rivals' way out of a
+crash reversed only while the car was slow, so it backed off a post by a
+car's width and drove straight back into it; this one commits to backing out
+for 0.8s.
+
+**`npm run calibrate`** drives every class round twenty-six circuits at
+medium, each to nine plans from cautious to reckless, three laps a plan,
+and keeps each circuit's best flying lap. About a minute a class.
+
+What the laps said, in the order it was found:
+
+- **Corners cost a tidy driver almost nothing.** Past a corner number of
+  about 70 the technical's laps stop getting quicker at all: it is at top
+  speed nearly everywhere, and running a plan faster than that only runs it
+  wider. Every class does the same, at 80 to 100.
+- **So the rating could not be fitted to lap times.** A search over corner,
+  accel and brake for the par times closest to the pilot's slid to the edge
+  of every range it was given — accel down to 150, corner up to 100–150 — and
+  the error did not change by a tenth of a percent as it went. The fit had
+  found length at top speed, in disguise: with nothing slowing it, the point
+  mass's lap is the circuit's length at top speed, times a constant.
+- **Length at top speed, times a constant, is par.** On the thirteen
+  circuits held out of the fit:
+
+| | technical | rally car | Le Mans prototype | F1 car |
+| --- | ---: | ---: | ---: | ---: |
+| par factor | 1.086 | 1.058 | 1.132 | 1.171 |
+| error, fitted factor | 1.6% (4.7% worst) | 2.2% (5.9%) | 2.9% (7.6%) | 3.8% (7.7%) |
+| error, point mass × 1.13 | 9.1% (17.1%) | 10.9% (15.1%) | 14.1% (24.8%) | 15.4% (25.8%) |
+
+  What is left of a lap time after the length hardly follows the corners:
+  its correlation with the tightest corner on each circuit is -0.18 to 0.15
+  for three classes and -0.33 for the rally car.
+- **The difficulty is still worth having**, from the corner, accel and brake
+  numbers as before: it tracks how much of each lap the pilot spends off
+  full throttle, r = 0.40 for the technical — which lifts for 0 to 1% of a
+  lap on any circuit — and 0.62 to 0.84 for the other three. It says how
+  often you lift. It does not say it will cost you, because it barely does.
+- **A steering limit did not help.** The plan and the par both tried a
+  corner speed capped by the lock the car has left at that speed, for the
+  long cars' sake; neither the laps nor the fit improved for any class, and
+  it came back out.
+- **The pilot is not good at everything.** The prototype and the F1 lap
+  circuits #4, #10 and #12 19 to 30% slower than par — off the road for half
+  the lap and into the scenery, the technical 14% of it on #4 — and the par
+  fit leaves out any circuit a tenth slower than the median rather than
+  letting three bad laps drag the constant up. Those three are in the
+  fitting set by chance; on the checking set the long cars' worst miss is 8%.
+  The prototype's and F1's factors move by 3% between the two halves, which
+  is how far to trust the third decimal place.
+
+`rating.par` is the constant. The test suite drives the original circuit in
+every class to one plan and holds the lap within 6% of par, so a change to
+the vehicles, the pilot or the par model that pulls them apart fails.
 
 **The start line is put on a straight.** The grid sits at an angle of -pi
 whatever the circuit does there, and on a random one that is as likely to be
@@ -1682,6 +1752,8 @@ mysteriously got four times slower while the GPU was doing the same work.
 | `src/game.ts` | the race: the truck, the walls, the lap and the clock |
 | `src/circuit.ts` | building a circuit: size, biome, ground, water, posts, flora, collisions |
 | `src/__tests__` | the recordings and the invariants, run in node: `npm test` |
+| `src/pilot.ts` | a driver that drives to a speed plan, for measuring classes |
+| `src/calibrate.ts`, `scripts/calibrate.ts` | par from laps driven: `npm run calibrate` |
 | `src/vehicle.ts` | the truck: suspension, tyres, a body with mass |
 | `src/track.ts` | the circuit, and where on it a point is |
 | `src/terrain.ts` | the ground, as one function everything reads |

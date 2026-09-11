@@ -707,6 +707,16 @@ export function shapePreview(s: Shape, steps = 400): {
  * corner and a pass forwards for what the engine can put back on the way
  * out. The time that falls out is what a lap costs when nothing is wasted.
  *
+ * That is the difficulty, and it is what the pilot's lifting follows (see
+ * `calibrate.ts`). It is not the par time. Driven by the pilot, every class
+ * laps a circuit in its length at the class's top speed times a constant,
+ * to within 2 to 4% — the point mass's lap follows the corners, and the
+ * corners turn out to cost a tidy driver almost nothing — so par is that
+ * constant times the flat-out lap, and the constant is `rating.par`. It
+ * was the point-mass lap times 1.13, from the rivals' laps, which was 9 to
+ * 11% off the pilot's laps on average for the technical and the rally car
+ * and 9 to 15% for the other two.
+ *
  * The cornering limit is measured, not derived. Ackermann on a 220mm
  * wheelbase says the truck can turn a 547mm radius at top speed, which would
  * make every corner on every circuit here flat out; the tyre model says
@@ -722,21 +732,14 @@ export function shapePreview(s: Shape, steps = 400): {
  * mid-range throttle for the accel, the flat for the brake — and `rateTrack`
  * takes whichever one belongs to the vehicle a lap is being rated for.
  */
-export interface CornerRating { corner: number; accel: number; brake: number }
-/** The technical's own numbers, and the default while nothing else is asked
- *  for — see the constants this replaced, just below, for how they were
- *  measured. */
-export const DEFAULT_RATING: CornerRating = { corner: 61, accel: 700, brake: 2400 };
-
-/**
- * What an ideal point mass beats a real truck by. The estimate below is a
- * lap with no bumps, no slip and no line to get wrong; a driver braking for
- * the same corners on the same circuits came in at 1.08 to 1.16 times it
- * over twenty of them, tight enough round 1.13 to quote as a lap time rather
- * than as a physics result.
- */
-const REAL = 1.13;
-
+export interface CornerRating {
+  corner: number;
+  accel: number;
+  brake: number;
+  /** A driven lap over a lap at flat out: par is this times the circuit's
+   *  length at top speed. Fitted per class — see `calibrate.ts`. */
+  par: number;
+}
 /**
  * The five bands, on the quantiles of three hundred generated circuits, so
  * each is about a fifth of what the generator makes. The original circuit
@@ -760,13 +763,17 @@ export function difficultyBand(d: number): { level: number; name: string } {
   return { level: 5, name: BANDS[4][1] };
 }
 
-export function rateTrack(s: Shape, topSpeed: number, rating: CornerRating = DEFAULT_RATING, steps = 720): {
-  /** Seconds for a lap driven perfectly. */
-  lap: number;
-  /** What a good lap actually comes out at: the above and a bit. */
-  par: number;
-  /** 0 for a circuit you never lift on, 1 for one you are never flat out on. */
-  difficulty: number;
+/**
+ * The speed an ideal point mass carries at each step round a lap: the corner
+ * limit at every step, then a pass backwards for what braking allows into
+ * each corner and — unless `accel` is false — a pass forwards for what the
+ * engine can put back on the way out. `rateTrack` times a lap from this; a
+ * pilot (`pilot.ts`) drives to it with the forward pass left off, since how
+ * hard the car accelerates is the car's business and not the plan's.
+ */
+export function speedPlan(s: Shape, topSpeed: number, rating: CornerRating, accel = true, steps = 720): {
+  v: number[];
+  ds: number[];
 } {
   const was = shape;
   shape = s;
@@ -790,12 +797,24 @@ export function rateTrack(s: Shape, topSpeed: number, rating: CornerRating = DEF
       const next = v[(i + 1) % steps];
       v[i] = Math.min(v[i], Math.sqrt(next * next + 2 * rating.brake * ds[i]));
     }
+    if (!accel) continue;
     for (let i = 0; i < steps; i++) {
       const back = v[(i - 1 + steps) % steps];
       v[i] = Math.min(v[i], Math.sqrt(back * back + 2 * rating.accel * ds[i]));
     }
   }
+  return { v, ds };
+}
 
+export function rateTrack(s: Shape, topSpeed: number, rating: CornerRating, steps = 720): {
+  /** Seconds for a lap driven perfectly. */
+  lap: number;
+  /** What a clean lap comes out at: the flat-out lap times `rating.par`. */
+  par: number;
+  /** 0 for a circuit you never lift on, 1 for one you are never flat out on. */
+  difficulty: number;
+} {
+  const { v, ds } = speedPlan(s, topSpeed, rating, true, steps);
   let lap = 0, length = 0;
   for (let i = 0; i < steps; i++) {
     const mean = (v[i] + v[(i + 1) % steps]) / 2;
@@ -803,5 +822,5 @@ export function rateTrack(s: Shape, topSpeed: number, rating: CornerRating = DEF
     length += ds[i];
   }
   const flatOut = length / topSpeed;
-  return { lap, par: lap * REAL, difficulty: Math.max(0, Math.min(1, 1 - flatOut / lap)) };
+  return { lap, par: flatOut * rating.par, difficulty: Math.max(0, Math.min(1, 1 - flatOut / lap)) };
 }

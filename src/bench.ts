@@ -1,9 +1,9 @@
 /**
  * Measuring a vehicle in isolation: how tight it turns, how hard it
- * accelerates, how hard it brakes. `VehicleSpec.rating` is these three
- * numbers, and `rateTrack` (`track.ts`) rates a lap by them — so a class
- * whose rating is a guess is a class whose difficulty and par time on the
- * track-select screen are guesses too.
+ * accelerates, how hard it brakes. `VehicleSpec.rating`'s corner, accel and
+ * brake are these three numbers, and the track-select screen's difficulty is
+ * worked out from them (`rateTrack` in `track.ts`). The par time is not: that
+ * is measured from laps driven — see `calibrate.ts`.
  *
  * Done on flat ground and on the centreline, and that took two real bugs out
  * of the way to find. First: driving the shipped circuit's own straight put
@@ -105,7 +105,7 @@ function cornerAt(spec: VehicleSpec, throttle: number): { corner: number; speed:
   return { corner: samples.reduce((a, b) => a + b, 0) / Math.max(1, samples.length), speed: v.speed };
 }
 
-export interface BenchResult extends CornerRating {
+export interface BenchResult extends Omit<CornerRating, 'par'> {
   topSpeed: number;
   accelWindow: [number, number];
   brakeWindow: [number, number];
