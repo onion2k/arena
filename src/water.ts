@@ -19,7 +19,8 @@ import { TRACK_LIFT, centreline } from './track';
 import { height } from './terrain';
 import type { Mesh } from 'artshape-render/mesh/types';
 
-/** How far under the water the lowest point of the road is. */
+/** How far under the water the lowest point of the road is, in the biomes
+ *  that have water at all. */
 export const FORD_DEPTH = 20;
 
 /** The lowest the road surface gets, measured round the whole lap. */
@@ -34,15 +35,32 @@ function lowestRoad(): number {
   return lo;
 }
 
-/** Where the water is, in the same millimetres as the ground. */
+/**
+ * Where the water is, in the same millimetres as the ground — or `null` for
+ * a biome with none, in which case it sits far below anything that could
+ * ever read as flooded and `underWater` is always false without a branch
+ * everywhere that asks it.
+ */
 export let WATER_LEVEL = lowestRoad() + FORD_DEPTH;
+let hasWater = true;
 
-/** Find the level again: the road moved, so the lowest point on it did too. */
-export function refloodArena() { WATER_LEVEL = lowestRoad() + FORD_DEPTH; }
+/**
+ * Find the level again: the road moved, so the lowest point on it did too.
+ * `depth` is the biome's own — `FORD_DEPTH` for forest and snow, deeper for
+ * a marsh that wants real lakes rather than fords, `null` for a desert.
+ * Marsh's own depth can flood the grid at the start/finish line if the whole
+ * arena sits close to level; the caller steps it down until that clears —
+ * see `useTrack`.
+ */
+export function refloodArena(depth: number | null = FORD_DEPTH) {
+  hasWater = depth !== null;
+  WATER_LEVEL = hasWater ? lowestRoad() + (depth as number) : -1e9;
+}
 
-/** Whether the ground at a point is under the water. */
+/** Whether the ground at a point is under the water. Always false where the
+ *  biome has none. */
 export function underWater(x: number, y: number, margin = 0): boolean {
-  return height(x, y) < WATER_LEVEL + margin;
+  return hasWater && height(x, y) < WATER_LEVEL + margin;
 }
 
 /**

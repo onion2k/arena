@@ -1134,8 +1134,11 @@ extra draws a frame.
 
 ## The forest
 
-Everything that is not the road or its shoulder is trees: 1784 cones, in
-shades of green, one mesh drawn once. A tree is seven flat-shaded triangles,
+Everything that is not the road or its shoulder is trees: about 1,550 cones
+at the medium size, in shades of green, one mesh drawn once — the four
+sizes and the three other biomes since this was written move that count;
+see [Four sizes](#four-sizes) and [Four biomes](#four-biomes). A tree is
+seven flat-shaded triangles,
 and everything that makes one different from the next — where it stands, how
 tall, which green — is its placement matrix and four floats of material, so
 the whole wood costs the GPU 0.26ms of a 2.97ms frame at 1080p and one draw
@@ -1155,10 +1158,65 @@ the circuit, where the road bulges to within 180mm of the wall, that strip was
 most of what there was, and the forest read as a hedge in the distance.
 
 They are solid: a truck that reaches one is pushed out and bounced, the way it
-is off a lamp post. Sixteen hundred of them against eight trucks is thirteen
-thousand distance checks a step, which measures at 0.067ms for the whole step
-and is not worth a grid. A hundred and fifty seconds of racing with the wood
-there: every car ten laps, nothing stalled.
+is off a lamp post. That stopped being cheap enough to shrug off once the
+arena could grow — the largest size holds several thousand of them — so they
+are looked up through a grid now (`spatial.ts`) instead of scanned; see
+[Four sizes](#four-sizes).
+
+## Four biomes
+
+**Forest, desert, snow, marsh — a button on the track-select screen,
+alongside the size and the vehicle.** The forest above is exactly what
+shipped: every number this section names — the cone, the greens, the
+planting grid, the exclusion round the road — moved onto a `Biome` record
+(`biomes.ts`) unchanged, and the planting algorithm itself moved to
+`flora.ts`, generalised to ask a biome which kinds of thing it wants planted
+and in what share rather than assuming there is only cones. Checked the same
+way the vehicle refactor was: the 30-second scripted-input trajectory hash
+against the forest biome is `562148294`, the same number as before any of
+this existed.
+
+A biome decides the ground and tarmac's colour, whether there is water and
+how deep, the terrain's amplitude — a scale on each of `terrain.ts`'s five
+waves, so a desert can have longer dunes and a marsh flatter ground without
+touching the numbers that guarantee nothing strands a car — how much grip
+running off the tarmac costs, a tint over the one dawn-to-noon sky table
+(not a table of its own; see the note below), what a dry wheel throws up,
+and its own trackside kinds in place of the pine.
+
+| | forest | desert | snow | marsh |
+| --- | --- | --- | --- | --- |
+| ground | dark, cold | sand | white | dark, wet |
+| water | fords, 20mm | none | frozen, 20mm | deep, 110mm |
+| terrain scale | 1× throughout | 1.6× long dunes, soft ramps | 1× throughout | 0.5×, flat |
+| off-track loss | 0.32 | 0.45 (sand) | 0.4 (snow) | 0.4 (mud) |
+| flora | pine | cactus, rock | fir | reed (no collision), deadwood |
+| dust | none | tan | white | mud brown |
+
+**No environment bake of its own, and no sky table of its own.** The
+environment mostly lights the metal — the ground by day is ambient times the
+biome's own albedo, which the biome already carries — and the nine-row dawn
+arc in `daylight.ts` was tuned by eye against real timings; four more copies
+of it would be thirty-six rows of colour with nothing to check them against.
+A biome instead multiplies the sun, the sky and the ambient by its own tint
+and scale (`skyAt`'s two extra arguments), which is enough to make a desert
+read warm and a snowfield read cold without inventing a second dawn.
+
+**Marsh floods for real rather than in fords.** 110mm over the lowest road,
+against the forest and snow's 20 — a marsh is meant to be mostly water, not
+occasionally water. A circuit whose whole loop happens to sit close to level
+can put the start line itself under that much water; `useTrack` steps the
+depth down by 10mm at a time until the grid there is dry rather than opening
+a race on a lake.
+
+**Reeds are the one thing here with no collision.** `PropKind.radiusOf` can
+return zero, which `keepOneInside` and the collision grid both treat as
+nothing to check against — a wheel goes through a reed bed rather than off
+it, the way it goes through long grass and not through a rock.
+
+![four biomes](docs/desert.png)
+![](docs/snow.png)
+![](docs/marsh.png)
 
 ## The light
 

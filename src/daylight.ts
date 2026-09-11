@@ -147,13 +147,21 @@ function arc(hours: number, e: number): [number, number, number] {
   return [Math.cos(az) * Math.cos(el), Math.sin(az) * Math.cos(el), Math.sin(el)];
 }
 
-export function skyAt(hours: number, nightAmbient: number): Sky {
+/**
+ * `tint` and `ambientScale` are the biome's say over an otherwise shared sky:
+ * a warm multiply for a desert, a cold bright one for snow, nothing at all
+ * for the forest the table was built against. One table and a tint over it
+ * rather than a table per biome, because the nine rows above encode a dawn
+ * arc that was tuned by eye against real timings, and four more tables would
+ * be thirty-six rows of colour with nothing to check them against.
+ */
+export function skyAt(hours: number, nightAmbient: number, tint: [number, number, number] = [1, 1, 1], ambientScale = 1): Sky {
   const h = ((hours % 24) + 24) % 24;
   const e = elevationAt(h);
   const { a, b, t } = keyed(e);
   let sun = mix(a.sun, b.sun, t);
   let sky = mix(a.sky, b.sky, t);
-  let ambient = a.ambient + (b.ambient - a.ambient) * t;
+  let ambient = (a.ambient + (b.ambient - a.ambient) * t) * ambientScale;
   const day = smooth(-0.06, 0.30, e);
   // the table's night floor is 0.035; the slider moves it, and its say
   // fades out as the day comes in
@@ -182,6 +190,8 @@ export function skyAt(hours: number, nightAmbient: number): Sky {
   // go out in the golden hour; and come on again as the sun goes down
   // rather than waiting for the dark. Above a fifth of the way up, off.
   const lampsOn = 1 - smooth(0.04, 0.22, e);
+  sun = [sun[0] * tint[0], sun[1] * tint[1], sun[2] * tint[2]];
+  sky = [sky[0] * tint[0], sky[1] * tint[1], sky[2] * tint[2]];
   return { sunDir: dir, sunColour: sun, ambient, background: sky, lampsOn, day, mist: Math.max(mistAt(h), lampsOn * NIGHT_HAZE) };
 }
 

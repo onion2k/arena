@@ -17,6 +17,8 @@
 import type { GameRenderer } from 'artshape-render/game/renderer';
 import type { Vehicle, Wheel } from './vehicle';
 import { WATER_LEVEL } from './water';
+import { gripAt } from './track';
+import { BIOME } from './biomes';
 
 /** A sliding tyre smokes above this much of a slide. */
 const SMOKE_FROM = 0.25;
@@ -58,6 +60,23 @@ export function wheelEffects(renderer: GameRenderer, v: Vehicle, w: Wheel, hub: 
       gravity: -0.02,
     });
     return;
+  }
+
+  // Dust: a biome's own, for a wheel off the tarmac and dry — sand off a
+  // desert shoulder, snow off a bank, mud off a marsh's edge. Forest has
+  // none (`BIOME.dust` is null there), so this changes nothing about it.
+  if (BIOME.dust && gripAt(hub[0], hub[1]) < 1) {
+    renderer.emit({
+      position: [hub[0], hub[1], hub[2] - v.spec.wheelRadius + 6],
+      velocity: [v.vx * 0.2, v.vy * 0.2, 40],
+      spread: 90,
+      count: Math.max(1, Math.min(4, Math.round(speed / 500))),
+      life: 0.7, lifeSpread: 0.3,
+      size: 20, growth: 40,
+      colour: [BIOME.dust[0] * lit, BIOME.dust[1] * lit, BIOME.dust[2] * lit],
+      alpha: 0.3,
+      gravity: -0.02,
+    });
   }
 
   if (w.slide > SMOKE_FROM) {

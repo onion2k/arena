@@ -1,5 +1,6 @@
 import type { Mesh } from 'artshape-render/mesh/types';
 import { height, normal as groundNormal } from './terrain';
+import { BIOME } from './biomes';
 
 /** How far the tarmac sits above the ground it follows: see `scene`. */
 export const TRACK_LIFT = 22;
@@ -116,11 +117,12 @@ export function gripAt(x: number, y: number): number {
   const off = Math.abs(where(x, y).offset);
   if (off <= TRACK_HALF) return 1;
   // A shoulder that lets go over 200mm rather than at a line, so running wide
-  // is a mistake that costs rather than a wall. It takes away a third and not
-  // the 55% it was written with: at 55 a car that ran wide could not put its
-  // engine down at all, so a single mistake ended a race rather than costing
-  // a second of it.
-  return 1 - 0.32 * Math.min(1, (off - TRACK_HALF) / 200);
+  // is a mistake that costs rather than a wall. The forest's own loss is a
+  // third and not the 55% it was written with: at 55 a car that ran wide
+  // could not put its engine down at all, so a single mistake ended a race
+  // rather than costing a second of it. Sand and snow take more — see
+  // `Biome.offTrackLoss`.
+  return 1 - BIOME.offTrackLoss * Math.min(1, (off - TRACK_HALF) / 200);
 }
 
 /**

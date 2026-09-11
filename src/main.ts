@@ -17,7 +17,8 @@ import { PAINT, Race, TRUCKS, setCollisionGrid, type Input } from './game';
 import type { Pose } from './ghost';
 import type { VehicleSpec } from './vehicle';
 import { CONTROLS, SETTINGS, restoreDefaults, save, type SliderKey } from './settings';
-import { TREES, forestBuffers, replant, treeMesh } from './forest';
+import { PROPS, floraBuffers, replant } from './flora';
+import { BIOME, BIOMES, BIOME_KEYS, labelOfBiome, setBiome, type BiomeKey } from './biomes';
 import { BOLLARDS, RAILS, SIGNS, barMesh, boardPanelMesh, chevronMarkMesh, chevronPanelMesh, drumMesh, furnitureBuffers, railMesh, railPostMesh, rebuildFurniture, signPostMesh, tyreMesh } from './furniture';
 import { clockLabel, skyAt } from './daylight';
 import { WATER_LEVEL, refloodArena, underWater, waterMesh } from './water';
@@ -40,6 +41,7 @@ const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
 const pregame = document.getElementById('pregame')!;
 const pregameMap = document.getElementById('pregameMap')!;
+const pregameBiome = document.getElementById('pregameBiome')!;
 const pregameVehicle = document.getElementById('pregameVehicle')!;
 const pregameSize = document.getElementById('pregameSize')!;
 const pregameFacts = document.getElementById('pregameFacts')!;
@@ -115,32 +117,56 @@ async function main() {
   function rebuildCollisionGrid() {
     const grid = new CircleGrid(ARENA_X + 500, ARENA_Y + 500, 320);
     for (const post of COLUMNS) grid.add(post.x, post.y, COLUMN_RADIUS * post.scale);
-    for (const tree of TREES) grid.add(tree.x, tree.y, tree.r);
+    // zero radius is a prop a wheel goes through — a marsh's reeds — and
+    // not a very small collision
+    for (const p of PROPS) if (p.r > 0) grid.add(p.x, p.y, p.r);
     for (const b of BOLLARDS) grid.add(b.x, b.y, b.r);
     setCollisionGrid(grid);
   }
 
   /**
+   * Flood the arena to the biome's own depth, or not at all. A marsh's 110mm
+   * is deep enough that a circuit whose whole loop sits close to level can
+   * put the start line itself under water — the grid steps the depth down
+   * until it is not, rather than starting a race on a lake.
+   */
+  function floodForBiome() {
+    let depth = BIOME.water.depth;
+    if (depth === null) { refloodArena(null); return; }
+    for (let tries = 0; tries < 10; tries++) {
+      refloodArena(depth);
+      const [sx, sy] = centreline(-Math.PI);
+      if (!underWater(sx, sy, 50)) return;
+      depth = Math.max(0, depth - 10);
+    }
+  }
+
+  /**
    * Put a circuit in force, and everything that grows out of one with it.
    *
-   * The order is the dependency order and it is not negotiable: the size has
-   * to be set before the arena is resized and the circuit generated, which
-   * both read it; the water level is the lowest point of the road plus a
-   * little, so the road has to exist first; the posts stand along the road;
-   * the trees are planted round both the road and the water; and the
-   * collision grid is built last of all, from lists that everything before
-   * it fills in. Getting any of this backwards plants a forest in last
-   * circuit's lake, or hands the truck a grid with nothing in it.
+   * The order is the dependency order and it is not negotiable: the size and
+   * the biome have to be set before the arena is resized and the ground and
+   * the circuit are built, since all three read them; the water level is
+   * the lowest point of the road plus the biome's own depth, so the road has
+   * to exist first; the posts stand along the road; the flora is planted
+   * round both the road and the water; and the collision grid is built last
+   * of all, from lists that everything before it fills in. Getting any of
+   * this backwards plants a forest in last circuit's lake, or hands the
+   * truck a grid with nothing in it.
    */
-  function useTrack(seed: number, size: SizeKey) {
+  function useTrack(seed: number, size: SizeKey, biome: BiomeKey) {
     const t0 = performance.now();
     setSize(size);
+    setBiome(biome);
     resizeArena();
     setTrack(circuitFor(seed, SIZE));
-    seedTerrain(seed);
-    refloodArena();
+    seedTerrain(seed, BIOME.terrain.ampScale);
+    floodForBiome();
     restandColumns();
-    replant();
+    // always 7, not the circuit's own seed: the jitter pattern is fixed, so
+    // only which grid cells survive the road and the water changes from one
+    // circuit to the next, not how the ones that do are scattered within it
+    replant(7, BIOME);
     // clear of the posts and out of the water
     rebuildFurniture(seed);
     rebuildCollisionGrid();
@@ -154,7 +180,7 @@ async function main() {
       console.warn(`arena: ${COLUMNS.length} posts is close to the ${LIGHT_CAPACITY} light capacity`);
     }
   }
-  useTrack(SETTINGS.seed, SETTINGS.size);
+  useTrack(SETTINGS.seed, SETTINGS.size, SETTINGS.biome);
 
   bootMsg.textContent = 'generating the arena…';
   // One frame's grace, so the message is painted before the geometry blocks
@@ -178,7 +204,7 @@ async function main() {
   function buildArena() {
   const tArena0 = performance.now();
   const at = arenaMatrices();
-  const forest = forestBuffers(TREES);
+  const flora = floraBuffers(PROPS, BIOME);
   const kit = furnitureBuffers();
 
   renderer.setStatic([
@@ -187,24 +213,29 @@ async function main() {
     // the arena read as corrugated iron — the bumps you could see were mostly
     // highlights rather than shape. Rough and cold now: it takes the light
     // and does not throw it back, so what you see of the ground is its form.
-    { mesh: MESHES.floor(), matrices: identity(), albedo: [0.042, 0.048, 0.066], roughness: 0.62 },
+    { mesh: MESHES.floor(), matrices: identity(), albedo: BIOME.ground.albedo, roughness: BIOME.ground.roughness },
     // Tarmac. Roughness is what darkens it, not the colour: albedo here is
     // the Fresnel base, and at the grazing angles a camera following a car
     // looks along a road at, Fresnel goes to one whatever that base is. So
     // dropping the colour from 0.135 to 0.062 changed almost nothing, and
     // taking the roughness from 0.34 to 0.85 — asphalt rather than wet
     // asphalt — is what stopped the road out-shining the cars on it.
-    { mesh: MESHES.tile(), matrices: at.tiles, albedo: [0.058, 0.062, 0.072], roughness: 0.85 },
+    { mesh: MESHES.tile(), matrices: at.tiles, albedo: BIOME.tarmac.albedo, roughness: BIOME.tarmac.roughness },
     // The water: one quad over the whole ground at the level, opaque, near
-    // black and nearly a mirror. What makes it read as water is what it
-    // reflects — the sky by day, and by night every lamp and headlight on
-    // the shore as a hard glint — and the shadows the trees lay across it.
-    { mesh: waterMesh(ARENA_X + 400, ARENA_Y + 400), matrices: identity(), albedo: [0.02, 0.045, 0.07], roughness: 0.06 },
-    // The kerbs: red and off-white blocks, matte enough to read as paint at
-    // any angle. They are the only saturated colour in the arena, and they
-    // are on the one thing the driver has to see.
-    { mesh: MESHES.kerbA(), matrices: at.tiles, albedo: [0.62, 0.075, 0.055], roughness: 0.55 },
-    { mesh: MESHES.kerbB(), matrices: at.tiles, albedo: [0.80, 0.80, 0.82], roughness: 0.55 },
+    // black and nearly a mirror in the forest and the snow; drawn with no
+    // count at all in a biome with none. What makes it read as water is what
+    // it reflects — the sky by day, and by night every lamp and headlight on
+    // the shore as a hard glint — and the shadows the flora lay across it.
+    {
+      mesh: waterMesh(ARENA_X + 400, ARENA_Y + 400), matrices: identity(),
+      count: BIOME.water.depth === null ? 0 : 1,
+      albedo: BIOME.water.albedo, roughness: BIOME.water.roughness,
+    },
+    // The kerbs: matte enough to read as paint at any angle, and the only
+    // saturated colour in most biomes — they are on the one thing the driver
+    // has to see.
+    { mesh: MESHES.kerbA(), matrices: at.tiles, albedo: BIOME.kerb[0], roughness: 0.55 },
+    { mesh: MESHES.kerbB(), matrices: at.tiles, albedo: BIOME.kerb[1], roughness: 0.55 },
     // The lamp posts. Pole and arm are a dark painted metal that the beam
     // never falls on — a street light stands outside its own pool — and the
     // head is near white and glossy, so what you see of a post at a distance
@@ -213,12 +244,12 @@ async function main() {
     { mesh: mesh.arm, matrices: at.arms, albedo: [0.30, 0.30, 0.33], roughness: 0.42 },
     { mesh: mesh.head, matrices: at.heads, albedo: [0.93, 0.92, 0.86], roughness: 0.14 },
     { mesh: mesh.gantry, matrices: gantryPosts(), count: 2, albedo: [0.62, 0.64, 0.70], roughness: 0.25 },
-    // The forest: one cone, drawn sixteen hundred times, each placement with
-    // its own green. Matte, because a glossy tree under a flood is a plastic
-    // one, and dark enough that only the moonlight and the spill from the
-    // road pick it out — which is what makes the black beyond the kerbs a
-    // place rather than an absence.
-    { mesh: treeMesh(), ...forest },
+    // The flora: one group a kind, each drawn as many times as there are of
+    // it. Matte, because a glossy tree under a flood is a plastic one, and
+    // dark enough that only the moonlight and the spill from the road pick
+    // it out — which is what makes the dark beyond the kerbs a place rather
+    // than an absence.
+    ...flora,
     // The barriers. Galvanised steel that has been out in the weather: light
     // enough to catch a flood from across the circuit, which is what draws
     // the edge of the road at night, and rough enough not to be a mirror.
@@ -341,7 +372,7 @@ async function main() {
   renderer.setEnvironment(nightEnv.specular, nightEnv.brdf, nightEnv.mips);
   let sky = skyAt(SETTINGS.time, SETTINGS.ambient);
   const applySky = () => {
-    sky = skyAt(arena.hours, SETTINGS.ambient);
+    sky = skyAt(arena.hours, SETTINGS.ambient, BIOME.sky.tint, BIOME.sky.ambientScale);
     renderer.look.sunDir = sky.sunDir;
     renderer.look.sunColour = sky.sunColour;
     renderer.look.ambient = sky.ambient;
@@ -362,9 +393,13 @@ async function main() {
     // Everything scales with the hour: nothing is marched at all away from
     // dawn.
     const mist = sky.mist * SETTINGS.mist;
+    // In a biome with water the mist sits on it, as it always did. A desert
+    // has none — `WATER_LEVEL` sits far below the ground there on purpose —
+    // so the mist instead lies near the ground itself, which is where a
+    // dawn haze actually forms over dry sand too.
     renderer.fog = {
       density: 2.6e-4 * mist,
-      base: WATER_LEVEL,
+      base: BIOME.water.depth === null ? 0 : WATER_LEVEL,
       height: 300,
       colour: [0.86, 0.89, 0.95],
       // the sky's own light on the mist, which is what keeps the shadowed
@@ -405,11 +440,12 @@ async function main() {
    * the trees — which is not a bug you would report, it is a bug you would
    * simply stop trusting the ghost over.
    */
-  function newTrack(seed: number, size: SizeKey) {
+  function newTrack(seed: number, size: SizeKey, biome: BiomeKey) {
     SETTINGS.seed = seed;
     SETTINGS.size = size;
+    SETTINGS.biome = biome;
     save();
-    useTrack(seed, size);
+    useTrack(seed, size, biome);
     buildArena();
     minimap.redraw();
     skids.clear();
@@ -429,14 +465,14 @@ async function main() {
    * race button is pressed, and only if the circuit actually changed.
    */
   const NS = 'http://www.w3.org/2000/svg';
-  let choice = { seed: SETTINGS.seed, size: SETTINGS.size, vehicle: SETTINGS.vehicle };
+  let choice = { seed: SETTINGS.seed, size: SETTINGS.size, vehicle: SETTINGS.vehicle, biome: SETTINGS.biome };
   /** What the arena is currently built for, so racing the same one is free. */
   let built = { ...choice };
   let racing = false;
 
   const road = document.createElementNS(NS, 'path');
   road.setAttribute('fill', 'none');
-  road.setAttribute('stroke', '#4a4c58');
+  road.setAttribute('stroke', BIOME.map.road);
   road.setAttribute('stroke-width', String(TRACK_HALF * 2));
   road.setAttribute('stroke-linejoin', 'round');
   const paint = document.createElementNS(NS, 'path');
@@ -458,7 +494,7 @@ async function main() {
     btn.type = 'button';
     btn.textContent = s.label;
     btn.addEventListener('click', () => {
-      preview(choice.seed, choice.vehicle, s.key);
+      preview(choice.seed, choice.vehicle, s.key, choice.biome);
       btn.blur();
     });
     pregameSize.appendChild(btn);
@@ -471,21 +507,36 @@ async function main() {
     btn.type = 'button';
     btn.textContent = VEHICLES[key].label;
     btn.addEventListener('click', () => {
-      preview(choice.seed, key, choice.size);
+      preview(choice.seed, key, choice.size, choice.biome);
       btn.blur();
     });
     pregameVehicle.appendChild(btn);
     vehicleButtons.set(key, btn);
   }
+  // The biome picker, the same way again.
+  const biomeButtons = new Map<BiomeKey, HTMLButtonElement>();
+  for (const key of BIOME_KEYS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = BIOMES[key].label;
+    btn.addEventListener('click', () => {
+      preview(choice.seed, choice.vehicle, choice.size, key);
+      btn.blur();
+    });
+    pregameBiome.appendChild(btn);
+    biomeButtons.set(key, btn);
+  }
 
   /** Draw a circuit on the select screen without building any of it. */
-  function preview(seed: number, vehicle: VehicleKey, size: SizeKey) {
-    choice = { seed, vehicle, size };
+  function preview(seed: number, vehicle: VehicleKey, size: SizeKey, biome: BiomeKey) {
+    choice = { seed, vehicle, size, biome };
     for (const [key, btn] of sizeButtons) btn.setAttribute('aria-pressed', String(key === size));
     for (const [key, btn] of vehicleButtons) btn.setAttribute('aria-pressed', String(key === vehicle));
+    for (const [key, btn] of biomeButtons) btn.setAttribute('aria-pressed', String(key === biome));
     const shape = circuitFor(seed, sizeOf(size));
     const p = shapePreview(shape);
     pregameMap.setAttribute('viewBox', p.box.join(' '));
+    road.setAttribute('stroke', BIOMES[biome].map.road);
     road.setAttribute('d', p.path);
     paint.setAttribute('d', p.path);
     startLine.setAttribute('x1', String(p.start[0])); startLine.setAttribute('y1', String(p.start[1]));
@@ -501,6 +552,7 @@ async function main() {
     pregameFacts.innerHTML =
       `${seed === 0 ? 'the original circuit' : `circuit <span>#${seed}</span>`}`
       + ` · <span>${labelOf(size)}</span>`
+      + ` · <span>${labelOfBiome(biome)}</span>`
       + ` · <span>${spec.label}</span>`
       + ` · <span>${(p.length / 1000).toFixed(1)}</span> m`
       + ` · about <span>${r.par.toFixed(1)}</span> s a lap`
@@ -511,20 +563,21 @@ async function main() {
 
   function openPregame() {
     racing = false;
-    preview(SETTINGS.seed, SETTINGS.vehicle, SETTINGS.size);
+    preview(SETTINGS.seed, SETTINGS.vehicle, SETTINGS.size, SETTINGS.biome);
     pregame.removeAttribute('hidden');
   }
 
   function startRace() {
     // Rebuild only what actually changed. Racing the same road in the same
-    // car again is a reset and costs nothing; a different road rebuilds the
-    // arena (and brings a different vehicle with it in the same pass, so a
-    // seed and a class chosen together are not two rebuilds); a different
-    // car on the same road is a mesh swap and nothing more.
-    const roadChanged = choice.seed !== built.seed || choice.size !== built.size;
+    // car again is a reset and costs nothing; a different road — a seed, a
+    // size or a biome — rebuilds the arena (and brings a different vehicle
+    // with it in the same pass, so choosing several at once is not several
+    // rebuilds); a different car on the same road is a mesh swap and
+    // nothing more.
+    const roadChanged = choice.seed !== built.seed || choice.size !== built.size || choice.biome !== built.biome;
     const vehicleChanged = choice.vehicle !== built.vehicle;
     if (roadChanged) {
-      newTrack(choice.seed, choice.size);
+      newTrack(choice.seed, choice.size, choice.biome);
       if (vehicleChanged) { SETTINGS.vehicle = choice.vehicle; save(); switchVehicle(VEHICLES[choice.vehicle]); }
       built = { ...choice };
     } else if (vehicleChanged) {
@@ -543,12 +596,12 @@ async function main() {
   }
 
   pregameAnother.addEventListener('click', () => {
-    preview(1 + Math.floor(Math.random() * 998), choice.vehicle, choice.size);
+    preview(1 + Math.floor(Math.random() * 998), choice.vehicle, choice.size, choice.biome);
     (pregameAnother as HTMLElement).blur();
   });
   pregameSeed.addEventListener('input', () => {
     const v = Math.max(0, Math.min(999999, Math.floor(Number(pregameSeed.value))));
-    if (Number.isFinite(v)) preview(v, choice.vehicle, choice.size);
+    if (Number.isFinite(v)) preview(v, choice.vehicle, choice.size, choice.biome);
   });
   pregameSeed.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { pregameSeed.blur(); startRace(); }
@@ -655,7 +708,8 @@ async function main() {
     // makes a test driver steer for a road that is not there.
     track: { centreline, tangentAt, generateTrack, where, radialToAcross, circuitFor, scaleShape, measureShape },
     furniture: { rails: () => RAILS, bollards: () => BOLLARDS, signs: () => SIGNS, buffers: furnitureBuffers },
-    world: { SIZES, sizeOf, labelOf, columns: () => COLUMNS, props: () => TREES },
+    world: { SIZES, sizeOf, labelOf, columns: () => COLUMNS, props: () => PROPS },
+    biomes: BIOMES,
     vehicles: VEHICLES,
   });
 
@@ -1107,7 +1161,7 @@ function buildMinimap(race: Race) {
 
   const road = document.createElementNS(NS, 'path');
   road.setAttribute('fill', 'none');
-  road.setAttribute('stroke', '#4a4c58');
+  road.setAttribute('stroke', BIOME.map.road);
   road.setAttribute('stroke-width', String(TRACK_HALF * 2));
   road.setAttribute('stroke-linejoin', 'round');
   mapSvg.appendChild(road);
@@ -1115,9 +1169,10 @@ function buildMinimap(race: Race) {
   // The lakes, and the fords: every cell of a grid whose ground is under
   // the water, as one path of squares, drawn over the road so that where
   // the road goes into the water on the ground it goes into the water here.
-  // At 150mm a cell it is two pixels on the map, which is a shoreline.
+  // At 150mm a cell it is two pixels on the map, which is a shoreline. None
+  // at all in a biome with no water — `underWater` is always false there.
   const water = document.createElementNS(NS, 'path');
-  water.setAttribute('fill', '#2a4a78');
+  water.setAttribute('fill', BIOME.map.water);
   mapSvg.appendChild(water);
 
   // the start line, across the road at the top of the lap
@@ -1128,6 +1183,8 @@ function buildMinimap(race: Race) {
 
   /** Draw the circuit, its water and its line. Called again for a new one. */
   function redraw() {
+    road.setAttribute('stroke', BIOME.map.road);
+    water.setAttribute('fill', BIOME.map.water);
     let lo = Infinity, hi = -Infinity;
     let path = '';
     for (let i = 0; i <= STEPS; i++) {
@@ -1258,7 +1315,7 @@ function buildConfig(applied: (key: SliderKey) => void, chooseCircuit: () => voi
   const trackValue = document.createElement('output');
   const showSeed = () => {
     const seed = SETTINGS.seed === 0 ? 'the original' : `#${SETTINGS.seed}`;
-    trackValue.textContent = `${labelOf(SETTINGS.size)} · ${seed} · ${VEHICLES[SETTINGS.vehicle].label}`;
+    trackValue.textContent = `${labelOf(SETTINGS.size)} · ${seed} · ${labelOfBiome(SETTINGS.biome)} · ${VEHICLES[SETTINGS.vehicle].label}`;
     shuffle.textContent = 'choose circuit';
   };
   showSeed();

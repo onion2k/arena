@@ -16,6 +16,7 @@
 import { clockLabel } from './daylight';
 import { SIZES, type SizeKey } from './world';
 import { VEHICLE_KEYS, type VehicleKey } from './vehicles';
+import { BIOME_KEYS, type BiomeKey } from './biomes';
 
 export interface Settings {
   /** How much the environment lights everything, before any lamp does. */
@@ -65,6 +66,8 @@ export interface Settings {
   size: SizeKey;
   /** Which vehicle class. Kept across sessions the same way as the size. */
   vehicle: VehicleKey;
+  /** Which biome. Kept across sessions the same way. */
+  biome: BiomeKey;
 }
 
 export const DEFAULTS: Readonly<Settings> = {
@@ -80,13 +83,14 @@ export const DEFAULTS: Readonly<Settings> = {
   seed: 0,
   size: 'M',
   vehicle: 'technical',
+  biome: 'forest',
 };
 
 /**
  * A setting a slider can drive: everything except the seed and the size,
  * which are buttons and not ranges — see `SliderKey`.
  */
-export type SliderKey = Exclude<keyof Settings, 'seed' | 'size' | 'vehicle'>;
+export type SliderKey = Exclude<keyof Settings, 'seed' | 'size' | 'vehicle' | 'biome'>;
 
 /** One row of the panel: which setting, what to call it, how far it goes. */
 export interface Control {
@@ -141,6 +145,10 @@ function load(): Partial<Settings> {
     if (typeof saved.vehicle === 'string' && VEHICLE_KEYS.includes(saved.vehicle as VehicleKey)) {
       out.vehicle = saved.vehicle as VehicleKey;
     }
+    // and the biome, the same way
+    if (typeof saved.biome === 'string' && BIOME_KEYS.includes(saved.biome as BiomeKey)) {
+      out.biome = saved.biome as BiomeKey;
+    }
     for (const c of CONTROLS) {
       const v = saved[c.key];
       if (typeof v === 'number' && Number.isFinite(v)) {
@@ -166,6 +174,7 @@ export function restoreDefaults() {
   const seed = SETTINGS.seed;
   const size = SETTINGS.size;
   const vehicle = SETTINGS.vehicle;
-  Object.assign(SETTINGS, DEFAULTS, { seed, size, vehicle });
+  const biome = SETTINGS.biome;
+  Object.assign(SETTINGS, DEFAULTS, { seed, size, vehicle, biome });
   save();
 }

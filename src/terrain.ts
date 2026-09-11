@@ -152,7 +152,16 @@ function envelopeAt(w: Wave, x: number, y: number): number {
  * wave of the same size and length in a different place and pointing a
  * different way is new ground with the old ground's guarantees.
  */
-export function seedTerrain(seed: number) {
+/**
+ * New hills for a new circuit, at a biome's own scale on each wave's
+ * amplitude — one factor per row of `WAVES`, in the same order: swell,
+ * swell, roll, roll, ramp. Only the phases and the headings are randomised;
+ * the amplitudes below are `BASE_AMP` times the biome's scale, so a biome
+ * that doubles the swell is dunes and one that halves everything is the
+ * flats a marsh wants, without touching the measurements the comment above
+ * this function is about — those are what a scale of 1 reproduces exactly.
+ */
+export function seedTerrain(seed: number, ampScale: number[] = [1, 1, 1, 1, 1]) {
   let a = (seed >>> 0) || 1;
   const rnd = () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -167,6 +176,7 @@ export function seedTerrain(seed: number) {
     // seed zero is the ground the game shipped with
     w.angle = seed === 0 ? base.angle : rnd() * Math.PI;
     w.phase = seed === 0 ? base.phase : rnd() * Math.PI * 2;
+    w.amp = base.amp * (ampScale[i] ?? 1);
     if (w.env && base.env) {
       w.env.angle = seed === 0 ? base.env.angle : rnd() * Math.PI;
       w.env.phase = seed === 0 ? base.env.phase : rnd() * Math.PI * 2;
@@ -174,9 +184,10 @@ export function seedTerrain(seed: number) {
   }
 }
 
-/** Where every wave started, so seed zero can put them all back. */
+/** Where every wave started, so seed zero can put them all back and a scale
+ *  of 1 always means the shipped amplitude. */
 const BASE = WAVES.map((w) => ({
-  angle: w.angle, phase: w.phase,
+  amp: w.amp, angle: w.angle, phase: w.phase,
   env: w.env ? { angle: w.env.angle, phase: w.env.phase } : undefined,
 }));
 

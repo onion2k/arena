@@ -19,7 +19,7 @@ import { Vehicle, type VehicleSpec } from './vehicle';
 import { VEHICLES } from './vehicles';
 import { Ghost } from './ghost';
 import { SETTINGS } from './settings';
-import { TREES } from './forest';
+import { PROPS } from './flora';
 import { BOLLARDS, RAILS, RAIL_DEEP } from './furniture';
 import { START_BULBS, radiusAt, tangentAt, where } from './track';
 import type { CircleGrid } from './spatial';
@@ -284,7 +284,9 @@ export class Race {
       collisionGrid.forEachNear(t.x, t.y, COLLISION_REACH, (c) => this.keepOff(t, c.x, c.y, c.r));
     } else {
       for (const post of COLUMNS) this.keepOff(t, post.x, post.y, COLUMN_RADIUS * post.scale);
-      for (const tree of TREES) this.keepOff(t, tree.x, tree.y, tree.r);
+      // zero radius is a prop a wheel goes through — a marsh's reeds —
+      // and not a collision at all, not a very small one
+      for (const prop of PROPS) if (prop.r > 0) this.keepOff(t, prop.x, prop.y, prop.r);
       for (const b of BOLLARDS) this.keepOff(t, b.x, b.y, b.r);
     }
     // The barriers are not. A rail is a line, and what the truck meets is
