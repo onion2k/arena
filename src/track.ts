@@ -881,11 +881,12 @@ export function shapePreview(s: Shape, steps = 400): {
  * out. The time that falls out is what a lap costs when nothing is wasted.
  *
  * That is the difficulty, and it is what the pilot's lifting follows (see
- * `calibrate.ts`). It is not the par time. Driven by the pilot, every class
- * laps a circuit in its length at the class's top speed times a constant,
- * to within 2 to 4% — the point mass's lap follows the corners, and the
- * corners turn out to cost a tidy driver almost nothing — so par is that
- * constant times the flat-out lap, and the constant is `rating.par`. It
+ * `calibrate.ts`). It is not quite the par time. Driven by the pilot, every
+ * class laps a smooth circuit in its length at the class's top speed times a
+ * constant, to within 2 to 4% — the corners cost a tidy driver almost
+ * nothing — and a wild circuit's tight corners cost a little. So par is that
+ * constant (`rating.par`) times the flat-out lap, plus `CORNER_SHARE` of
+ * what the point mass loses to the corners. It
  * was the point-mass lap times 1.13, from the rivals' laps, which was 9 to
  * 11% off the pilot's laps on average for the technical and the rally car
  * and 9 to 15% for the other two.
@@ -979,10 +980,28 @@ export function speedPlan(s: Shape, topSpeed: number, rating: CornerRating, acce
   return { v, ds };
 }
 
+/**
+ * How much of what the corners cost the point mass a driven lap pays. The
+ * point mass brakes to its corner limit and accelerates back out at a
+ * constant rate, which is pessimistic by a long way on a car that is at top
+ * speed nearly everywhere; a fifth of it is what the pilot's laps come to, the
+ * same fifth, near enough, for all four classes (0.18 to 0.22 fitted one at a
+ * time). See `calibrate.ts`.
+ */
+export const CORNER_SHARE = 0.2;
+
 export function rateTrack(s: Shape, topSpeed: number, rating: CornerRating, steps = 720): {
-  /** Seconds for a lap driven perfectly. */
+  /** Seconds for a lap driven perfectly by the point mass. */
   lap: number;
-  /** What a clean lap comes out at: the flat-out lap times `rating.par`. */
+  /** Seconds for a lap at top speed all the way round. */
+  flatOut: number;
+  /**
+   * What a clean lap comes out at: the flat-out lap times `rating.par`, and
+   * a share of what the corners cost the point mass on top. It was the
+   * flat-out lap alone, which a wild circuit's tight corners made 1 to 3%
+   * optimistic and a smooth circuit 1 to 2% pessimistic once the constant
+   * was fitted to both.
+   */
   par: number;
   /** 0 for a circuit you never lift on, 1 for one you are never flat out on. */
   difficulty: number;
@@ -995,5 +1014,10 @@ export function rateTrack(s: Shape, topSpeed: number, rating: CornerRating, step
     length += ds[i];
   }
   const flatOut = length / topSpeed;
-  return { lap, par: flatOut * rating.par, difficulty: Math.max(0, Math.min(1, 1 - flatOut / lap)) };
+  return {
+    lap,
+    flatOut,
+    par: flatOut * rating.par + CORNER_SHARE * (lap - flatOut),
+    difficulty: Math.max(0, Math.min(1, 1 - flatOut / lap)),
+  };
 }

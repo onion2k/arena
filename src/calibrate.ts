@@ -13,10 +13,12 @@
  * be.
  *
  * **Par.** A driven lap turned out to be the circuit's length at the class's
- * top speed, times a constant for the class, to within two percent for the
- * technical and the rally car. The corners explain almost nothing of what is
- * left. So par is that — `rating.par` is the constant — and this fits it on
- * one set of circuits and checks it on another.
+ * top speed, times a constant for the class, to within two percent on the
+ * smooth circuits — and a little optimistic on the wild circuits, whose
+ * corners are tight enough to cost something. So par is that lap times
+ * `rating.par`, plus `CORNER_SHARE` of the time the point mass loses to the
+ * corners (`rateTrack`), and this fits the constant on one set of circuits,
+ * smooth and wild, and checks it on another.
  *
  * **Difficulty** is how much of a lap is spent below flat out, from the
  * class's corner, accel and brake numbers. It is checked against how much of
@@ -26,7 +28,7 @@
 import { useTrack } from './circuit';
 import { Race, STEP } from './game';
 import { Pilot } from './pilot';
-import { circuitFor, measureShape, rateTrack, speedPlan, type CornerRating } from './track';
+import { CORNER_SHARE, circuitFor, rateTrack, speedPlan, type CornerRating } from './track';
 import type { VehicleSpec } from './vehicle';
 import type { BiomeKey } from './biomes';
 import { sizeOf, type SizeKey } from './world';
@@ -47,6 +49,9 @@ export interface Drive {
 
 /** The pilot round one circuit to one plan: its best flying lap, and how
  *  much of the flying laps it lifted for. A medium forest unless asked. */
+/** One circuit the calibration drives: a seed, smooth or wild. */
+export interface Circuit { seed: number; wild: boolean }
+
 export function driveTo(spec: VehicleSpec, seed: number, corner: number, size: SizeKey = 'M', biome: BiomeKey = 'forest', wild = false): Drive {
   useTrack(seed, size, biome, wild);
   const race = new Race();
@@ -67,17 +72,17 @@ export function driveTo(spec: VehicleSpec, seed: number, corner: number, size: S
 }
 
 export interface Measured {
-  seeds: number[];
+  circuits: Circuit[];
   laps: number[];
   lifts: number[];
 }
 
 /** The best lap on each circuit from any plan, and the lifting to one. */
-export function measure(spec: VehicleSpec, seeds: number[]): Measured {
+export function measure(spec: VehicleSpec, circuits: Circuit[]): Measured {
   return {
-    seeds,
-    laps: seeds.map((seed) => Math.min(...PLANS.map((corner) => driveTo(spec, seed, corner).lap))),
-    lifts: seeds.map((seed) => driveTo(spec, seed, LIFT_PLAN).lift),
+    circuits,
+    laps: circuits.map(({ seed, wild }) => Math.min(...PLANS.map((corner) => driveTo(spec, seed, corner, 'M', 'forest', wild).lap))),
+    lifts: circuits.map(({ seed, wild }) => driveTo(spec, seed, LIFT_PLAN, 'M', 'forest', wild).lift),
   };
 }
 
@@ -92,7 +97,7 @@ export interface Score {
 
 /** How a rating's par times and difficulties compare with what was driven. */
 export function score(spec: VehicleSpec, m: Measured, rating: CornerRating): Score {
-  const rated = m.seeds.map((seed) => rateTrack(circuitFor(seed, 1), spec.engine.topSpeed, rating));
+  const rated = m.circuits.map(({ seed, wild }) => rateTrack(circuitFor(seed, 1, wild), spec.engine.topSpeed, rating));
   const errors = rated.map((r, i) => (Number.isFinite(m.laps[i]) ? r.par / m.laps[i] - 1 : NaN));
   const finite = errors.filter(Number.isFinite);
   return {
@@ -104,8 +109,9 @@ export function score(spec: VehicleSpec, m: Measured, rating: CornerRating): Sco
 }
 
 /**
- * The par constant: the median of lap over a flat-out lap, over the circuits
- * the pilot got round cleanly. A circuit it lapped more than a tenth slower
+ * The par constant: the median, over the circuits the pilot got round
+ * cleanly, of what is left of a lap once `CORNER_SHARE` of the corners' cost
+ * is taken off it, over the flat-out lap. A circuit it lapped more than a tenth slower
  * than that median is left out and the median taken again — a lap like that
  * is the pilot in trouble, and a par time should be a clean lap's. The first
  * pilot left out #4, #10 and #12 for the long cars; the path follower leaves
@@ -114,8 +120,11 @@ export function score(spec: VehicleSpec, m: Measured, rating: CornerRating): Sco
  */
 export function fitPar(spec: VehicleSpec, m: Measured): number {
   const median = (a: number[]) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
-  const ratios = m.seeds
-    .map((seed, i) => (m.laps[i] * spec.engine.topSpeed) / measureShape(circuitFor(seed, 1)).length)
+  const ratios = m.circuits
+    .map(({ seed, wild }, i) => {
+      const r = rateTrack(circuitFor(seed, 1, wild), spec.engine.topSpeed, spec.rating);
+      return (m.laps[i] - CORNER_SHARE * (r.lap - r.flatOut)) / r.flatOut;
+    })
     .filter(Number.isFinite);
   const first = median(ratios);
   return Math.round(median(ratios.filter((r) => r <= first * 1.1)) * 1000) / 1000;

@@ -49,18 +49,16 @@ describe('wild circuits', () => {
     }
   });
 
-  // Every class gets round one near par. Par is fitted on smooth circuits and
-  // is length at top speed, which a wild circuit's tight corners make a
-  // little optimistic — 1 to 3% on average over thirteen of them, most for
-  // the F1, worst 7% — so a wild lap is held to 8% rather than the smooth
-  // circuits' 6%.
+  // Every class gets round one, to par: par counts a share of what tight
+  // corners cost (`CORNER_SHARE`) and is fitted on smooth and wild circuits
+  // alike, so a wild lap is held to the same 6% a smooth one is.
   it('can be driven to par in every class', () => {
     for (const key of VEHICLE_KEYS) {
       const spec = VEHICLES[key];
       // its best lap over a few plans, the way par is calibrated
       const lap = Math.min(...[60, 80, 100].map((c) => driveTo(spec, 3, c, 'M', 'forest', true).lap));
       const { par } = rateTrack(circuitFor(3, 1, true), spec.engine.topSpeed, spec.rating);
-      expect(Math.abs(par / lap - 1), `${key}: par ${par.toFixed(2)}, driven ${lap.toFixed(2)}`).toBeLessThan(0.08);
+      expect(Math.abs(par / lap - 1), `${key}: par ${par.toFixed(2)}, driven ${lap.toFixed(2)}`).toBeLessThan(0.06);
     }
   });
 });

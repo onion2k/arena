@@ -332,8 +332,8 @@ per-class number where the technical had a constant.
 | suspension travel | 26 | 34 | 18 | 12 |
 | collision radius | 98 | 90 | 105 | 110 |
 | corner / accel / brake rating | 61 / 700 / 2400 | 73 / 785 / 2627 | 69 / 852 / 2915 | 71 / 1018 / 3383 |
-| par factor | 1.110 | 1.073 | 1.139 | 1.159 |
-| par lap, seed 0, medium | 14.0 s | 12.5 s | 11.0 s | 10.2 s |
+| par factor | 1.103 | 1.068 | 1.104 | 1.122 |
+| par lap, seed 0, medium | 14.0 s | 12.5 s | 10.9 s | 10.1 s |
 
 ### Benching the three new classes
 
@@ -675,8 +675,8 @@ What the laps said, in the order it was found:
 
 | | technical | rally car | Le Mans prototype | F1 car |
 | --- | ---: | ---: | ---: | ---: |
-| par factor | 1.110 | 1.073 | 1.139 | 1.159 |
-| error, fitted factor | 1.2% (3.9% worst) | 1.6% (4.9%) | 2.2% (4.5%) | 1.9% (3.8%) |
+| par factor, flat-out lap only | 1.110 | 1.073 | 1.139 | 1.159 |
+| error, flat-out lap only | 1.2% (3.9% worst) | 1.6% (4.9%) | 2.2% (4.5%) | 1.9% (3.8%) |
 | error, point mass × 1.13, first pilot | 9.1% (17.1%) | 10.9% (15.1%) | 14.1% (24.8%) | 15.4% (25.8%) |
 
   What is left of a lap time after the length hardly follows the corners:
@@ -740,6 +740,45 @@ The measurements the first pilot took elsewhere in this file were run again
 with this one, and the tables in [Cars and sizes](#cars-and-sizes) and
 [Ice, reeds, and what water costs](#ice-reeds-and-what-water-costs) are the
 new numbers.
+
+### Par, and the corners
+
+Length at top speed was a smooth circuit's par to within 2%, and a wild
+circuit's tight corners made it optimistic. So the pilot drove every class
+round fifty-two circuits, twenty-six smooth and twenty-six wild, best lap of
+nine plans each, and four models of par were fitted on half of them and
+checked on the other half:
+
+| model, checked | smooth: mean error, bias | wild: mean error, bias |
+| --- | --- | --- |
+| flat-out lap × a constant (what par was) | 1.6 to 2.2%, +0.9 to +2.1% | 1.1 to 1.8%, −0.3 to −1.1% |
+| flat-out lap × (1 + k × difficulty) | 1.4 to 1.8%, −0.1 to +0.6% | 1.2 to 1.5%, −0.1 to +0.4% |
+| flat-out lap × a constant, plus k × what the corners cost the point mass | 1.4 to 1.7%, −0.1 to +0.4% | 1.2 to 1.5%, −0.1 to +0.3% |
+| the point mass's lap × a constant | 4.0 to 8.4%, −4 to −8% | 2.7 to 3.8%, +0.3 to +1.6% |
+
+The flat-out lap alone, with its constant fitted to both kinds, is a
+compromise that is pessimistic on one and optimistic on the other. The two
+that allow for the corners take the bias out of both, and the last of them
+is the one that says what it means: a lap is the flat-out lap stretched by
+a constant, plus a share of the time the point mass loses to the corners. It
+brakes to its corner limit and accelerates back out at a constant rate, which
+is pessimistic by a long way on a car that is at top speed nearly everywhere,
+and the share that matches the pilot's laps is a fifth — 0.18 to 0.22 fitted
+class by class, and 0.2 for all four gives the same errors. That is
+`CORNER_SHARE`.
+
+`npm run calibrate` fits the constant on smooth and wild circuits together
+now and checks it on as many again:
+
+| | technical | rally car | Le Mans prototype | F1 car |
+| --- | ---: | ---: | ---: | ---: |
+| par factor | 1.103 | 1.068 | 1.104 | 1.122 |
+| checking, mean (worst) | 1.2% (4.4%) | 1.3% (4.6%) | 1.4% (4.9%) | 1.5% (4.8%) |
+| checking, bias smooth / wild | +0.9 / +0.5% | +1.3 / +0.6% | +1.0 / +0.1% | +1.4 / −0.5% |
+
+The difficulty follows the pilot's lifting better with the wild circuits in
+the set — r = 0.85 to 0.96 — because it has a wider range of circuits to
+follow. A wild lap is held to 6% of par by the tests, as a smooth one is.
 
 **The start line is put on a straight.** The grid sits at an angle of -pi
 whatever the circuit does there, and on a random one that is as likely to be
@@ -806,10 +845,11 @@ Two things measured before they shipped:
   drum's width of clearance to the nearest road before they are placed, which
   no smooth circuit's bollard is anywhere near, so their layouts are
   unchanged.
-- **The pilot gets round, and par nearly holds.** Every class finishes all
-  thirteen wild circuits it was given. Par is fitted on smooth circuits and
-  is length at top speed; on wild ones it comes out 1.0 to 2.8% optimistic
-  on average by class, most for the F1, and 7% at the worst. The difficulty
+- **The pilot gets round.** Every class finishes all thirteen wild circuits
+  it was given. Par, fitted on smooth circuits as length at top speed, came
+  out 1.0 to 2.8% optimistic on them on average by class, most for the F1,
+  and 7% at the worst — which is what [Par, and the corners](#par-and-the-corners)
+  fixed. The difficulty
   reads high — 0.04 to 0.30 against the smooth circuits' 0.02 to 0.06 — and a
   wild circuit is nearly always *relentless*, which is true.
 
