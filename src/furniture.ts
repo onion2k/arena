@@ -32,8 +32,18 @@ import { underWater } from './water';
 import { box, prism } from './scene';
 import { SIZE } from './world';
 
-/** A corner worth protecting: anything tighter than this gets a barrier. */
+/**
+ * A corner worth protecting, at medium: anything tighter than this gets a
+ * barrier. It is multiplied by the size in force, and so is the span the
+ * corner is measured over, because a size is the same circuit scaled — a
+ * corner that wants a barrier at medium is the same corner at extra large,
+ * twice the radius. Held at 1900mm, it did not scale: large lost two in
+ * five of its barriers and extra large three quarters, and eight circuits
+ * in twenty had none at all.
+ */
 const CORNER = 1900;
+/** The span a corner's radius is measured over, at medium. */
+const CORNER_SPAN = 240;
 /** How far out from the middle of the road the barrier face stands. */
 const BARRIER_OUT = TRACK_HALF + 300;
 /** One rail's length. Short enough to follow a bend without a visible kink. */
@@ -243,12 +253,13 @@ export function rebuildFurniture(seed = 5) {
    * which are straights by definition, and put lengths of barrier across the
    * road.
    */
+  const corner = CORNER * SIZE, span = CORNER_SPAN * SIZE;
   const at = (t: number) => {
-    const d = 240 / Math.max(radiusAt(t), 200);
+    const d = span / Math.max(radiusAt(t), 200);
     const a = centreline(t - d), b = centreline(t), c = centreline(t + d);
     const turn = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
     const [tx, ty] = tangentAt(t);
-    return { b, left: [-ty, tx] as [number, number], turn, r: curveRadius(t, 240), t };
+    return { b, left: [-ty, tx] as [number, number], turn, r: curveRadius(t, span), t };
   };
   /** The road's edge, `BARRIER_OUT` out on the side given. */
   const edge = (s: ReturnType<typeof at>, side: number): [number, number] =>
@@ -257,15 +268,24 @@ export function rebuildFurniture(seed = 5) {
   // Walk the lap by arc length rather than by angle: the same step of angle
   // covers half again as much road on the outside of the loop as the inside,
   // and barriers spaced by angle come out bunched at one end of every corner.
+  //
+  // A sample is RAIL × SIZE of road, which is the same share of the lap at
+  // every size, so a circuit's corners are found in the same samples at every
+  // size. Sampled every RAIL whatever the size, a corner at extra large had
+  // twice the samples it had at medium and short corners medium passes over
+  // got barriers. The rails are laid `pieces` to a sample, on the road's own
+  // curve between samples, so a rail stays about RAIL long and the posts the
+  // same distance apart.
+  const pieces = Math.max(1, Math.round(SIZE));
   const samples: ReturnType<typeof at>[] = [];
   let th = -Math.PI;
   while (th < Math.PI) {
     samples.push(at(th));
-    th += RAIL / Math.max(radiusAt(th), 200);
+    th += (RAIL * SIZE) / Math.max(radiusAt(th), 200);
   }
 
   const n = samples.length;
-  const wanted = samples.map((s) => s.r < CORNER);
+  const wanted = samples.map((s) => s.r < corner);
 
   // Runs of corner, each taking one side for its whole length.
   //
@@ -295,18 +315,26 @@ export function rebuildFurniture(seed = 5) {
     const side = samples[apex].turn > 0 ? -1 : 1;
 
     // A barrier starts before the corner and ends after it: the place you
-    // leave the road is past the apex, not at it.
+    // leave the road is past the apex, not at it: three samples of it.
     const LEAD = 3;
     const run: number[] = [];
     for (let k = -LEAD; k < core.length + LEAD; k++) run.push((core[0] + k + n * 2) % n);
 
     let prev: [number, number] | null = null;
-    for (const k of run) {
-      const [x, y] = edge(samples[k], side);
-      if (underWater(x, y, 10)) { prev = null; continue; }
-      if (prev) RAILS.push({ x1: prev[0], y1: prev[1], x2: x, y2: y });
-      prev = [x, y];
-    }
+    run.forEach((k, i) => {
+      const points = [edge(samples[k], side)];
+      if (i + 1 < run.length) {
+        const t0 = samples[k].t;
+        let t1 = samples[run[i + 1]].t;
+        if (t1 < t0) t1 += Math.PI * 2;
+        for (let p = 1; p < pieces; p++) points.push(edge(at(t0 + ((t1 - t0) * p) / pieces), side));
+      }
+      for (const [x, y] of points) {
+        if (underWater(x, y, 10)) { prev = null; continue; }
+        if (prev) RAILS.push({ x1: prev[0], y1: prev[1], x2: x, y2: y });
+        prev = [x, y];
+      }
+    });
 
     const s = samples[apex];
     const [tx, ty] = tangentAt(s.t);
@@ -361,7 +389,7 @@ export function rebuildFurniture(seed = 5) {
       const bt = backAlong(samples[core[0]].t, outward, BOARD_FIRST + b * BOARD_GAP);
       if (bt === null) break;
       // never in the corner before this one
-      if (curveRadius(bt, 240) < CORNER) break;
+      if (curveRadius(bt, span) < corner) break;
       const [bx, by] = signAt(bt, outward);
       if (underWater(bx, by, 10) || !clearOfPosts(bx, by, 110)) break;
       const [btx, bty] = tangentAt(bt);

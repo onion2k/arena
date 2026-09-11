@@ -3,7 +3,7 @@ import { gridUnder, useTrack } from './sim';
 import { BIOMES, type BiomeKey } from '../biomes';
 import { COLUMNS } from '../scene';
 import { PROPS } from '../flora';
-import { BOLLARDS, RAILS } from '../furniture';
+import { BOLLARDS, RAILS, SIGNS } from '../furniture';
 import * as water from '../water';
 import { SIZES } from '../world';
 
@@ -47,6 +47,27 @@ describe('the water', () => {
 });
 
 describe('the arena as built', () => {
+  // A size is the same circuit scaled, so the same corners want barriers at
+  // every size: the same tyre stacks at every apex, and twice the rails at
+  // large and extra large, where each run is laid two rails to a sample. In
+  // the desert, so no water cuts a run short. The corner threshold was a
+  // fixed 1900mm once, and #63 had no barriers at all at either big size.
+  it('guards the same corners at every size', () => {
+    for (let seed = 0; seed < 10; seed++) {
+      const at = (size: 'S' | 'M' | 'L' | 'XL') => {
+        useTrack(seed, size, 'desert');
+        return { tyres: BOLLARDS.filter((b) => b.kind === 'tyre').length, rails: RAILS.length, chevrons: SIGNS.filter((c) => c.kind === 'chevron').length };
+      };
+      const m = at('M');
+      expect(m.tyres, `#${seed} has corners to guard`).toBeGreaterThan(0);
+      for (const size of ['S', 'L', 'XL'] as const) {
+        const got = at(size);
+        expect(got.tyres, `#${seed} ${size} tyre stacks`).toBe(m.tyres);
+        expect(got.rails, `#${seed} ${size} rails`).toBe(m.rails * (size === 'S' ? 1 : 2));
+      }
+    }
+  });
+
   // A fingerprint of everything `useTrack` lays out, per size and biome, on
   // the original circuit and one other. A change to any of these numbers is
   // either the point of the change being made or a regression in it; run

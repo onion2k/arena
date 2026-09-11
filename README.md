@@ -810,6 +810,7 @@ medians of three:
 
 Lamps, barriers, signs and kerb all measure themselves off the lap they are
 built for, so they scale with the *road* — twice the lap, twice the posts.
+*(Barriers did not, until later: see below.)*
 The forest does not: at a fixed density it would scale with the arena's
 *area*, which is four times as many trees at the largest size for a truck
 that never gets anywhere near most of them. Past 1800mm from the centreline —
@@ -843,6 +844,20 @@ inside it, which the largest size does not; the search now runs out to
 carries a shadow map from a capacity of 256, so `useTrack` warns rather than
 silently drops one if a circuit's post count is ever close to it — it never
 is, at any size this game reaches.
+
+**The barriers now scale with it too.** Which corners get one was decided
+by a fixed radius — tighter than 1900mm — measured over a fixed 240mm of
+road, on samples a fixed 440mm apart. A size is the same circuit scaled, so
+at large and extra large every corner is wider and most of them stopped
+qualifying: over twenty desert circuits, 967 rails at medium, 589 at large
+and 235 at extra large, with no barrier at all on eight of the twenty. Small
+had the opposite trouble, nearly medium's count on three quarters the lap.
+The radius, the span and the sample spacing are multiplied by the size now,
+so a circuit's corners are found in the same places at every size — the same
+tyre stacks at the same apexes, 369 at all four — and the rails are laid on
+the road's own curve between samples, two to a sample at large and extra
+large, so a rail stays about its own length and the posts as far apart as
+at medium. Nothing moved at medium, and a test holds the rest to it.
 
 ### Cars and sizes
 
