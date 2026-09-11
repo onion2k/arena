@@ -13,38 +13,36 @@ const SEEDS = Array.from({ length: 40 }, (_, i) => i);
 /** How deep the water is over the lowest road, as built for the circuit in force. */
 const depthNow = () => Math.round((water.WATER_LEVEL - water.lowestRoad()) * 10) / 10;
 
+/** The road a race starts on stays this far above the water. */
+const CLEARANCE = 10;
+
 describe('the water', () => {
-  // Fails at the commit this harness lands in, on the forest's #3: the line
-  // there is the lowest point of the lap, so even the step-down's floor of
-  // no depth at all leaves the road beside the centreline 6mm under.
-  it.fails('never puts the road on the grid under it', () => {
+  it('keeps clear of the road on the grid', () => {
     for (const biome of WET) {
       for (const seed of SEEDS) {
         useTrack(seed, 'M', biome);
-        expect(gridUnder(water.WATER_LEVEL), `${biome} #${seed}`).toBe(false);
+        // a micron under, because a level set exactly at the clearance can round
+        // a hair over it
+        expect(gridUnder(water.WATER_LEVEL + CLEARANCE - 1e-6), `${biome} #${seed}`).toBe(false);
       }
     }
   });
 
-  // Fails at the commit this harness lands in: the step-down in
-  // `floodForBiome` runs out of tries on every marsh (110mm is always
-  // lowered to 20) and drains the forest's fords on 18 of these 40 seeds,
-  // because it tests the ground at one point with a 50mm margin rather than
-  // the road on the grid.
-  it.fails('is only made shallower than the biome asks when the grid needs it', () => {
+  it('is only made shallower than the biome asks as far as the grid needs', () => {
+    let lowered = 0;
     for (const biome of WET) {
       const asked = BIOMES[biome].water.depth!;
       for (const seed of SEEDS) {
         useTrack(seed, 'M', biome);
-        const depth = depthNow();
-        if (depth >= asked) continue;
-        // lowered: then 20mm deeper than it was lowered to, or the depth the
-        // biome asked for, would have to wet the grid
-        const floor = water.lowestRoad();
-        const deeper = Math.min(asked, depth + 20);
-        expect(gridUnder(floor + deeper), `${biome} #${seed} lowered to ${depth}`).toBe(true);
+        const depth = water.WATER_LEVEL - water.lowestRoad();
+        if (depth >= asked - 1e-6) continue;
+        lowered++;
+        // a millimetre more water and the grid would no longer be clear
+        expect(gridUnder(water.WATER_LEVEL + CLEARANCE + 1), `${biome} #${seed} lowered to ${depth.toFixed(1)}`).toBe(true);
       }
     }
+    // and the test is not passing by never lowering anything
+    expect(lowered).toBeGreaterThan(0);
   });
 });
 

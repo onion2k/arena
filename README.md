@@ -1151,6 +1151,49 @@ or six hundred a ford. Against the road surface it is 5.5% of the lap, and
 the drivers' best laps are what they were: 13.6 to 14.2 seconds, six laps in
 a hundred seconds, nobody stranded.
 
+### Off the grid
+
+The biomes added a check that the water is not over the start line, and it
+was wrong in a way that only showed on circuits nobody looked at. It stepped
+the depth down 10mm at a time, up to ten times, while the *ground* at one
+point on the line was within 50mm of the water. The ground is 22mm under the
+road, and 50 is a lot of margin on top, so it lowered water that was nowhere
+near the road. On the first forty circuits at medium it drained the forest's
+fords to nothing on 18 — seed 0, the one the refactor's hash test drove, was
+not one of them — and on every marsh it ran out of tries at 20mm, so the
+110mm marsh was only ever a forest-depth marsh on flatter ground. On a
+circuit whose line is the lowest point of the lap, it drained the fords and
+still left the grid wet.
+
+`floodForBiome` (`circuit.ts`) is one number now: as deep as the biome asks,
+or as deep as the grid allows, whichever is less — where the grid is the road
+a car stands on, from 600mm behind the line to 200 past it and 150 either
+side of the centreline, and allowed is 10mm under the lowest of it. Where the
+line is in the lap's lowest dip that comes out below the lowest road: no
+fords on that circuit, and the lakes off the road smaller, which is what the
+ground there says. Forest, first forty circuits at medium:
+
+| | full 20mm | shallower | none |
+| --- | ---: | ---: | ---: |
+| before | 17 | 5 | 18 |
+| after | 31 | 6 | 3 |
+
+With the check fixed the marsh's 110mm got through, and it showed why it had
+never been seen: on the flatter ground it drowned the arena — 54% of it under
+water at the median circuit, 79% at the ninetieth percentile, and 45% of the
+lap under water there. The water is opaque, so the road and its kerbs vanished
+a car's length off the grid; and the planting keeps out of water, so the
+marsh was bare, 2 props on the original circuit where there had been 388. A
+marsh that is mostly water needs a road that stays visible in it and reeds
+that stand in it, and has neither yet. So its depth is 20, which is what it
+always actually was: 35% of the arena under water at the median, 7% of the
+lap.
+
+Two tests hold it: the road on the grid stays 10mm clear of the water on
+every one of the first forty circuits in every wet biome, and wherever the
+water was made shallower than asked, a millimetre more would break that.
+Both fail against the old step-down, on the forest's #3 and #5.
+
 ## Smoke and spray
 
 The trucks throw things up: smoke off a sliding tyre, spray off a wet one.
@@ -1348,7 +1391,7 @@ and its own trackside kinds in place of the pine.
 | | forest | desert | snow | marsh |
 | --- | --- | --- | --- | --- |
 | ground | dark, cold | sand | white | dark, wet |
-| water | fords, 20mm | none | frozen, 20mm | deep, 110mm |
+| water | fords, 20mm | none | frozen, 20mm | 20mm, over flatter ground |
 | terrain scale | 1× throughout | 1.6× long dunes, soft ramps | 1× throughout | 0.5×, flat |
 | off-track loss | 0.32 | 0.45 (sand) | 0.4 (snow) | 0.4 (mud) |
 | flora | pine | cactus, rock | fir | reed (no collision), deadwood |
@@ -1368,7 +1411,9 @@ against the forest and snow's 20 — a marsh is meant to be mostly water, not
 occasionally water. A circuit whose whole loop happens to sit close to level
 can put the start line itself under that much water; `useTrack` steps the
 depth down by 10mm at a time until the grid there is dry rather than opening
-a race on a lake.
+a race on a lake. *(It never did flood: the step-down ran out of tries on
+every circuit and left 20mm, and drained the forest's fords besides. The
+marsh is 20mm over flatter ground now — see [Off the grid](#off-the-grid).)*
 
 **Reeds are the one thing here with no collision.** `PropKind.radiusOf` can
 return zero, which `keepOneInside` and the collision grid both treat as

@@ -11,9 +11,9 @@ import { setCollisionGrid } from './game';
 import { PROPS, replant } from './flora';
 import { BIOME, setBiome, type BiomeKey } from './biomes';
 import { BOLLARDS, rebuildFurniture } from './furniture';
-import { refloodArena, underWater } from './water';
-import { centreline, circuitFor, setTrack } from './track';
-import { seedTerrain } from './terrain';
+import { lowestRoad, refloodArena } from './water';
+import { TRACK_LIFT, centreline, circuitFor, setTrack, tangentAt } from './track';
+import { height, seedTerrain } from './terrain';
 import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS, resizeArena, restandColumns } from './scene';
 import { CircleGrid } from './spatial';
 import { SIZE, setSize, type SizeKey } from './world';
@@ -34,21 +34,52 @@ function rebuildCollisionGrid() {
   setCollisionGrid(grid);
 }
 
+/** How far the road on the grid stays above the water, at the least. */
+const GRID_CLEARANCE = 10;
+
 /**
- * Flood the arena to the biome's own depth, or not at all. A marsh's 110mm
- * is deep enough that a circuit whose whole loop sits close to level can
- * put the start line itself under water — the grid steps the depth down
- * until it is not, rather than starting a race on a lake.
+ * The lowest the road gets where a race starts: a box from 600mm behind the
+ * line, past the tail of the longest vehicle on the grid with room to roll
+ * back, to 200mm beyond it, and 150mm either side of the centreline — the
+ * widest body and a margin. Not the whole width of the tarmac: the ribbon
+ * lies on the ground, and on a circuit whose line is in a dip its edges sit
+ * lower than anything a car on the grid touches.
+ */
+function lowestOnGrid(): number {
+  const [cx, cy] = centreline(-Math.PI);
+  const [tx, ty] = tangentAt(-Math.PI);
+  let lo = Infinity;
+  for (let along = -600; along <= 200; along += 50) {
+    for (let across = -150; across <= 150; across += 37.5) {
+      lo = Math.min(lo, height(cx + tx * along + ty * across, cy + ty * along - tx * across) + TRACK_LIFT);
+    }
+  }
+  return lo;
+}
+
+/**
+ * Flood the arena to the biome's own depth over the lowest road, or not at
+ * all — and never over the road on the grid, so a race does not start in a
+ * lake.
+ *
+ * This used to step the depth down 10mm at a time, up to ten times, while
+ * the ground at one point on the line was within 50mm of the water. The
+ * ground is 22mm under the road, and 50mm is a lot of margin besides, so it
+ * lowered water that was nowhere near the road: it drained the forest's
+ * fords on 18 of the first 40 circuits, and ran out of tries on every marsh
+ * and left it at the forest's 20mm. On a circuit whose line is the lowest
+ * point of the lap it drained the fords and still left the grid wet.
+ *
+ * Now it is one number: as deep as the biome asks, or as deep as the grid
+ * allows, whichever is less. Where the grid sits in the lap's lowest dip,
+ * that is below the lowest road — no fords on that circuit, and only the
+ * hollows off the road hold water — which is what the ground there says.
  */
 function floodForBiome() {
-  let depth = BIOME.water.depth;
-  if (depth === null) { refloodArena(null); return; }
-  for (let tries = 0; tries < 10; tries++) {
-    refloodArena(depth);
-    const [sx, sy] = centreline(-Math.PI);
-    if (!underWater(sx, sy, 50)) return;
-    depth = Math.max(0, depth - 10);
-  }
+  const asked = BIOME.water.depth;
+  if (asked === null) { refloodArena(null); return; }
+  const allowed = lowestOnGrid() - GRID_CLEARANCE - lowestRoad();
+  refloodArena(Math.min(asked, allowed));
 }
 
 /**

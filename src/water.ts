@@ -46,11 +46,10 @@ let hasWater = true;
 
 /**
  * Find the level again: the road moved, so the lowest point on it did too.
- * `depth` is the biome's own — `FORD_DEPTH` for forest and snow, deeper for
- * a marsh that wants real lakes rather than fords, `null` for a desert.
- * Marsh's own depth can flood the grid at the start/finish line if the whole
- * arena sits close to level; the caller steps it down until that clears —
- * see `useTrack`.
+ * `depth` is over the lowest road — `FORD_DEPTH` for forest and snow, deeper
+ * for a marsh that wants real lakes rather than fords, `null` for a desert —
+ * and may be negative, for a circuit whose grid is in the lap's lowest dip:
+ * the caller keeps the water off the grid (`floodForBiome` in `circuit.ts`).
  */
 export function refloodArena(depth: number | null = FORD_DEPTH) {
   hasWater = depth !== null;

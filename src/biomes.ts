@@ -159,10 +159,16 @@ const MARSH: Biome = {
   ground: { albedo: [0.09, 0.11, 0.07], roughness: 0.7 },
   tarmac: { albedo: [0.05, 0.055, 0.05], roughness: 0.85 },
   kerb: [[0.55, 0.09, 0.06], [0.72, 0.72, 0.68]],
-  // far deeper than a ford: a marsh is meant to be mostly water, not
-  // occasionally water. `useTrack` steps this down if it would flood the
-  // grid at the line.
-  water: { depth: 110, albedo: [0.05, 0.08, 0.06], roughness: 0.15 },
+  // A ford's depth, the same as the forest's, over flatter ground — so the
+  // same 20mm spreads into wide shallows. It was 110, meant to make a marsh
+  // mostly water, and never came out as anything but 20: the start-line
+  // check that lowered it ran out of tries on every circuit. Once that was
+  // fixed, 110 was allowed through on flat circuits and drowned them — half
+  // the arena under water at the median, the road and its kerbs vanishing
+  // under the opaque water a car's length from the grid, and nothing
+  // planted, because nothing grows in water. A marsh that is mostly water
+  // needs a road that stays visible in it and reeds that stand in it first.
+  water: { depth: 20, albedo: [0.05, 0.08, 0.06], roughness: 0.15 },
   // flatter, so the deeper water spreads into wide shallows rather than a
   // few deep lakes
   terrain: { ampScale: [0.5, 0.5, 0.4, 0.3, 0.6] },
