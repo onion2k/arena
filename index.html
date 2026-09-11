@@ -52,6 +52,8 @@
   #pregame .facts { color: #9a97ab; letter-spacing: 0.04em; margin: 0; }
   #pregame .facts span { color: var(--ink); font-variant-numeric: tabular-nums; }
   #pregame .picks { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+  #pregame .seg { display: flex; gap: 6px; }
+  #pregame .seg button[aria-pressed="true"] { background: #e8b74a; border-color: #e8b74a; color: #14131a; font-weight: 600; }
   #pregame input { font: inherit; width: 84px; text-align: center; color: var(--ink);
                    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14);
                    border-radius: 6px; padding: 5px 8px; }
@@ -78,6 +80,7 @@
   <svg id="pregameMap" aria-hidden="true"></svg>
   <p class="rating" id="pregameRating"></p>
   <p class="facts" id="pregameFacts"></p>
+  <div class="seg" id="pregameSize" role="group" aria-label="track size"></div>
   <div class="picks">
     <button type="button" id="pregameAnother">another</button>
     <input id="pregameSeed" type="number" min="0" max="999999" step="1" aria-label="circuit seed">

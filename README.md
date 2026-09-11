@@ -437,7 +437,7 @@ button to do when the road is what you are standing on.
 The seed is a number you can read off the screen and type back in; seed zero
 is the original. It persists, so the circuit you were driving is the one you
 come back to. The defaults button deliberately does *not* reset it — defaults
-is for undoing a slider you regret.
+is for undoing a slider you regret — and the size below is kept the same way.
 
 One bug worth recording, because it will happen again to anyone styling a
 panel here: `#pregame { display: grid }` beats the `hidden` attribute's
@@ -448,6 +448,78 @@ display: none }` is the fix, and the same trap is set for every panel in this
 file that sets its own display.
 
 ![six circuits](docs/circuits.svg)
+
+### Four sizes
+
+**Small, medium, large, extra large — 0.75×, 1×, 1.5×, 2× the arena the game
+shipped with.** A button on the track screen beside the seed, kept across
+sessions the same way. Medium is exactly what shipped: seed zero at medium is
+still the 29,099mm original, bit for bit.
+
+The two things that used to be unrelated numbers — `ARENA_X`/`ARENA_Y`, the
+square the world stands in, and the circuit generator's own radius and length
+limits — now move together, from one factor, `SIZE`. The generator itself
+stays untouched and size-blind: it always builds a circuit in the same
+canonical units it always did, and `scaleShape` multiplies `r0` and every
+amplitude by the size afterward. Scaling a shape is a similarity — the loop
+does not change, only how big it is — so a seed gives the *same circuit* at
+every size, and every geometric limit the generator checked still holds:
+length, both radius bounds and the tightness of the corners all scale by the
+same factor, and `across`, a ratio, does not move at all.
+
+The one limit that does not scale is the truck's own turning circle — a
+property of the car, not of the geometry — so the small size is not held to
+it: its tightest corners can be under what the truck can carry flat out,
+which is the point of small being small. The difficulty rating is computed
+on the actually-scaled shape, so it says so honestly rather than pretending
+every size drives the same.
+
+What grows with the arena, and what does not — all circuit #63, fenced,
+medians of three:
+
+| | small | medium | large | extra large |
+| --- | ---: | ---: | ---: | ---: |
+| lap | 19.5 m | 26.0 m | 39.0 m | 52.0 m |
+| lamp posts | 30 | 38 | 58 | 76 |
+| trees | 908 | 1,685 | 2,813 | 3,118 |
+| rebuild (circuit + arena) | 18 + 14 ms | 18 + 17 ms | 24 + 24 ms | 28 + 32 ms |
+| night frame, 1080p | 3.2 ms | 4.2 ms | 6.3 ms | 5.1 ms |
+
+Lamps, barriers, signs and kerb all measure themselves off the lap they are
+built for, so they scale with the *road* — twice the lap, twice the posts.
+The forest does not: at a fixed density it would scale with the arena's
+*area*, which is four times as many trees at the largest size for a truck
+that never gets anywhere near most of them. Past 1800mm from the centreline —
+further than any flood or headlight reaches — a bigger arena thins the wood
+instead of filling it, so the count that actually matters (the belt the
+truck can hit) grows with the road and not the empty ground behind it. The
+same growth, unchecked, would also have put thousands of trees back into
+`keepOneInside`'s plain distance scan every physics step; they are looked up
+through a grid now instead (`spatial.ts`), together with every lamp post and
+bollard.
+
+The ground mesh is the other thing that would have gone quadratic: doubling
+the linear size at a fixed cell is four times the vertices, and four times
+what the sun's shadow map redraws every frame. The cell grows with the square
+root of the size instead, so the vertex count merely doubles at the largest
+setting and the 720mm ramps are still smooth enough to read as a slope.
+
+The sun's shadow map is the one thing that does not stay sharp for free.
+Fitted round the whole arena, 2048 texels buys seven millimetres each at
+medium and smaller; a bigger box would spend the same texels thinner, so past
+medium the map instead follows the camera in a 13.2-metre window — plenty for
+what is on screen, and the texel size never moves. The window's own edge can
+show at full zoom-out on the largest arena; growing the box instead is a
+one-line trade if that reads worse than the blur does.
+
+Two more things a size setting is not entitled to make silently wrong: the
+camera's own fit used to search out to a hard 6000mm and would have converged
+there — without complaint — the moment an arena's corners no longer fit
+inside it, which the largest size does not; the search now runs out to
+`2.5 × hypot(ARENA_X, ARENA_Y)` instead. And every trackside light still
+carries a shadow map from a capacity of 256, so `useTrack` warns rather than
+silently drops one if a circuit's post count is ever close to it — it never
+is, at any size this game reaches.
 
 ## The circuit
 

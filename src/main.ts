@@ -13,9 +13,9 @@ import { Orbit } from 'artshape-render/gpu/camera';
 import { bakeEnvironment } from 'artshape-render/render/env';
 import { GameRenderer, EFFECT_STRIDE, type GameGroup } from 'artshape-render/game/renderer';
 import { LightPool } from 'artshape-render/game/lights';
-import { PAINT, Race, TRUCKS, type Input } from './game';
+import { PAINT, Race, TRUCKS, setCollisionGrid, type Input } from './game';
 import type { Pose } from './ghost';
-import { CONTROLS, SETTINGS, restoreDefaults, save } from './settings';
+import { CONTROLS, SETTINGS, restoreDefaults, save, type SliderKey } from './settings';
 import { TREES, forestBuffers, replant, treeMesh } from './forest';
 import { BOLLARDS, RAILS, SIGNS, barMesh, boardPanelMesh, chevronMarkMesh, chevronPanelMesh, drumMesh, furnitureBuffers, railMesh, railPostMesh, rebuildFurniture, signPostMesh, tyreMesh } from './furniture';
 import { clockLabel, skyAt } from './daylight';
@@ -23,11 +23,13 @@ import { WATER_LEVEL, refloodArena, underWater, waterMesh } from './water';
 import { wheelEffects } from './particles';
 import { Skids, markMesh } from './skids';
 import { WHEELS } from './vehicle';
-import { START_BULBS, TRACK_HALF, centreline, difficultyBand, gantry, generateTrack, radialToAcross, rateTrack, setTrack, shapePreview, tangentAt, where } from './track';
+import { START_BULBS, TRACK_HALF, centreline, circuitFor, difficultyBand, gantry, generateTrack, measureShape, radialToAcross, rateTrack, scaleShape, setTrack, shapePreview, tangentAt, where } from './track';
 import { height as groundAt, seedTerrain } from './terrain';
-import { ARENA_X, ARENA_Y, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices, restandColumns } from './scene';
+import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices, resizeArena, restandColumns } from './scene';
 import { placeOnSlope, placeVehicleFacing, placeVehiclePart, placeVehicleWheel, project } from './matrix';
 import { EFFECT_CAPACITY, LIGHT_CAPACITY, effectsFor, lightsFor, setProjectionScale, shadowedLamps } from './lighting';
+import { CircleGrid } from './spatial';
+import { SIZE, SIZES, labelOf, setSize, sizeOf, type SizeKey } from './world';
 
 const FOV = 40;
 /** Where the dynamic groups sit, in the order they are handed over. */
@@ -37,6 +39,7 @@ const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
 const pregame = document.getElementById('pregame')!;
 const pregameMap = document.getElementById('pregameMap')!;
+const pregameSize = document.getElementById('pregameSize')!;
 const pregameFacts = document.getElementById('pregameFacts')!;
 const pregameRating = document.getElementById('pregameRating')!;
 const pregameSeed = document.getElementById('pregameSeed') as HTMLInputElement;
@@ -97,25 +100,59 @@ async function main() {
     background: [0.006, 0.011, 0.026],
   };
 
+  /** How long the last rebuild took, and what it produced — read from the
+   *  console rather than asserted, since nothing here ever measured it. */
+  const timings: Record<string, number> = { track: 0, arena: 0 };
+
+  /**
+   * Every lamp post, tree and bollard, in a grid the truck can be checked
+   * against without scanning all of them — see `spatial.ts`. Built last,
+   * because it has to be built from lists that `rebuildFurniture` (bollards)
+   * and `replant` (trees) have already filled.
+   */
+  function rebuildCollisionGrid() {
+    const grid = new CircleGrid(ARENA_X + 500, ARENA_Y + 500, 320);
+    for (const post of COLUMNS) grid.add(post.x, post.y, COLUMN_RADIUS * post.scale);
+    for (const tree of TREES) grid.add(tree.x, tree.y, tree.r);
+    for (const b of BOLLARDS) grid.add(b.x, b.y, b.r);
+    setCollisionGrid(grid);
+  }
+
   /**
    * Put a circuit in force, and everything that grows out of one with it.
    *
-   * The order is the dependency order and it is not negotiable: the water
-   * level is the lowest point of the road plus a little, so the road has to
-   * exist first; the posts stand along the road; and the trees are planted
-   * round both the road and the water. Getting this backwards plants a
-   * forest in last circuit's lake.
+   * The order is the dependency order and it is not negotiable: the size has
+   * to be set before the arena is resized and the circuit generated, which
+   * both read it; the water level is the lowest point of the road plus a
+   * little, so the road has to exist first; the posts stand along the road;
+   * the trees are planted round both the road and the water; and the
+   * collision grid is built last of all, from lists that everything before
+   * it fills in. Getting any of this backwards plants a forest in last
+   * circuit's lake, or hands the truck a grid with nothing in it.
    */
-  function useTrack(seed: number) {
-    setTrack(generateTrack(seed));
+  function useTrack(seed: number, size: SizeKey) {
+    const t0 = performance.now();
+    setSize(size);
+    resizeArena();
+    setTrack(circuitFor(seed, SIZE));
     seedTerrain(seed);
     refloodArena();
     restandColumns();
     replant();
-    // last, because it stands clear of the posts and out of the water
+    // clear of the posts and out of the water
     rebuildFurniture(seed);
+    rebuildCollisionGrid();
+    timings.track = performance.now() - t0;
+    // Every post carries a floodlight, and the ghost-corner and start-line
+    // glows are on top of that: both pools have room to spare at any size
+    // this game reaches, but silently dropping lights past a fixed capacity
+    // is exactly the kind of thing that would go unnoticed until someone
+    // tried an arena big enough to hit it.
+    if (COLUMNS.length + 6 > LIGHT_CAPACITY) {
+      console.warn(`arena: ${COLUMNS.length} posts is close to the ${LIGHT_CAPACITY} light capacity`);
+    }
   }
-  useTrack(SETTINGS.seed);
+  useTrack(SETTINGS.seed, SETTINGS.size);
 
   bootMsg.textContent = 'generating the arena…';
   // One frame's grace, so the message is painted before the geometry blocks
@@ -136,6 +173,7 @@ async function main() {
   };
 
   function buildArena() {
+  const tArena0 = performance.now();
   const at = arenaMatrices();
   const forest = forestBuffers(TREES);
   const kit = furnitureBuffers();
@@ -201,6 +239,7 @@ async function main() {
     { mesh: chevronPanelMesh(), matrices: kit.panels, count: kit.panelCount, albedo: [0.16, 0.165, 0.18], roughness: 0.66 },
     { mesh: chevronMarkMesh(), matrices: kit.marks, count: kit.markCount, albedo: [0.78, 0.77, 0.74], roughness: 0.60 },
   ]);
+  timings.arena = performance.now() - tArena0;
   }
   buildArena();
 
@@ -234,14 +273,32 @@ async function main() {
   renderer.setDynamic(dynamic);
 
   const arena = new Race();
-  // The sun's shadow map is fitted round the whole arena, apron included,
-  // and up to the tallest thing in it: a tree at its biggest is 414, a lamp
-  // post 551 plus the ground under it. 2048 texels across 14 metres is
-  // seven millimetres each, which is a shadow with an edge you can see.
-  renderer.setSunShadow({
-    min: [-ARENA_X - 400, -ARENA_Y - 400, -140],
-    max: [ARENA_X + 400, ARENA_Y + 400, 780],
-  });
+  /**
+   * The sun's shadow map, fitted round the whole arena at medium size and
+   * smaller: 2048 texels across 14 metres is seven millimetres each, which
+   * is a shadow with an edge you can see. A bigger arena would spend those
+   * same texels thinner — fourteen millimetres at the largest size — so past
+   * medium the box instead follows the camera: a window this wide is still
+   * only a third of an extra-large arena, and it keeps every texel the same
+   * size regardless of how far the far side of the circuit is. The window's
+   * edge can show at full zoom-out on the largest arenas; growing the box
+   * instead is the one-line alternative if that reads worse than the blur.
+   */
+  const SUN_WINDOW = 6600;
+  function updateSunShadow(targetX: number, targetY: number) {
+    if (SIZE <= 1) {
+      renderer.setSunShadow({
+        min: [-ARENA_X - 400, -ARENA_Y - 400, -140],
+        max: [ARENA_X + 400, ARENA_Y + 400, 780],
+      });
+    } else {
+      renderer.setSunShadow({
+        min: [targetX - SUN_WINDOW, targetY - SUN_WINDOW, -140],
+        max: [targetX + SUN_WINDOW, targetY + SUN_WINDOW, 780],
+      });
+    }
+  }
+  updateSunShadow(0, 0);
 
   bootMsg.textContent = 'baking the environment…';
   // Two of them, night and day, baked once and swapped as the sun comes up.
@@ -286,7 +343,9 @@ async function main() {
       // half of it a cold blue rather than black
       ambient: 0.16 + 0.5 * sky.ambient,
       anisotropy: 0.62,
-      reach: 9000,
+      // A bigger arena needs the march to carry further, or the far side of
+      // the circuit sits beyond it and the mist simply stops there.
+      reach: 9000 * Math.max(1, SIZE),
       // Steps with the thickness, because what they are for is hiding the
       // steps. A thin haze scatters little per step, so the noise a short
       // march leaves is small too, and eighteen of them at night is
@@ -318,10 +377,11 @@ async function main() {
    * the trees — which is not a bug you would report, it is a bug you would
    * simply stop trusting the ghost over.
    */
-  function newTrack(seed: number) {
+  function newTrack(seed: number, size: SizeKey) {
     SETTINGS.seed = seed;
+    SETTINGS.size = size;
     save();
-    useTrack(seed);
+    useTrack(seed, size);
     buildArena();
     minimap.redraw();
     skids.clear();
@@ -341,9 +401,9 @@ async function main() {
    * race button is pressed, and only if the circuit actually changed.
    */
   const NS = 'http://www.w3.org/2000/svg';
-  let choice = SETTINGS.seed;
+  let choice = { seed: SETTINGS.seed, size: SETTINGS.size };
   /** What the arena is currently built for, so racing the same one is free. */
-  let built = SETTINGS.seed;
+  let built = { ...choice };
   let racing = false;
 
   const road = document.createElementNS(NS, 'path');
@@ -362,10 +422,27 @@ async function main() {
   startLine.setAttribute('stroke-width', '150');
   pregameMap.append(road, paint, startLine);
 
+  // The size picker: one button per entry in `SIZES`, built from the table
+  // rather than written out — adding a size is a line there and none here.
+  const sizeButtons = new Map<SizeKey, HTMLButtonElement>();
+  for (const s of SIZES) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = s.label;
+    btn.addEventListener('click', () => {
+      preview(choice.seed, s.key);
+      btn.blur();
+    });
+    pregameSize.appendChild(btn);
+    sizeButtons.set(s.key, btn);
+  }
+
   /** Draw a circuit on the select screen without building any of it. */
-  function preview(seed: number) {
-    choice = seed;
-    const p = shapePreview(generateTrack(seed));
+  function preview(seed: number, size: SizeKey) {
+    choice = { seed, size };
+    for (const [key, btn] of sizeButtons) btn.setAttribute('aria-pressed', String(key === size));
+    const shape = circuitFor(seed, sizeOf(size));
+    const p = shapePreview(shape);
     pregameMap.setAttribute('viewBox', p.box.join(' '));
     road.setAttribute('d', p.path);
     paint.setAttribute('d', p.path);
@@ -376,10 +453,11 @@ async function main() {
     // which corners are corners: turn the truck down and a circuit really
     // does get easier, and a rating that ignored the setting would be
     // describing somebody else's car.
-    const r = rateTrack(generateTrack(seed), SETTINGS.topSpeed);
+    const r = rateTrack(shape, SETTINGS.topSpeed);
     const band = difficultyBand(r.difficulty);
     pregameFacts.innerHTML =
       `${seed === 0 ? 'the original circuit' : `circuit <span>#${seed}</span>`}`
+      + ` · <span>${labelOf(size)}</span>`
       + ` · <span>${(p.length / 1000).toFixed(1)}</span> m`
       + ` · about <span>${r.par.toFixed(1)}</span> s a lap`
       + ` · tightest corner <span>${Math.round(p.curve)}</span> mm`;
@@ -389,25 +467,30 @@ async function main() {
 
   function openPregame() {
     racing = false;
-    preview(SETTINGS.seed);
+    preview(SETTINGS.seed, SETTINGS.size);
     pregame.removeAttribute('hidden');
   }
 
   function startRace() {
     // only rebuild if it is a different road; racing the same one again is
-    // a reset, not thirty-five milliseconds of geometry
-    if (choice !== built) { newTrack(choice); built = choice; } else { arena.reset(); }
+    // a reset, not a rebuild of the geometry
+    if (choice.seed !== built.seed || choice.size !== built.size) {
+      newTrack(choice.seed, choice.size);
+      built = { ...choice };
+    } else {
+      arena.reset();
+    }
     pregame.setAttribute('hidden', '');
     racing = true;
   }
 
   pregameAnother.addEventListener('click', () => {
-    preview(1 + Math.floor(Math.random() * 998));
+    preview(1 + Math.floor(Math.random() * 998), choice.size);
     (pregameAnother as HTMLElement).blur();
   });
   pregameSeed.addEventListener('input', () => {
     const v = Math.max(0, Math.min(999999, Math.floor(Number(pregameSeed.value))));
-    if (Number.isFinite(v)) preview(v);
+    if (Number.isFinite(v)) preview(v, choice.size);
   });
   pregameSeed.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { pregameSeed.blur(); startRace(); }
@@ -508,12 +591,13 @@ async function main() {
     return png.length;
   };
   Object.assign(globalThis as Record<string, unknown>, {
-    arena, renderer, orbit, input, lights, measure, shoot, skids, newTrack,
+    arena, renderer, orbit, input, lights, measure, shoot, skids, newTrack, timings,
     // the app's own copy of the circuit. A console `import('/src/track.ts')`
     // is a different module instance with a different shape in it, which
     // makes a test driver steer for a road that is not there.
-    track: { centreline, tangentAt, generateTrack, where, radialToAcross },
+    track: { centreline, tangentAt, generateTrack, where, radialToAcross, circuitFor, scaleShape, measureShape },
     furniture: { rails: () => RAILS, bollards: () => BOLLARDS, signs: () => SIGNS, buffers: furnitureBuffers },
+    world: { SIZES, sizeOf, labelOf, columns: () => COLUMNS, props: () => TREES },
   });
 
   /**
@@ -775,6 +859,7 @@ async function main() {
     // nothing steps and the lights do not count down. A countdown that ran
     // while you were picking a track would be over before you picked one.
     if (racing) arena.step(dt, input.read());
+    updateSunShadow(renderer.camera.target[0], renderer.camera.target[1]);
 
     const effects = upload();
 
@@ -816,12 +901,21 @@ async function main() {
  * was never on screen. So the corners are projected and the distance is
  * solved for, on every resize.
  */
-/** The eight corners of the box everything in the arena stands inside. */
-const ARENA_CORNERS: [number, number, number][] = [];
-for (const x of [-ARENA_X, ARENA_X]) {
-  for (const y of [-ARENA_Y, ARENA_Y]) {
-    for (const z of [0, 380]) ARENA_CORNERS.push([x, y, z]);
+/**
+ * The eight corners of the box everything in the arena stands inside.
+ *
+ * A function and not a module-level constant, because `ARENA_X`/`ARENA_Y`
+ * move with the size the player chose and are no longer fixed at load time.
+ * Eight corners a frame is nothing next to the rest of a frame's cost.
+ */
+function arenaCorners(): [number, number, number][] {
+  const out: [number, number, number][] = [];
+  for (const x of [-ARENA_X, ARENA_X]) {
+    for (const y of [-ARENA_Y, ARENA_Y]) {
+      for (const z of [0, 380]) out.push([x, y, z]);
+    }
   }
+  return out;
 }
 
 /**
@@ -836,7 +930,7 @@ for (const x of [-ARENA_X, ARENA_X]) {
  */
 function setDepthRange(cam: GameRenderer['camera']) {
   let far = 0;
-  for (const c of ARENA_CORNERS) {
+  for (const c of arenaCorners()) {
     const d = Math.hypot(c[0] - cam.position[0], c[1] - cam.position[1], c[2] - cam.position[2]);
     if (d > far) far = d;
   }
@@ -851,10 +945,14 @@ function fitCamera(cam: GameRenderer['camera'], aspect: number): number {
   const target: [number, number, number] = [0, 0, CAMERA_HEIGHT];
   // back and up from the target, at the angle the arena reads best from
   const back = norm([0, -1.32, 0.915]);
-  const corners = ARENA_CORNERS;
+  const corners = arenaCorners();
   cam.aspect = aspect;
   cam.target = target;
-  let lo = 500, hi = 6000;
+  // Wide enough for the largest arena: a fixed 6000 was already close to
+  // binding at the shipped size, and a search that cannot reach far enough
+  // converges silently on a distance that does not actually frame the
+  // corners rather than failing loudly.
+  let lo = 500, hi = 2.5 * Math.hypot(ARENA_X, ARENA_Y);
   for (let i = 0; i < 22; i++) {
     const d = (lo + hi) / 2;
     cam.position = [target[0] + back[0] * d, target[1] + back[1] * d, target[2] + back[2] * d];
@@ -979,7 +1077,11 @@ function buildMinimap(race: Race) {
     mapSvg.setAttribute('viewBox', `${lo - pad} ${lo - pad} ${hi - lo + pad * 2} ${hi - lo + pad * 2}`);
     road.setAttribute('d', path);
 
-    const CELL = 150;
+    // Scaled with the arena, or a large one spends four times as many
+    // `underWater` samples on a map drawn at the same pixel size — the lake
+    // shorelines are drawn at a few pixels either way, so a coarser cell on
+    // a bigger circuit costs nothing the map itself would show.
+    const CELL = 150 * SIZE;
     let lakes = '';
     const reach = Math.max(ARENA_X, ARENA_Y) + 400;
     for (let y = -reach; y < reach; y += CELL) {
@@ -1059,7 +1161,7 @@ function identity(): Float32Array {
  * Every change is written straight into the live settings and saved, and
  * the caller is told which key moved for the two that need applying by hand.
  */
-function buildConfig(applied: (key: keyof typeof SETTINGS) => void, chooseCircuit: () => void) {
+function buildConfig(applied: (key: SliderKey) => void, chooseCircuit: () => void) {
   const rows = document.createElement('div');
   rows.className = 'rows';
   const readouts = new Map<string, HTMLElement>();
@@ -1091,7 +1193,8 @@ function buildConfig(applied: (key: keyof typeof SETTINGS) => void, chooseCircui
   shuffle.type = 'button'; shuffle.className = 'wide';
   const trackValue = document.createElement('output');
   const showSeed = () => {
-    trackValue.textContent = SETTINGS.seed === 0 ? 'the original' : `#${SETTINGS.seed}`;
+    const seed = SETTINGS.seed === 0 ? 'the original' : `#${SETTINGS.seed}`;
+    trackValue.textContent = `${labelOf(SETTINGS.size)} · ${seed}`;
     shuffle.textContent = 'choose circuit';
   };
   showSeed();

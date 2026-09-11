@@ -30,6 +30,7 @@ import { height, normal } from './terrain';
 import { COLUMNS } from './scene';
 import { underWater } from './water';
 import { box, prism } from './scene';
+import { SIZE } from './world';
 
 /** A corner worth protecting: anything tighter than this gets a barrier. */
 const CORNER = 1900;
@@ -378,8 +379,10 @@ export function rebuildFurniture(seed = 5) {
   }
 
   // Loose drums in the run-off, in twos and threes, well back from the road:
-  // scenery rather than obstacle, and the reason the verge is not empty.
-  for (let i = 0; i < 26; i++) {
+  // scenery rather than obstacle, and the reason the verge is not empty. A
+  // flat count, unlike everything else here, so it scales with the arena or
+  // a big one reads as sparse.
+  for (let i = 0; i < Math.round(26 * SIZE); i++) {
     const s = at(-Math.PI + rnd() * Math.PI * 2);
     const side = rnd() < 0.5 ? -1 : 1;
     const out = TRACK_HALF + 620 + rnd() * 420;

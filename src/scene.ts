@@ -18,6 +18,7 @@ import { groupByMesh } from 'artshape-render/assembly/groups';
 import type { Mesh } from 'artshape-render/mesh/types';
 import { groundMesh, height } from './terrain';
 import { BODY_LENGTH } from './vehicle';
+import { SIZE } from './world';
 
 /** Where a compiled part's origin should end up. */
 type Anchor =
@@ -77,28 +78,44 @@ export const LAMP_HEIGHT = 84;
 
 /**
  * Half the arena, in the millimetres everything else is modelled in: square,
- * and 4.8 metres across.
+ * and 12.4 metres across at the medium size the game shipped with.
  *
- * Twelve times the area it started at, and four times the last size. Size
- * alone does not read as size, though — a bigger empty floor just looks like
- * the same floor with the camera further back. What gives a space scale is
- * things of a known size repeating away into it, which is why the posts are
- * on a grid and why the tiles are worth their draw call. The truck is 250mm
- * long against a 4800mm floor: nineteen of it end to end.
+ * Size alone does not read as size, though — a bigger empty floor just looks
+ * like the same floor with the camera further back. What gives a space scale
+ * is things of a known size repeating away into it, which is why the posts
+ * are on a grid and why the tiles are worth their draw call.
  *
  * Everything that stands in the arena is placed from these two numbers and
  * the camera solves its distance from them, so this is the only place the
- * size lives.
+ * size lives — along with `SIZE` itself, which is what moves it. `resizeArena`
+ * is called first in `useTrack`, before the circuit is even generated: the
+ * generator's own bounds scale by the same factor (see `scaleShape`), and
+ * both have to move together or the road escapes the box or rattles round
+ * inside it.
  */
-export const ARENA_X = 6200;
-export const ARENA_Y = 6200;
+export let ARENA_X = 6200;
+export let ARENA_Y = 6200;
+
+/** Put the arena's bounds in force for whatever `SIZE` is now. */
+export function resizeArena() {
+  ARENA_X = 6200 * SIZE;
+  ARENA_Y = ARENA_X;
+}
 
 export const MESHES = {
   /**
    * The ground: a grid put where the terrain function says, not a plate. It
    * runs 400mm past the walls so that its own edge is never the edge you see.
+   *
+   * The cell grows with the square root of the size so that a bigger arena
+   * does not cost the ground mesh's vertex count quadratically: doubling the
+   * linear size at a fixed cell would be four times the vertices and four
+   * times what the sun's shadow map has to rasterise every frame for it. At
+   * `sqrt(2)` the cell instead the count merely doubles, and the ramps —
+   * 720mm wavelength at their sharpest — are still six vertices across at
+   * the largest size, which is enough to read as a slope rather than a facet.
    */
-  floor: () => groundMesh(ARENA_X + 400, ARENA_Y + 400, 85),
+  floor: () => groundMesh(ARENA_X + 400, ARENA_Y + 400, 85 * Math.sqrt(SIZE)),
   /** The tarmac: one ribbon following the centreline, not a run of slabs. */
   tile: () => trackMesh(6, 90, TRACK_LIFT),
   /**

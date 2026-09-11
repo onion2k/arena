@@ -14,6 +14,7 @@
  */
 
 import { clockLabel } from './daylight';
+import { SIZES, type SizeKey } from './world';
 
 export interface Settings {
   /** How much the environment lights everything, before any lamp does. */
@@ -50,6 +51,12 @@ export interface Settings {
    * of the drag. Zero is the circuit the game shipped with.
    */
   seed: number;
+  /**
+   * How big the circuit and the arena round it are. Not a slider, for the
+   * same reason the seed is not: it rebuilds the whole arena, so it is
+   * chosen on the track-select screen and pressed for, not dragged through.
+   */
+  size: SizeKey;
 }
 
 export const DEFAULTS: Readonly<Settings> = {
@@ -63,11 +70,18 @@ export const DEFAULTS: Readonly<Settings> = {
   grain: 0.03,
   mist: 1,
   seed: 0,
+  size: 'M',
 };
+
+/**
+ * A setting a slider can drive: everything except the seed and the size,
+ * which are buttons and not ranges — see `SliderKey`.
+ */
+export type SliderKey = Exclude<keyof Settings, 'seed' | 'size'>;
 
 /** One row of the panel: which setting, what to call it, how far it goes. */
 export interface Control {
-  key: keyof Settings;
+  key: SliderKey;
   label: string;
   min: number;
   max: number;
@@ -109,6 +123,11 @@ function load(): Partial<Settings> {
     if (typeof saved.seed === 'number' && Number.isFinite(saved.seed)) {
       out.seed = Math.max(0, Math.floor(saved.seed));
     }
+    // the size likewise: a button on the track screen, not a range, so it is
+    // checked against the table of sizes that exist rather than clamped
+    if (typeof saved.size === 'string' && SIZES.some((s) => s.key === saved.size)) {
+      out.size = saved.size as SizeKey;
+    }
     for (const c of CONTROLS) {
       const v = saved[c.key];
       if (typeof v === 'number' && Number.isFinite(v)) {
@@ -132,6 +151,7 @@ export function save() {
  */
 export function restoreDefaults() {
   const seed = SETTINGS.seed;
-  Object.assign(SETTINGS, DEFAULTS, { seed });
+  const size = SETTINGS.size;
+  Object.assign(SETTINGS, DEFAULTS, { seed, size });
   save();
 }

@@ -620,6 +620,28 @@ export function generateTrack(seed: number): Shape {
 export function setTrack(s: Shape) { shape = s; }
 
 /**
+ * The same circuit, bigger or smaller. `r0` and every amplitude scale by `k`
+ * and the phases are untouched, which is a similarity — the shape does not
+ * change, only its size — so everything `measureShape` reports (`length`,
+ * `minRadius`, `maxRadius`, `curve`) scales by `k` too and `across`, a ratio,
+ * does not move at all. A shape that cleared `LIMITS` at one size therefore
+ * clears the geometric limits at every size: nothing here can hand back an
+ * escaped or crowded loop. `curve` is the one limit that is not geometry but
+ * the truck's own turning circle, and it is not honoured below `k = 1` — the
+ * smallest size is meant to be tight, and the difficulty rating (computed on
+ * the scaled shape) says so honestly rather than pretending every size drives
+ * the same.
+ */
+export function scaleShape(s: Shape, k: number): Shape {
+  return { r0: s.r0 * k, terms: s.terms.map(([kk, amp, phase]) => [kk, amp * k, phase]) };
+}
+
+/** A circuit for a seed, at a size. Same seed, same shape, any size. */
+export function circuitFor(seed: number, size: number): Shape {
+  return scaleShape(generateTrack(seed), size);
+}
+
+/**
  * Everything a track-select screen needs to draw a circuit it has not
  * committed to: the outline, a box round it, where the start line goes, and
  * what the thing measures.

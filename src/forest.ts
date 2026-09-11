@@ -18,6 +18,7 @@ import { TRACK_HALF, where } from './track';
 import { ARENA_X, ARENA_Y } from './scene';
 import { height } from './terrain';
 import { underWater } from './water';
+import { SIZE } from './world';
 
 /**
  * How far from the centreline the trees start: just behind the lamp posts,
@@ -42,6 +43,15 @@ export const FOREST_FROM = TRACK_HALF + 650;
 const APRON = 380;
 /** Nominal spacing of the planting grid, before jitter. Dense: a truck is 300. */
 const SPACING = 230;
+/**
+ * Beyond this from the centreline, a bigger arena thins the wood rather than
+ * filling it at the same density: a truck never gets there, and the tree
+ * count would otherwise grow with the arena's *area* — roughly 3.7 times at
+ * the largest size — which is trees in a collision list nobody drives near.
+ * Within it, full density always: this is what the floods and the headlights
+ * actually reach.
+ */
+const NEAR = 1800;
 /** The unit tree, before its own scale: a cone this wide at the foot and this tall. */
 const BASE_RADIUS = 92;
 const BASE_HEIGHT = 300;
@@ -123,7 +133,11 @@ export function plant(seed = 7): Tree[] {
       const x = gx + (rand() - 0.5) * SPACING;
       const y = gy + (rand() - 0.5) * SPACING;
       if (Math.abs(x) > x1 || Math.abs(y) > y1) continue;
-      if (Math.abs(where(x, y).offset) < FOREST_FROM) continue;
+      const off = Math.abs(where(x, y).offset);
+      if (off < FOREST_FROM) continue;
+      // thin, beyond where anything reaches, so the count grows with the
+      // lap's length and not the arena's area
+      if (off > NEAR && rand() >= 1 / SIZE) continue;
       // not in a lake, nor on its shore: a tree's foot is sunk 22, and a tree
       // standing in the water is a mistake you can see from anywhere
       if (underWater(x, y, 30)) continue;

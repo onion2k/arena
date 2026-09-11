@@ -21,6 +21,7 @@ import { SETTINGS } from './settings';
 import { TREES } from './forest';
 import { BOLLARDS, RAILS, RAIL_DEEP } from './furniture';
 import { START_BULBS, radiusAt, tangentAt, where } from './track';
+import type { CircleGrid } from './spatial';
 
 /** How long the lights hold you before the lap starts. */
 export const COUNTDOWN = 4;
@@ -28,6 +29,18 @@ export const COUNTDOWN = 4;
 
 /** How much of its speed the truck keeps when it meets a wall or a post. */
 const BOUNCE = 0.45;
+
+/**
+ * Every lamp post, tree and bollard, in one grid, so `keepOneInside` can ask
+ * "what is near the truck" instead of scanning every one of them. Rebuilt by
+ * `useTrack` whenever the circuit does, since all three lists move with it.
+ * Null only for the first instant before that has happened once, in which
+ * case the truck is not near anything worth checking against yet.
+ */
+let collisionGrid: CircleGrid | null = null;
+export function setCollisionGrid(grid: CircleGrid) { collisionGrid = grid; }
+/** The widest reach worth asking the grid for: a post or a tree plus the truck. */
+const COLLISION_REACH = 260;
 /**
  * How wide the truck is for the purpose of not being inside a post. It is
  * 250 long and 128 across, so no one circle is right; this is between the
@@ -251,19 +264,18 @@ export class Race {
     if (t.y < -limY) { t.y = -limY; t.vy = Math.abs(t.vy) * BOUNCE; }
     if (t.y > limY) { t.y = limY; t.vy = -Math.abs(t.vy) * BOUNCE; }
 
-    // The lamp posts and then the trees, the same way: a circle each, and a
-    // truck that meets one is put outside it and bounced. Sixteen hundred
-    // trees against one truck is sixteen hundred distance checks a step,
-    // which is a few microseconds and not worth a grid.
-    for (const post of COLUMNS) {
-      this.keepOff(t, post.x, post.y, COLUMN_RADIUS * post.scale);
-    }
-    for (const tree of TREES) {
-      this.keepOff(t, tree.x, tree.y, tree.r);
-    }
-    // The drums and the tyre stacks are circles like everything else.
-    for (const b of BOLLARDS) {
-      this.keepOff(t, b.x, b.y, b.r);
+    // The lamp posts, the trees, the drums and the tyre stacks: a circle
+    // each, and a truck that meets one is put outside it and bounced. All
+    // four lists grow with the arena — the forest quadratically before it
+    // was thinned — so they are looked up through a grid rather than
+    // scanned; see `spatial.ts`. Only if the grid has somehow not been built
+    // yet does this fall back to the plain scan it replaced.
+    if (collisionGrid) {
+      collisionGrid.forEachNear(t.x, t.y, COLLISION_REACH, (c) => this.keepOff(t, c.x, c.y, c.r));
+    } else {
+      for (const post of COLUMNS) this.keepOff(t, post.x, post.y, COLUMN_RADIUS * post.scale);
+      for (const tree of TREES) this.keepOff(t, tree.x, tree.y, tree.r);
+      for (const b of BOLLARDS) this.keepOff(t, b.x, b.y, b.r);
     }
     // The barriers are not. A rail is a line, and what the truck meets is
     // the nearest point on it — which turns the whole thing into the circle
