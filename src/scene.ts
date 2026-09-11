@@ -67,15 +67,6 @@ export function part(source: string, anchor: Anchor = 'centre'): Mesh {
 }
 
 /**
- * Where a headlamp sits in the truck's own frame: ahead of the cab, out to
- * either side, at bumper height. The model is placed from these and so is the
- * beam, so a beam always comes out of a lamp you can see.
- */
-export const LAMP_AHEAD = 142;
-export const LAMP_ACROSS = 46;
-export const LAMP_HEIGHT = 84;
-
-/**
  * Half the arena, in the millimetres everything else is modelled in: square,
  * and 12.4 metres across at the medium size the game shipped with.
  *

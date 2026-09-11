@@ -28,7 +28,7 @@ import { VEHICLES, VEHICLE_KEYS, type VehicleKey } from './vehicles';
 import { bench } from './bench';
 import { START_BULBS, TRACK_HALF, centreline, circuitFor, difficultyBand, gantry, generateTrack, measureShape, radialToAcross, rateTrack, scaleShape, shapePreview, tangentAt, where } from './track';
 import { height as groundAt } from './terrain';
-import { ARENA_X, ARENA_Y, COLUMNS, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, MESHES, arenaMatrices } from './scene';
+import { ARENA_X, ARENA_Y, COLUMNS, MESHES, arenaMatrices } from './scene';
 import { placeOnSlope, placeVehicleFacing, placeVehiclePart, placeVehicleWheel, project } from './matrix';
 import { EFFECT_CAPACITY, LIGHT_CAPACITY, effectsFor, lightsFor, setProjectionScale, shadowedLamps } from './lighting';
 import { useTrack as buildCircuit } from './circuit';
@@ -857,8 +857,9 @@ async function main() {
       }
 
       let lamp = 0;
-      for (const ly of [-LAMP_ACROSS, LAMP_ACROSS]) {
-        const at = on(LAMP_AHEAD, ly, LAMP_HEIGHT - 52);
+      const [hx, hy, hz] = spec.kit.lights.head;
+      for (const ly of [-hy, hy]) {
+        const at = on(hx, ly, hz);
         // facing, not wheeled: a lamp looks along the nose where a wheel
         // turns about an axle across it
         placeVehicleFacing(lampM, ci * 2 + lamp++, at[0], at[1], at[2], yaw, pitch, roll);

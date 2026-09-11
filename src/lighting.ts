@@ -18,7 +18,7 @@
 import { LightPool } from 'artshape-render/game/lights';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
 import type { Race } from './game';
-import { COLUMNS, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, beamAt, lampAt } from './scene';
+import { COLUMNS, beamAt, lampAt } from './scene';
 import { height } from './terrain';
 import { gantry } from './track';
 import { project } from './matrix';
@@ -181,13 +181,13 @@ export function lightsFor(pool: LightPool, arena: Race) {
   const bf: [number, number, number] = [cy * cp, sy * cp, -sp];
   const bl: [number, number, number] = [cy * sp * sr - sy * cr, sy * sp * sr + cy * cr, cp * sr];
   const bu: [number, number, number] = [cy * sp * cr + sy * sr, sy * sp * cr - cy * sr, cp * cr];
-  /** A point in the truck's own frame, in the world. Heights are as they were
-   *  when the floor was flat, so the body's own 52mm of ride is taken off. */
-  const at = (lx: number, ly: number, z: number): [number, number, number] => [
-    car.x + bf[0] * lx + bl[0] * ly + bu[0] * (z - 52),
-    car.y + bf[1] * lx + bl[1] * ly + bu[1] * (z - 52),
-    car.z + bf[2] * lx + bl[2] * ly + bu[2] * (z - 52),
+  /** A point in the truck's own frame, in the world. */
+  const at = (lx: number, ly: number, lz: number): [number, number, number] => [
+    car.x + bf[0] * lx + bl[0] * ly + bu[0] * lz,
+    car.y + bf[1] * lx + bl[1] * ly + bu[1] * lz,
+    car.z + bf[2] * lx + bl[2] * ly + bu[2] * lz,
   ];
+  const head = arena.truck.spec.kit.lights.head;
   /** A direction in the truck's frame, so a beam tips with the body. */
   const facing = (lx: number, ly: number, lz: number): [number, number, number] => [
     bf[0] * lx + bl[0] * ly + bu[0] * lz,
@@ -213,7 +213,7 @@ export function lightsFor(pool: LightPool, arena: Race) {
   for (const side of [-1, 1]) {
     playerHeads.push(pool.count);
     pool.add({
-      position: at(LAMP_AHEAD, side * LAMP_ACROSS, LAMP_HEIGHT),
+      position: at(head[0], side * head[1], head[2]),
       radius: 2400,
       colour: hurt ? [1, 0.45, 0.4] : [1, 0.87, 0.62],
       // A lamp 84mm above the floor sees it almost edge-on: at 900mm out the
@@ -281,16 +281,17 @@ export function setProjectionScale(fovDegrees: number) {
 export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): number {
   let n = 0;
   const t = arena.shown;
+  const lights = arena.truck.spec.kit.lights;
   const cy = Math.cos(t.yaw); const sy = Math.sin(t.yaw);
   const at = (lx: number, ly: number) => [t.x + lx * cy - ly * sy, t.y + lx * sy + ly * cy];
   if (arena.thrusting > 0) {
-    const [ex, ey] = at(-180, 0);
-    n = glow(out, n, vp, ex, ey, t.z - 10, 34 * arena.thrusting, 1.3 * arena.thrusting, [1, 0.6, 0.28], 2.2);
+    const [ex, ey] = at(lights.exhaust[0], 0);
+    n = glow(out, n, vp, ex, ey, t.z + lights.exhaust[1], 34 * arena.thrusting, 1.3 * arena.thrusting, [1, 0.6, 0.28], 2.2);
   }
   if (arena.braking > 0) {
     for (const side of [-1, 1]) {
-      const [bx, by] = at(-168, side * 48);
-      n = glow(out, n, vp, bx, by, t.z + 6, 22, 1.6 * arena.braking, [1, 0.15, 0.08], 2.6);
+      const [bx, by] = at(lights.tail[0], side * lights.tail[1]);
+      n = glow(out, n, vp, bx, by, t.z + lights.tail[2], 22, 1.6 * arena.braking, [1, 0.15, 0.08], 2.6);
     }
   }
   /*
@@ -337,11 +338,11 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
     const vcy = Math.cos(v.yaw), vsy = Math.sin(v.yaw);
     const put = (lx: number, ly: number) => [v.x + lx * vcy - ly * vsy, v.y + lx * vsy + ly * vcy];
     for (const side of [-1, 1]) {
-      const [lx, ly] = put(LAMP_AHEAD + 6, side * LAMP_ACROSS);
-      if (on > 0) n = glow(out, n, vp, lx, ly, v.z + LAMP_HEIGHT - 52, 24, 2.2 * on, [1, 0.9, 0.7], 2.8);
+      const [lx, ly] = put(lights.head[0] + 6, side * lights.head[1]);
+      if (on > 0) n = glow(out, n, vp, lx, ly, v.z + lights.head[2], 24, 2.2 * on, [1, 0.9, 0.7], 2.8);
       if (arena.braking > 0) {
-        const [bx2, by2] = put(-168, side * 48);
-        n = glow(out, n, vp, bx2, by2, v.z + 6, 22, 1.6 * arena.braking, [1, 0.15, 0.08], 2.6);
+        const [bx2, by2] = put(lights.tail[0], side * lights.tail[1]);
+        n = glow(out, n, vp, bx2, by2, v.z + lights.tail[2], 22, 1.6 * arena.braking, [1, 0.15, 0.08], 2.6);
       }
     }
   }
@@ -363,9 +364,10 @@ export function effectsFor(out: Float32Array, arena: Race, vp: Float32Array): nu
     // points is a thing in the distance and four is a truck-shaped thing, and
     // which way the ghost is pointing as it goes into a corner is most of
     // what you want from it.
-    for (const [lx, ly] of [[104, -58], [104, 58], [-104, -58], [-104, 58]]) {
+    const [mx, my, mz] = lights.markers;
+    for (const [lx, ly] of [[mx, -my], [mx, my], [-mx, -my], [-mx, my]]) {
       n = glow(out, n, vp,
-        past.x + lx * gcy - ly * gsy, past.y + lx * gsy + ly * gcy, past.z + 62,
+        past.x + lx * gcy - ly * gsy, past.y + lx * gsy + ly * gcy, past.z + mz,
         40, 2.6, [0.42, 0.70, 1], 2.4);
     }
   }

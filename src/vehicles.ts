@@ -25,7 +25,23 @@
  * groups and not a change to how many of them exist. See `main.ts`.
  */
 import { box, part } from './scene';
-import type { VehicleSpec } from './vehicle';
+import type { VehicleLights, VehicleSpec } from './vehicle';
+
+/**
+ * Lights in the same places on any body as on the technical's, as shares of
+ * its length and width and of the thickness of its body plate: just inside
+ * the nose and a finger's width over the plate for the lamps, just off the
+ * tail for the glows. The technical's own numbers are what these give for its
+ * 300 × 128 body on a 40mm plate.
+ */
+export function lightsFor(length: number, width: number, plate: number): VehicleLights {
+  return {
+    head: [length / 2 - 8, Math.round(width * 0.36), plate / 2 + 12],
+    tail: [-(length / 2 + 18), Math.round(width * 0.375), Math.round(plate * 0.15)],
+    exhaust: [-(length / 2 + 30), -plate / 4],
+    markers: [Math.round(length * 0.347), Math.round(width * 0.453), plate / 2 + 42],
+  };
+}
 
 export type VehicleKey = 'technical' | 'rally' | 'lmp' | 'f1';
 export const VEHICLE_KEYS: VehicleKey[] = ['technical', 'rally', 'lmp', 'f1'];
@@ -68,6 +84,7 @@ const TECHNICAL: VehicleSpec = {
     },
     wheel: () => part('disc(radius: 31, thickness: 24, sides: 16, bolts: 5, boltCircle: 17, boltBore: 5, bevel: 5)'),
     lamp: () => part('disc(radius: 17, thickness: 14, sides: 14, bevel: 4)'),
+    lights: lightsFor(300, 128, 40),
   },
 };
 
@@ -108,6 +125,7 @@ const RALLY: VehicleSpec = {
     },
     wheel: () => part('disc(radius: 28, thickness: 30, sides: 14, bolts: 6, boltCircle: 15, boltBore: 4, bevel: 4)'),
     lamp: () => part('disc(radius: 16, thickness: 13, sides: 12, bevel: 4)'),
+    lights: lightsFor(260, 120, 56),
   },
 };
 
@@ -148,6 +166,7 @@ const LMP: VehicleSpec = {
     },
     wheel: () => part('disc(radius: 30, thickness: 26, sides: 16, bolts: 5, boltCircle: 16, boltBore: 4, bevel: 4)'),
     lamp: () => part('disc(radius: 15, thickness: 12, sides: 12, bevel: 3)'),
+    lights: lightsFor(340, 130, 30),
   },
 };
 
@@ -196,6 +215,7 @@ const F1: VehicleSpec = {
     },
     wheel: () => part('disc(radius: 34, thickness: 34, sides: 16, bolts: 5, boltCircle: 19, boltBore: 5, bevel: 3)'),
     lamp: () => part('disc(radius: 13, thickness: 11, sides: 12, bevel: 3)'),
+    lights: lightsFor(360, 110, 22),
   },
 };
 

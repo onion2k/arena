@@ -75,6 +75,14 @@ describe('every vehicle class', () => {
     }
   });
 
+  // The technical's lights were bare constants before they were a kit's; the
+  // proportions every class's are worked out from have to give its old ones.
+  it('puts the technical\'s lights where they always were', () => {
+    expect(VEHICLES.technical.kit.lights).toEqual({
+      head: [142, 46, 32], tail: [-168, 48, 6], exhaust: [-180, -10], markers: [104, 58, 62],
+    });
+  });
+
   // Why the test above holds, per class, before anyone has to drive one: a
   // damper integrated explicitly is stable while its rate times the step is
   // under two, and this keeps every class under half of that. A class stiff

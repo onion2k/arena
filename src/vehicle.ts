@@ -171,7 +171,26 @@ export interface VehicleKit {
   detail: VehiclePart;
   wheel: () => Mesh;
   lamp: () => Mesh;
+  lights: VehicleLights;
 }
+
+/**
+ * Where a class's lights sit, in millimetres from the body's centre: forward,
+ * out to either side, up. The lamp models are placed from `head` and so are
+ * the beams, so a beam always comes out of a lamp you can see. They were the
+ * technical's for every class, and a body 48mm tall carried its lamps in the
+ * air above it.
+ */
+export interface VehicleLights {
+  head: [number, number, number];
+  /** The brake glows. */
+  tail: [number, number, number];
+  /** The exhaust glow, straight behind: back and up. */
+  exhaust: [number, number];
+  /** The ghost's four corner markers. */
+  markers: [number, number, number];
+}
+
 
 /** What the driver is asking for. */
 export interface Drive {

@@ -144,7 +144,8 @@ const SNOW: Biome = {
   key: 'snow', label: 'snow',
   ground: { albedo: [0.82, 0.85, 0.90], roughness: 0.5 },
   tarmac: { albedo: [0.05, 0.055, 0.065], roughness: 0.8 },
-  kerb: [[0.55, 0.08, 0.06], [0.85, 0.86, 0.90]],
+  // red and a dark grey: a white stripe on white snow is no stripe at all
+  kerb: [[0.55, 0.08, 0.06], [0.10, 0.10, 0.12]],
   // frozen: real water, drawn pale and semi-gloss rather than a black
   // mirror, and a third of the grip on it (see the README, "Ice")
   water: { depth: 20, albedo: [0.75, 0.82, 0.90], roughness: 0.28, ice: 0.35 },

@@ -412,12 +412,12 @@ vehicle-shaped dynamic groups regardless of which one is in force, so
 changing class is `renderer.setDynamic` handed new meshes into the same
 pools — the same operation the arena already does for a new circuit's
 static half — and not a change to how many buffers exist or how big they
-are. Headlamp position, brake glow and the ghost's corner markers are still
-the technical's own fixed offsets for every class in this pass; a body
-noticeably longer or lower than the technical's own 300×128×90 will have
-lamps a little off where a real one's would sit, which is the next thing to
-put on the spec if it reads as wrong rather than as this game's style of
-low-poly shape.
+are. Each kit carries its own lights — headlamps, brake glows, the exhaust
+glow and the ghost's corner markers — from the same proportions of its own
+length, width and body plate as the technical's (`lightsFor` in
+`vehicles.ts`; a test holds the technical's to the constants they were).
+They were the technical's offsets for every class until then, and the F1's
+48mm-tall body carried its lamps in the air above its nose.
 
 Switching class clears the ghost, the same way a new circuit does and for
 the same reason: a lap belongs to what was driven as much as to where.
@@ -1570,6 +1570,18 @@ circuit. The forest's fords, against the same circuits dry, cost a median
 ![four biomes](docs/desert.png)
 ![](docs/snow.png)
 ![](docs/marsh.png)
+
+**By day**, forest, desert, snow and marsh — none of the shots above had
+checked the sky tints until this one:
+
+![the four biomes at noon](docs/biomes-day.png)
+
+**A look at each.** The desert's cacti were a trunk each, and a desert of
+them at night read as a car park full of bollards: they have a saguaro's two
+arms now, above anything a car reaches, so the collision stays the trunk's.
+The marsh's reeds were one stalk; they are a clump of six. Snow's kerbs were
+red and white on white snow, which is red and nothing — the second stripe
+is a dark grey.
 
 ## The light
 
