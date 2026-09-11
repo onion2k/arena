@@ -18,7 +18,7 @@
 import { LightPool } from 'artshape-render/game/lights';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
 import type { Race } from './game';
-import { COLUMNS, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, lampAt } from './scene';
+import { COLUMNS, LAMP_ACROSS, LAMP_AHEAD, LAMP_HEIGHT, beamAt, lampAt } from './scene';
 import { height } from './terrain';
 import { gantry } from './track';
 import { project } from './matrix';
@@ -55,7 +55,7 @@ function floods(pool: LightPool, on: number) {
     // about the post, and this file used to re-derive it from the post's
     // index in the list, which is the sort of thing that is right until
     // someone changes the order.
-    const [x, y, z] = lampAt(post);
+    const [x, y, z] = beamAt(post);
     const inx = Math.cos(post.aim); const iny = Math.sin(post.aim);
     const hue = (i / COLUMNS.length + 0.12) % 1;
     const c = hueToRgb(hue);

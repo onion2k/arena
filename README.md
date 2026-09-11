@@ -793,8 +793,35 @@ tree's shadow is under the tree. At 08:00, with the sun at 33 degrees, they
 turn 5.7% of the frame dark and drop the mean 3.7%: lamp posts across the
 road, lit and shaded sides on every tree, the trucks' own under them. The
 evening is the same the other way round. By night the moon casts, faintly,
-and the lamps cast hard — a post's own shadow across the road under it, and
-the trucks' as they pass.
+and the lamps cast — a post's own shadow across the road under it, and the
+trucks' as they pass.
+
+### The lamps were inside their own heads
+
+The road at night had dark areas in it: a hard-edged black bite out of every
+lamp's pool, from a third of the way across the tarmac to past the far edge,
+and long black wedges across the road wherever the circuit bent. It was not
+the moon (turned off, the same), not the fog (turned off, the same), not the
+trees or the terrain or the truck — skipping each static group from the
+spot maps in turn, one by one, found it: the lamp heads. Not the neighbours'
+heads. Each lamp's own.
+
+The flood was placed at the centre of its head, and the head is a box 27
+deep. The half of that box beyond the shadow map's 20-unit near plane — the
+underside, out toward the road — was drawn into the lamp's own map, and a
+blocker a few millimetres from the lens shades everything behind it: from
+where the near plane cut the box (a straight edge, which is what made the
+bite look cut with a knife) out to the box's far corner, 71 degrees from
+straight down. The beam now leaves from just under the head, `beamAt`,
+while the head, the arm and the glow stay where `lampAt` puts them.
+
+The lamps' shadows also soften with distance now — `spotSoftness` in the
+renderer's look, a texel of the map per 500 units the surface is from the
+lamp. Every post stands as tall as the lamps beside it, so a neighbour's
+shadow of it has no end; at 2500 from a lamp a pole's shadow lands as a
+smear a hand wide rather than a wedge, and a truck under its own lamp keeps
+a crisp one. Eight taps on a spiral turned by a per-pixel hash instead of
+four fixed ones: 0.10 ms of the night frame.
 
 The tests for all of this live with the library: a box over a floor, the
 floor in its shadow darker than beside it, for the sun and for a spotlight.
@@ -1204,7 +1231,10 @@ the renderer's `economy.post` turns the whole chain off.
 Measured on a Mac mini (M-series) at 1920×1080, fenced on the queue rather
 than timed off `requestAnimationFrame` — a browser tab that is not being
 composited stops calling back, and reads as a scene that mysteriously got
-slower. `measure(width, height, frames)` is on the console for repeating it.
+slower. `measure(width, height, frames)` is on the console for repeating it,
+and `shoot(width, height, name)` draws one frame at a chosen size and writes
+it to `docs/<name>.png` through the dev server — the frame itself, not a
+screenshot of the pane — which is how every A/B in this file was compared.
 
 Measured at the framing the arena opens on, with the camera settled — which
 matters more than it sounds. The figure in this table before this one was
@@ -1214,8 +1244,11 @@ the lamps than it ended up. Let the orbit stop before timing anything.
 
 | | lights | steps | ms a frame |
 | --- | ---: | ---: | ---: |
-| night, haze and cones | 46 | 19 | 4.27 |
+| night, haze and cones | 46 | 19 | 4.92 |
 | noon, nothing in the air | 2 | — | 0.62 |
+
+The night figure was 4.27 before the trackside furniture (4.34), the marker
+boards and chevrons (4.82), and the soft edge on the lamps' shadows (4.92).
 
 A frame at sixty is 16.7 ms, so the night frame has four times its own cost
 in hand; 1440p is 7.0. Of the 4.27, medians of three with each configuration

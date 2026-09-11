@@ -129,7 +129,7 @@ export const MESHES = {
    */
   pole: () => prism(POLE_RADIUS, COLUMN_HEIGHT, 8),
   arm: () => box(LAMP_ARM, 21, 17),
-  head: () => box(78, 50, 27),
+  head: () => box(78, 50, HEAD_DEPTH),
   /**
    * The player is a technical: a flatbed with a gun on the back that aims
    * where it likes, not where the truck is pointing. It is five parts rather
@@ -166,6 +166,8 @@ export const COLUMN_HEIGHT = 520;
  */
 export const POLE_RADIUS = 17;
 export const LAMP_ARM = 210;
+/** How deep the head on the end of the arm is, top face to underside. */
+export const HEAD_DEPTH = 27;
 /** How far a post's foot stands from the edge of the tarmac. */
 export const POST_CLEARANCE = 470;
 
@@ -178,6 +180,21 @@ export function lampAt(post: Post): [number, number, number] {
   const x = post.x + Math.cos(post.aim) * reach;
   const y = post.y + Math.sin(post.aim) * reach;
   return [x, y, height(post.x, post.y) - SINK + COLUMN_HEIGHT * post.scale - 8];
+}
+
+/**
+ * Where the light itself comes from: just under the head, not inside it.
+ *
+ * The flood used to be placed at the head's centre, which put a box round
+ * it. The half of that box past the shadow map's near plane — the head's
+ * underside, out toward the road — was drawn into the lamp's own map, and
+ * from a blocker a few millimetres from the lens it shaded everything from
+ * a third of the way across the tarmac to past the far edge. Every lamp
+ * did it, and the road at night was pools with a black bite out of each.
+ */
+export function beamAt(post: Post): [number, number, number] {
+  const [x, y, z] = lampAt(post);
+  return [x, y, z - HEAD_DEPTH / 2 - 2];
 }
 
 /**

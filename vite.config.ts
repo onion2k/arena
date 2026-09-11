@@ -11,12 +11,16 @@ const capture = (): Plugin => ({
   apply: 'serve',
   configureServer(server) {
     server.middlewares.use('/__shot', (req, res) => {
+      // `?name=x` writes docs/x.png, for a series of captures compared side
+      // by side; the hero image is the default so nothing that shoots it
+      // needs to know
+      const name = (new URL(req.url ?? '', 'http://x').searchParams.get('name') ?? 'arena').replace(/[^\w-]/g, '');
       let body = '';
       req.on('data', (c) => { body += c; });
       req.on('end', () => {
         const [, data] = body.split(',');
         mkdirSync('docs', { recursive: true });
-        writeFileSync('docs/arena.png', Buffer.from(data, 'base64'));
+        writeFileSync(`docs/${name}.png`, Buffer.from(data, 'base64'));
         res.end('ok');
       });
     });

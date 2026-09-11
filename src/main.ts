@@ -80,6 +80,11 @@ async function main() {
     // carried it and the floor a metre away never knew it existed. At nine
     // hundred a passing shot lights a bay of the hall.
     falloffHalf: 900,
+    // The lamps' shadows soften with distance. Every lamp post stands as
+    // tall as the lamps beside it, so each neighbour threw its shadow across
+    // the road as a hard wedge with no end; a pole 2500 away now lands as a
+    // smear a hand wide. A truck under its own lamp keeps a crisp shadow.
+    spotSoftness: 1 / 500,
     // A dark hall. The environment lights everything everywhere before a
     // single point light exists, so leaving it at one meant the floor was
     // already lit and a shot going past had nothing to add.
@@ -486,7 +491,7 @@ async function main() {
    * writes it to docs/. A screenshot of the browser is a screenshot of the
    * browser: this is the frame itself, at whatever size the picture wants.
    */
-  const shoot = async (w = 1600, h = 900) => {
+  const shoot = async (w = 1600, h = 900, name = 'arena') => {
     canvas.width = w; canvas.height = h;
     renderer.resize(w, h);
     if (!touched) reframe(true, w / h);
@@ -499,7 +504,7 @@ async function main() {
     renderer.frame(ctx.context.getCurrentTexture().createView(), 'redraw', 1 / 60);
     await ctx.queue.onSubmittedWorkDone();
     const png = canvas.toDataURL('image/png');
-    await fetch('/__shot', { method: 'POST', body: png });
+    await fetch(`/__shot?name=${name}`, { method: 'POST', body: png });
     return png.length;
   };
   Object.assign(globalThis as Record<string, unknown>, {
