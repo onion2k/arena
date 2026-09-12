@@ -134,7 +134,9 @@ const LMP: VehicleSpec = {
   radius: 105,
   turnCircle: 561,
   // bench: corner 62.0, accel 3755, brake 6676 at top speed 3000
-  rating: { corner: 69, accel: 852, brake: 2915, par: 1.104 },
+  // par refitted on track circuits, which is the only kind this class is
+  // raced on: 1.104 was fitted on rally stages and read 8.2% slow there.
+  rating: { corner: 69, accel: 852, brake: 2915, par: 1.018 },
   kit: {
     body: lmpBody,
     detail: { mesh: lmpDetail, at: [0, 0, 0], albedo: [0.04, 0.045, 0.05], roughness: 0.16 },
@@ -179,7 +181,9 @@ const F1: VehicleSpec = {
   // (`SUBSTEP` in `vehicle.ts`). Re-benched at a 480th, scaled by the same
   // factors as before. The other three classes moved by under 1.5% and are
   // left as they were.
-  rating: { corner: 71, accel: 1018, brake: 3383, par: 1.122 },
+  // par refitted on track circuits, as the prototype's: 1.122 was a rally
+  // stage's figure and read 11.2% slow on the roads this car is offered.
+  rating: { corner: 71, accel: 1018, brake: 3383, par: 1.008 },
   kit: {
     body: f1Body,
     detail: { mesh: f1Detail, at: [0, 0, 0], albedo: [0.035, 0.035, 0.04], roughness: 0.24 },

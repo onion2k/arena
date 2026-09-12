@@ -32,6 +32,7 @@ import { CORNER_SHARE, circuitFor, rateTrack, speedPlan, type CornerRating } fro
 import type { VehicleSpec } from './vehicle';
 import type { BiomeKey } from './biomes';
 import { sizeOf, type SizeKey } from './world';
+import type { TrackKind } from './kind';
 
 /** The corner numbers the pilot's plans are built from, cautious to reckless. */
 const PLANS = [50, 55, 60, 65, 70, 80, 90, 100, 115];
@@ -50,13 +51,13 @@ export interface Drive {
 /** The pilot round one circuit to one plan: its best flying lap, and how
  *  much of the flying laps it lifted for. A medium forest unless asked. */
 /** One circuit the calibration drives: a seed, smooth or wild. */
-export interface Circuit { seed: number; wild: boolean }
+export interface Circuit { seed: number; wild: boolean; kind?: TrackKind }
 
-export function driveTo(spec: VehicleSpec, seed: number, corner: number, size: SizeKey = 'M', biome: BiomeKey = 'forest', wild = false): Drive {
-  useTrack(seed, size, biome, wild);
+export function driveTo(spec: VehicleSpec, seed: number, corner: number, size: SizeKey = 'M', biome: BiomeKey = 'forest', wild = false, kind: TrackKind = 'rally'): Drive {
+  useTrack(seed, size, biome, wild, kind);
   const race = new Race();
   race.useVehicle(spec);
-  const plan = speedPlan(circuitFor(seed, sizeOf(size), wild), spec.engine.topSpeed, { corner, accel: 1, brake: PLAN_BRAKE, par: 1 }, false).v;
+  const plan = speedPlan(circuitFor(seed, sizeOf(size), wild, kind), spec.engine.topSpeed, { corner, accel: 1, brake: PLAN_BRAKE, par: 1 }, false).v;
   const pilot = new Pilot(spec, plan);
   const laps: number[] = [];
   let flying = 0, lifted = 0;
@@ -81,8 +82,8 @@ export interface Measured {
 export function measure(spec: VehicleSpec, circuits: Circuit[]): Measured {
   return {
     circuits,
-    laps: circuits.map(({ seed, wild }) => Math.min(...PLANS.map((corner) => driveTo(spec, seed, corner, 'M', 'forest', wild).lap))),
-    lifts: circuits.map(({ seed, wild }) => driveTo(spec, seed, LIFT_PLAN, 'M', 'forest', wild).lift),
+    laps: circuits.map(({ seed, wild, kind }) => Math.min(...PLANS.map((corner) => driveTo(spec, seed, corner, 'M', 'forest', wild, kind).lap))),
+    lifts: circuits.map(({ seed, wild, kind }) => driveTo(spec, seed, LIFT_PLAN, 'M', 'forest', wild, kind).lift),
   };
 }
 
@@ -97,7 +98,7 @@ export interface Score {
 
 /** How a rating's par times and difficulties compare with what was driven. */
 export function score(spec: VehicleSpec, m: Measured, rating: CornerRating): Score {
-  const rated = m.circuits.map(({ seed, wild }) => rateTrack(circuitFor(seed, 1, wild), spec.engine.topSpeed, rating));
+  const rated = m.circuits.map(({ seed, wild, kind }) => rateTrack(circuitFor(seed, 1, wild, kind), spec.engine.topSpeed, rating));
   const errors = rated.map((r, i) => (Number.isFinite(m.laps[i]) ? r.par / m.laps[i] - 1 : NaN));
   const finite = errors.filter(Number.isFinite);
   return {
@@ -121,8 +122,8 @@ export function score(spec: VehicleSpec, m: Measured, rating: CornerRating): Sco
 export function fitPar(spec: VehicleSpec, m: Measured): number {
   const median = (a: number[]) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
   const ratios = m.circuits
-    .map(({ seed, wild }, i) => {
-      const r = rateTrack(circuitFor(seed, 1, wild), spec.engine.topSpeed, spec.rating);
+    .map(({ seed, wild, kind }, i) => {
+      const r = rateTrack(circuitFor(seed, 1, wild, kind), spec.engine.topSpeed, spec.rating);
       return (m.laps[i] - CORNER_SHARE * (r.lap - r.flatOut)) / r.flatOut;
     })
     .filter(Number.isFinite);

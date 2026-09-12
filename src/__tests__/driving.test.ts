@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { drive, raceOn, stateOf } from './sim';
 import { setTrack, circuitFor, centreline, tangentAt, setBenchGrip, rateTrack, TRACK_LIFT } from '../track';
+import { kindForVehicle } from '../kind';
 import { height } from '../terrain';
 import { setBenchFlat } from '../terrain';
 import { SUBSTEP, Vehicle, rollDamping } from '../vehicle';
@@ -186,12 +187,18 @@ describe('par', () => {
   // circuits and every plan; this is the part of it quick enough to run
   // every time, and it fails if the vehicles, the pilot or the par model
   // drift apart.
-  it('is what the pilot laps the original circuit in, for every class', () => {
+  it('is what the pilot laps seed zero in, for every class on its own kind', () => {
+    // Each class on the kind of circuit it is offered on. Driving a
+    // prototype round a rally stage and holding its par to what it laps
+    // there is checking a number against a road the car is never on: the
+    // two racing classes' par constants are fitted on tracks, and on a
+    // stage they read eight and eleven percent slow — correctly.
     for (const key of VEHICLE_KEYS) {
       const spec = VEHICLES[key];
-      const { lap } = driveTo(spec, 0, 80);
-      const { par } = rateTrack(circuitFor(0, 1), spec.engine.topSpeed, spec.rating);
-      expect(Math.abs(par / lap - 1), `${key}: par ${par.toFixed(2)}, driven ${lap.toFixed(2)}`).toBeLessThan(0.06);
+      const kind = kindForVehicle(key);
+      const { lap } = driveTo(spec, 0, 80, 'M', 'forest', false, kind);
+      const { par } = rateTrack(circuitFor(0, 1, false, kind), spec.engine.topSpeed, spec.rating);
+      expect(Math.abs(par / lap - 1), `${key} on ${kind}: par ${par.toFixed(2)}, driven ${lap.toFixed(2)}`).toBeLessThan(0.06);
     }
   });
 });

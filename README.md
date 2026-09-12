@@ -332,7 +332,7 @@ per-class number where the technical had a constant.
 | suspension travel | 26 | 34 | 18 | 12 |
 | collision radius | 98 | 90 | 105 | 110 |
 | corner / accel / brake rating | 61 / 700 / 2400 | 73 / 785 / 2627 | 69 / 852 / 2915 | 71 / 1018 / 3383 |
-| par factor | 1.103 | 1.068 | 1.104 | 1.122 |
+| par factor | 1.103 | 1.068 | 1.018 | 1.008 |
 | par lap, seed 0, medium | 14.0 s | 12.5 s | 10.9 s | 10.1 s |
 
 ### Benching the three new classes
@@ -767,18 +767,37 @@ and the share that matches the pilot's laps is a fifth — 0.18 to 0.22 fitted
 class by class, and 0.2 for all four gives the same errors. That is
 `CORNER_SHARE`.
 
-`npm run calibrate` fits the constant on smooth and wild circuits together
-now and checks it on as many again:
+`npm run calibrate` fits each class's constant on the kind of circuit it is
+raced on, and checks it on as many again. A rally class sees thirteen smooth
+stages and thirteen wild ones; a racing class sees twenty-six tracks, there
+being no wild variant of one:
 
 | | technical | rally car | Le Mans prototype | F1 car |
 | --- | ---: | ---: | ---: | ---: |
-| par factor | 1.103 | 1.068 | 1.104 | 1.122 |
-| checking, mean (worst) | 1.2% (4.4%) | 1.3% (4.6%) | 1.4% (4.9%) | 1.5% (4.8%) |
-| checking, bias smooth / wild | +0.9 / +0.5% | +1.3 / +0.6% | +1.0 / +0.1% | +1.4 / −0.5% |
+| circuits fitted on | rally | rally | track | track |
+| par factor | 1.103 | 1.068 | **1.018** | **1.008** |
+| checking, mean (worst) | 1.2% (4.4%) | 1.3% (4.6%) | 0.9% (3.7%) | 0.8% (3.4%) |
 
-The difficulty follows the pilot's lifting better with the wild circuits in
-the set — r = 0.85 to 0.96 — because it has a wider range of circuits to
-follow. A wild lap is held to 6% of par by the tests, as a smooth one is.
+**The two racing classes' constants were 8 and 11% out.** They were fitted
+when every class was offered every circuit, which meant fitting a prototype
+on rally stages: the corners there are tight enough to cost it real time, so
+its constant carried that cost — and on a track, where the tightest corner
+is three times the radius, it predicted a lap 8.2% slower than the pilot
+drives. The F1 was 11.2% out the same way. Refitted on tracks the two come
+back at 1.018 and 1.008, which is to say a racing class on a racing circuit
+laps within two percent of the flat-out lap: the corners cost it almost
+nothing, which is what makes it a racing circuit.
+
+The rally classes are unchanged and were re-run to prove it: the technical
+still fits at 1.103, 1.2% mean.
+
+**The difficulty rating means much less on a track.** Against the pilot's
+lifting it is r = 0.85 for the technical on rally stages, and r = 0.23 for
+the F1 and 0.00 for the prototype on tracks. There is nothing wrong with
+the number — a racing circuit is flat out nearly everywhere, so there is
+almost no lifting for it to correlate with, and the band it drives will read
+*flowing* for most tracks because most tracks are. It is worth knowing that
+the band discriminates between rally stages and barely between tracks.
 
 **The start line is put on a straight.** The grid sits at an angle of -pi
 whatever the circuit does there, and on a random one that is as likely to be

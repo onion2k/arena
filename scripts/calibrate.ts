@@ -5,12 +5,23 @@
  */
 import { fitPar, measure, score, type Circuit } from '../src/calibrate';
 import { VEHICLES, VEHICLE_KEYS, type VehicleKey } from '../src/vehicles';
+import { kindForVehicle, type TrackKind } from '../src/kind';
 
-// thirteen smooth circuits and thirteen wild ones to fit on, and as many
-// again of each to check
-const range = (from: number, wild: boolean): Circuit[] => Array.from({ length: 13 }, (_, i) => ({ seed: from + i, wild }));
-const FIT = [...range(0, false), ...range(1, true)];
-const CHECK = [...range(13, false), ...range(14, true)];
+/*
+ * Which circuits each class is fitted and checked on, and it is not the same
+ * set for all of them any more: a class is fitted on the kind of circuit it
+ * is raced on. A rally class sees thirteen smooth stages and thirteen wild
+ * ones; a racing class sees twenty-six tracks, there being no wild variant
+ * of one. Fitting a prototype's par on rally stages it will never be offered
+ * would be fitting it on the wrong road — which is the whole reason the two
+ * kinds exist.
+ */
+const range = (from: number, wild: boolean, kind: TrackKind = 'rally'): Circuit[] =>
+  Array.from({ length: 13 }, (_, i) => ({ seed: from + i, wild, kind }));
+const SETS: Record<TrackKind, { fit: Circuit[]; check: Circuit[] }> = {
+  rally: { fit: [...range(0, false), ...range(1, true)], check: [...range(13, false), ...range(14, true)] },
+  track: { fit: [...range(0, false, 'track'), ...range(13, false, 'track')], check: [...range(26, false, 'track'), ...range(39, false, 'track')] },
+};
 
 const pct = (e: number) => `${(e * 100).toFixed(1)}%`;
 // no @types/node here, and one array is all this wants from it
@@ -19,6 +30,8 @@ const asked = argv.slice(2).filter((a): a is VehicleKey => (VEHICLE_KEYS as stri
 
 for (const key of asked.length ? asked : VEHICLE_KEYS) {
   const spec = VEHICLES[key];
+  const kind = kindForVehicle(key);
+  const { fit: FIT, check: CHECK } = SETS[kind];
   const t0 = performance.now();
   const fitSet = measure(spec, FIT);
   const checkSet = measure(spec, CHECK);
@@ -33,14 +46,14 @@ for (const key of asked.length ? asked : VEHICLE_KEYS) {
   const misses = all.circuits.map((c, i) => [name(c), s.errors[i]] as const)
     .filter(([, e]) => Number.isFinite(e)).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 4);
   const unfinished = all.circuits.filter((_, i) => !Number.isFinite(all.laps[i])).map(name);
-  console.log(`\n${spec.label} (${((performance.now() - t0) / 1000).toFixed(0)}s)`);
+  console.log(`\n${spec.label}, on ${kind} circuits (${((performance.now() - t0) / 1000).toFixed(0)}s)`);
   console.log(line('fitted  ', fitted));
   console.log(line('in force', spec.rating));
   const split = (set: typeof fitSet, rating: typeof fitted) => {
     const sc = score(spec, set, rating);
     const pick = (wild: boolean) => sc.errors.filter((e, i) => set.circuits[i].wild === wild && Number.isFinite(e));
     const fmt = (e: number[]) => `${pct(e.reduce((a, b) => a + Math.abs(b), 0) / e.length)} mean, ${pct(e.reduce((a, b) => a + b, 0) / e.length)} bias`;
-    return `smooth ${fmt(pick(false))}; wild ${fmt(pick(true))}`;
+    return kind === 'track' ? fmt(pick(false)) : `smooth ${fmt(pick(false))}; wild ${fmt(pick(true))}`;
   };
   console.log(`  checking circuits, fitted: ${split(checkSet, fitted)}`);
   console.log(`  worst misses ${misses.map(([c, e]) => `${c} ${pct(e)}`).join(', ')}${unfinished.length ? `; never finished ${unfinished.join(', ')}` : ''}`);
