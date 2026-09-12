@@ -899,13 +899,32 @@ The floor of 900mm is well clear of either racing car's turning circle —
 561 and 691mm — so a hairpin is a corner they brake hard for and not one
 they cannot make.
 
-**A track is wider.** Half widths of 380 on a stage, as the game shipped,
-and 560 on a track — 760mm against 1120. Against the cars raced on each
-that is about six technical-widths on a stage and eight and a half to ten
-car-widths on a track; a real circuit runs six to seven and a half, and this
-one is seen from above at a distance where generous reads as right. The
-racing line is what made the case: on a stage it sits hard against its clamp
-on every seed, and on a track it does not.
+**Three widths, and the corners set them.** Every circuit was 380 either
+side of the line — 760 across, about six technical-widths — and it was too
+narrow for all of them. The racing line is what made the case: drawn on a
+stage it sat hard against its clamp on every seed, which is the road saying
+it is narrower than the line the car would like to take.
+
+| | half width | across | tightest corner |
+| --- | ---: | ---: | ---: |
+| wild stage | 300 | 600 | 450 mm |
+| rally stage | 480 | 960 | 720 mm |
+| racing track | 560 | 1120 | 1100–2500 mm, per seed |
+
+A road cannot hold a corner tighter than it is wide: the inside edge of one
+folds through itself. So the corner floors move with the widths, and the
+wild circuits are the reason there are three rather than two — their corners
+are arcs placed by a generator that can only hold them above about 450mm (at
+a floor of 520 a quarter of seeds fall back to a smooth circuit, at 600
+three quarters), so a wild stage keeps the tightest road in the game for the
+tightest corners in it. The smooth stage's floor of 720 is the half width
+and a half, and it sits just under the original circuit's own 733mm corner,
+which is not a coincidence worth undoing.
+
+Widening the stage did not move par: the technical refits at 1.100 against
+1.103 in force and the rally car at 1.070 against 1.068, both about 1.2%
+mean. The pilot drives the centreline, so a wider road is not a faster one
+for it — which is also why the racing line is worth drawing for the player.
 
 The width is a live value, as the arena's size is, because everything is
 measured out from it: the road mesh, the kerbs, the lamp posts, the
@@ -2178,12 +2197,11 @@ centreline. A line that fed the physics would move every lap time in the
 game and invalidate the par constants fitted against them — so the switch
 changes what you see and nothing else.
 
-**And it showed the road was too narrow.** On a track the line uses 291 to
-357mm of the 459 it is allowed. On a rally stage it used 312 of 312 — every
-seed, hard against the clamp, which is the road saying it is narrower than
-the line the car would like to take. A stage is meant to be that. A racing
-circuit is not, so the two kinds now have different widths: see
-[Rally and track](#rally-and-track).
+**And it showed every road was too narrow.** On a track the line uses 291
+to 357mm of the 459 it is allowed. On the old 380 stage it used 312 of 312
+— every seed, hard against the clamp, which is the road saying it is
+narrower than the line the car would like to take. All three widths went up
+because of it: see [Rally and track](#rally-and-track).
 
 **How it is drawn.** One quad a step, four hundred of them, each with a
 colour of its own in the group's `materials` buffer — the same trick the

@@ -76,28 +76,23 @@ describe('the racing line', () => {
     }
   });
 
-  it('slows for the corners, and less of the lap on a track than a stage', () => {
-    // What the line is slowed to is a fraction of top speed, and the share
-    // of the lap spent there is small in both kinds — the line straightens
-    // a corner by a quarter to a half, which is the whole point of it: over
-    // these seeds the road's tightest is 714 to 912mm and the line's is 931
-    // to 1378. So the claim is comparative, and about where the slowing is.
-    const slowed = (kind: 'rally' | 'track', key: 'technical' | 'f1') => {
+  it('slows most where the corners are tightest: a wild stage', () => {
+    // Three roads, three sets of corners: a wild stage's hairpins down to
+    // 450mm on a narrow road, a smooth stage's 720 and up, a track's 1100
+    // and up. What the line is slowed to should follow that order.
+    const slowest = (wild: boolean, kind: 'rally' | 'track', key: 'technical' | 'f1') => {
       const spec = VEHICLES[key];
-      let share = 0, slowest = 1;
+      let worst = 1;
       for (const seed of SEEDS) {
-        useTrack(seed, 'M', 'forest', false, kind);
+        useTrack(seed, 'M', 'forest', wild, kind);
         const line = raceLine(spec.engine.topSpeed, spec.rating);
-        share += line.speed.filter((v) => v < spec.engine.topSpeed * 0.9).length / line.speed.length / SEEDS.length;
-        slowest = Math.min(slowest, Math.min(...line.speed) / spec.engine.topSpeed);
+        worst = Math.min(worst, Math.min(...line.speed) / spec.engine.topSpeed);
       }
-      return { share, slowest };
+      return worst;
     };
-    const stage = slowed('rally', 'technical');
-    const track = slowed('track', 'f1');
-    // a stage has somewhere the truck is off top speed, even on the line
-    expect(stage.slowest).toBeLessThan(0.95);
-    // and spends more of its lap there than a racing circuit does
-    expect(stage.share).toBeGreaterThan(track.share);
+    const wildStage = slowest(true, 'rally', 'technical');
+    const stage = slowest(false, 'rally', 'technical');
+    expect(wildStage).toBeLessThan(stage);
+    expect(wildStage).toBeLessThan(0.9);
   });
 });

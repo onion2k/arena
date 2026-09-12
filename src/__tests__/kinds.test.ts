@@ -147,27 +147,26 @@ describe('the width of the road', () => {
     }
   });
 
-  it('gives the racing line more room to move, the wider it is', () => {
-    // The point of the width, isolated: the same circuit, the same car, the
-    // line drawn at two widths. Comparing a track's line with a stage's
-    // would measure how much each circuit bends rather than how much room
-    // the line was given — on seed 3 the stage's line wanders further than
-    // the track's, because the stage has corners that make it.
+  it('gives the racing line more road to use, the more road there is', () => {
+    // The same circuit and car, the line drawn at each of the game's three
+    // widths: a wild stage's 300, a smooth stage's 480, a track's 560. What
+    // it uses has to grow with what it is given, and stop growing once the
+    // road is no longer the thing stopping it.
     useTrack(3, 'M', 'forest', false, 'track');
     const spec = VEHICLES.f1;
-    const spread = () => {
+    const spread = (half: number) => {
+      setTrackHalf(half);
       const line = raceLine(spec.engine.topSpeed, spec.rating);
       return Math.max(...line.points.map(([x, y]) => Math.abs(where(x, y).offset)));
     };
-    const wide = spread();
-    setTrackHalf(KINDS.rally.half);
-    const narrow = spread();
+    const narrow = spread(KINDS.rally.wildHalf!);
+    const stage = spread(KINDS.rally.half);
+    const track = spread(KINDS.track.half);
     setTrackHalf(KINDS.track.half);
-    // the wider line wanders further, and — the point of it — the narrow
-    // one is hard against its clamp while the wide one is not: a stage's
-    // road is the thing stopping the line, and a track's is not
-    expect(wide).toBeGreaterThan(narrow);
-    expect(narrow).toBeCloseTo(KINDS.rally.half * 0.82, 0);
-    expect(wide).toBeLessThan(KINDS.track.half * 0.82 * 0.95);
+    expect(narrow).toBeLessThan(stage);
+    expect(track).toBeGreaterThanOrEqual(stage);
+    // the narrow one is hard against its clamp and the widest is not
+    expect(narrow).toBeCloseTo(KINDS.rally.wildHalf! * 0.82, 0);
+    expect(track).toBeLessThan(KINDS.track.half * 0.82 * 0.95);
   });
 });

@@ -998,6 +998,7 @@ async function main() {
       rebuild: () => rebuildLine(),
       at: (i: number) => Array.from(lineM.slice(i * 16 + 12, i * 16 + 15)),
       colour: (i: number) => Array.from(lineMat.slice(i * 4, i * 4 + 4)),
+      car: () => ({ offset: arena.offset, half: TRACK_HALF, x: arena.shown.x, y: arena.shown.y }),
     },
     photo: {
       it: photo,

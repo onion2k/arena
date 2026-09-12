@@ -788,11 +788,21 @@ export function circuitFor(seed: number, size: number, wild = false, kind: Track
 /**
  * What a wild circuit has to clear. The same arena and the same road as a
  * smooth one — the radius bounds and how square the radius stays to the road
- * are unchanged — but corners down to 380mm, near the technical's own circle,
- * a lap that may run a little longer, and at least one straight worth the name.
+ * are unchanged — but the tightest corners the road can hold, a lap that may
+ * run a little longer, and at least one straight worth the name.
+ *
+ * The corner was 380mm, near the technical's own circle, while the road was
+ * 380 either side of the line: the inside edge of such a corner is a point,
+ * and the road folded through itself there. It went unnoticed because a
+ * hairpin that tight is rare even among wild seeds. Now the road is 480
+ * either side and the floor is 720 — still half of what a smooth stage
+ * allows, so a wild circuit keeps the hairpin that is the point of it.
  */
-const WILD = {
-  curve: 380,
+export const WILD_LIMITS = {
+  // 450: the tightest the generator reliably places — at 520 a quarter of
+  // seeds fall back and at 600 three quarters — and comfortably clear of
+  // the 300 half width a wild stage is given, so the road does not fold
+  curve: 450,
   maxLength: 38000,
   longestStraight: 5500,
   /** How finely the radius is sampled round the lap. */
@@ -820,7 +830,7 @@ type P = [number, number];
  */
 export function generateWild(seed: number): Shape {
   const rnd = random((seed * 2654435761) ^ 0x5bd1e995);
-  const n = WILD.samples;
+  const n = WILD_LIMITS.samples;
   for (let attempt = 0; attempt < 200; attempt++) {
     const corners = 5 + Math.floor(rnd() * 4);
     const turn = rnd() * Math.PI * 2;
@@ -892,7 +902,7 @@ export function generateWild(seed: number): Shape {
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
       if (len > longest) { longest = len; mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; }
     }
-    if (longest < WILD.longestStraight) continue;
+    if (longest < WILD_LIMITS.longestStraight) continue;
     const shift = Math.round(((Math.atan2(mid[1], mid[0]) + Math.PI) / (Math.PI * 2)) * n);
     const turned = new Float64Array(n);
     for (let j = 0; j < n; j++) turned[j] = r[(j + shift) % n];
@@ -902,8 +912,8 @@ export function generateWild(seed: number): Shape {
 
     const candidate: Shape = { r0: 0, terms: [], table: { r: turned, d } };
     const m = measureShape(candidate);
-    if (m.curve >= WILD.curve && m.minRadius >= LIMITS.minRadius && m.maxRadius <= LIMITS.maxRadius
-      && m.across >= LIMITS.across && m.length >= LIMITS.minLength && m.length <= WILD.maxLength) {
+    if (m.curve >= WILD_LIMITS.curve && m.minRadius >= LIMITS.minRadius && m.maxRadius <= LIMITS.maxRadius
+      && m.across >= LIMITS.across && m.length >= LIMITS.minLength && m.length <= WILD_LIMITS.maxLength) {
       return candidate;
     }
   }

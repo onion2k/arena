@@ -66,20 +66,34 @@ export interface KindSpec {
   /** Whether the wild circuits — straights and hairpins — are offered. */
   wild: boolean;
   /**
+   * The half width a wild circuit of this kind gets, where it differs.
+   *
+   * A wild stage is the one circuit that has to stay narrow. Its corners
+   * are arcs rather than waves and the generator can only hold them above
+   * about 450mm — past that it fails to place them and falls back to a
+   * smooth circuit, 31 seeds in 40 at a floor of 600. A road 480 either
+   * side of a 450mm corner is a road folded through itself, so a wild
+   * stage keeps a narrow one: 300, which is 600 across and the tightest
+   * road in the game, for the circuit with the tightest corners in it.
+   */
+  wildHalf?: number;
+  /**
    * Half the width of the tarmac, in millimetres.
    *
-   * A rally stage is 380, the width the game shipped with: a lane and a
-   * half, where the line you take is mostly the one the road gives you. A
-   * racing circuit is wider, because the whole of racing on one is choosing
-   * a line — brake on the outside, clip the apex, run out to the far edge —
-   * and on a stage's width there is nowhere to do it. It showed the moment
-   * the racing line was drawn: the line had the road's own shape because
-   * there was no room for another.
+   * Both were 380 — 760 across, six technical-widths — and both were too
+   * narrow. The racing line showed it: drawn on a stage it sat hard against
+   * its clamp on every seed, which is the road saying it is narrower than
+   * the line the car would like to take.
    *
-   * 560 is 1120 across. Against the cars raced on a track, 110 and 130
-   * wide, that is eight and a half to ten car widths; a real circuit runs
-   * six to seven and a half, and this one is drawn from above at a distance
-   * where generous reads as right.
+   * A stage is 480 now, 960 across, and a racing circuit 560, 1120. Against
+   * the cars raced on each that is seven and a half technical-widths and
+   * eight and a half to ten car-widths; a real circuit runs six to seven and
+   * a half, and this one is seen from above at a distance where generous
+   * reads as right. The stage stays the narrower of the two, because
+   * choosing a line freely is what a racing circuit is for.
+   *
+   * The corner limits move with the width: a road cannot have a corner in it
+   * tighter than it is wide, or the inside edge folds over itself.
    */
   half: number;
 }
@@ -90,11 +104,17 @@ export const KINDS: Record<TrackKind, KindSpec> = {
     label: 'rally',
     vehicles: ['technical', 'rally'],
     terrain: [1, 1, 1, 1, 1],
-    curve: 600,
+    // 720, up from the 600 that was the technical's own turning circle and
+    // a little: a road 480 either side of the line cannot hold a 600mm
+    // corner, whose inside edge would be a 120mm arc. The floor is the half
+    // width and a half — and it is also just under the original circuit's
+    // own tightest corner, 733mm, which is not a coincidence worth undoing.
+    curve: 720,
     minLength: 24000,
     maxLength: 34000,
     wild: true,
-    half: 380,
+    half: 480,
+    wildHalf: 300,
   },
   track: {
     key: 'track',

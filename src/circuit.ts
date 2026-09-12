@@ -104,7 +104,8 @@ export function useTrack(seed: number, size: SizeKey, biome: BiomeKey, wild = fa
   resizeArena();
   // the width first: the road, the kerbs, the posts, the barriers and the
   // forest are all measured out from it, and all of them are built below
-  setTrackHalf(kindOf(kind).half);
+  const k = kindOf(kind);
+  setTrackHalf(wild && k.wild && k.wildHalf ? k.wildHalf : k.half);
   setTrack(circuitFor(seed, SIZE, wild, kind));
   // the biome says what the ground is made of and the kind says how much of
   // it there is: a racing circuit keeps the biome's character at a fraction
