@@ -2008,6 +2008,42 @@ grid the whole time.
 
 ![concours d'élégance](docs/concours.png)
 
+## Photo mode
+
+`P` stops the race and hands the car to the library's *other* renderer.
+
+The Concours dresses the car as an objet d'art and then says what it cannot
+do: the game path has a colour and a roughness to work with, so the gold is
+paint, the stones are faceted meshes in glossy colour, and there is no gem
+shading anywhere. The still-life path in the same library has measured
+metals, cut stones with an index of refraction and a dispersion that do real
+work, a table, a soft key and a path tracer — and it will draw one car
+standing still, which is exactly what it is for. So the photograph is the
+Concours car as the Concours means it: gold, onyx, diamond headlamps,
+white-gold filigree, and a stone a lap set into the curls, each the species
+its colour was standing in for. Drag turns the car under the lights; `T`
+asks for the traced version.
+
+It is built the first time it is asked for — about 50 ms, then two seconds
+for the bakes to settle, then the tracer — so a race that is never paused
+for a photograph pays nothing.
+
+**What it is not.** A slab-sided low-polygon car in polished gold reads as
+flat tan, and the tracer says the same thing the raster does, so that is
+honest rather than broken: a mirror shows what it is pointed at, and a flat
+panel under a soft sky shows one patch of it. The picture wants either
+curved bodywork or a photographer's light tent — a gradient backdrop and a
+big soft source close in — and it has neither. What it does show, which the
+road never could, is the filigree as wire, the tyres as stone, and the
+headlamps as diamonds rather than white blobs.
+
+**Two things it turned up, both worth knowing.** The dev server was not
+allowed to serve files from the linked renderer checkout, so the path
+tracer's scene worker was fetched and then died importing what it needed —
+and from the page that is indistinguishable from a tracer still thinking.
+`vite.config.ts` now allows it, and the library says so when a worker cannot
+start rather than waiting for ever.
+
 ## What it costs
 
 Measured on a Mac mini (M-series) at 1920×1080, fenced on the queue rather

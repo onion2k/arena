@@ -1,5 +1,17 @@
+import { createRequire } from 'node:module';
+import { dirname } from 'node:path';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vite';
+
+/**
+ * Where the renderer actually is: inside node_modules when it was installed,
+ * and a checkout elsewhere on the disk when it was linked for working on both
+ * at once. The path tracer builds its scene in a worker inside the library,
+ * fetched by URL, so the dev server has to be allowed to serve from there —
+ * without it the worker is fetched, fails to import what it needs, and dies
+ * without a word, which looks like a traced frame that never arrives.
+ */
+const renderer = dirname(createRequire(import.meta.url).resolve('artshape-render/package.json'));
 
 /**
  * Dev-only: POST a data URL to /__shot and it lands in docs/. The canvas
@@ -31,6 +43,10 @@ export default defineConfig({
   plugins: [capture()],
   // The renderer is linked during development, and Vite's watcher ignores
   // everything under node_modules: without this an edit to it serves stale.
-  server: { port: 5190, strictPort: true, watch: { ignored: ['!**/node_modules/artshape-render/**'] } },
+  server: {
+    port: 5190, strictPort: true,
+    watch: { ignored: ['!**/node_modules/artshape-render/**'] },
+    fs: { allow: ['.', renderer] },
+  },
   optimizeDeps: { exclude: ['artshape-render'] },
 });

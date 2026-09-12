@@ -15,6 +15,7 @@ import { GameRenderer, EFFECT_STRIDE, type GameGroup } from 'artshape-render/gam
 import { LightPool } from 'artshape-render/game/lights';
 import { COUNTDOWN, PAINT, Race, TRUCKS, type Input } from './game';
 import { STONES, filigree, gemMesh, plinthRadius, plinthRim, plinthVelvet, presentation, type Filigree } from './concours';
+import { Photo, carGroups } from './photo';
 import type { Pose } from './ghost';
 import type { VehicleSpec } from './vehicle';
 import { CONTROLS, SETTINGS, restoreDefaults, save, type SliderKey } from './settings';
@@ -863,6 +864,75 @@ async function main() {
   addEventListener('resize', resize);
   resize();
 
+  // --- photo mode ---------------------------------------------------------
+
+  /**
+   * The car as the Concours says it is: the same device and the same canvas,
+   * handed to the still-life renderer, which has the metals, the cut stones
+   * and the tracer this path has never had. Built on the first photograph.
+   */
+  const photo = new Photo(ctx, canvas);
+  let photoTurning = false;
+  let photoNoteIn = 0;
+  let photoAzimuth = -2.2;
+  let photoElevation = 0.42;
+
+  function writePhotoNote() {
+    if (photo.stage === 'off') { statsPanel.innerHTML = ''; return; }
+    const built = photo.timings.build ? `${Math.round(photo.timings.build)} ms to build` : '';
+    const settled = photo.timings.settle ? `, ${(photo.timings.settle / 1000).toFixed(1)} s to settle` : '';
+    statsPanel.innerHTML = `<b>photograph</b><br>${photo.status}<br><span>${built}${settled}</span><br>`
+      + 'drag to turn · <span>P</span> back to the race';
+  }
+
+  async function photograph() {
+    if (photo.stage !== 'off') {
+      photo.close();
+      resize();
+      writePhotoNote();
+      return;
+    }
+    const spec = arena.truck.spec;
+    const groups = carGroups(
+      { spec, laps: arena.laps, concours: SETTINGS.concours, paint: [...PAINT[0]] as [number, number, number] },
+      filigreeOf,
+    );
+    // the car and its plinth, with a little air: what the camera has to hold
+    const half = Math.max(spec.body.length, spec.body.width) * 0.62 + 24;
+    await photo.open(groups, {
+      min: [-half, -half, -spec.wheelRadius - 24],
+      max: [half, half, spec.body.height + 20],
+    });
+    photo.turn(photoAzimuth, photoElevation);
+    photoTurning = false;
+    writePhotoNote();
+  }
+
+  // a handle for the console and for a test: the photograph, and what it holds
+  Object.assign(window as unknown as Record<string, unknown>, {
+    photo: {
+      it: photo,
+      shoot: () => photograph(),
+      groups: () => carGroups(
+        { spec: arena.truck.spec, laps: arena.laps, concours: SETTINGS.concours, paint: [...PAINT[0]] as [number, number, number] },
+        filigreeOf,
+      ),
+    },
+  });
+
+  // turning the car under the lights: a drag, as the arena's own camera takes one
+  canvas.addEventListener('pointermove', (e) => {
+    if (photo.stage === 'off' || !(e.buttons & 1)) return;
+    photoAzimuth -= e.movementX * 0.006;
+    photoElevation = Math.max(-0.15, Math.min(1.35, photoElevation + e.movementY * 0.004));
+    photo.turn(photoAzimuth, photoElevation);
+    photoTurning = true;
+  });
+  addEventListener('keydown', (e) => {
+    if (e.key === 'p' || e.key === 'P') void photograph();
+    if ((e.key === 't' || e.key === 'T') && photo.stage !== 'off') { photo.trace(); writePhotoNote(); }
+  });
+
   await renderer.ready;
   for (const el of [scorePanel, statsPanel, helpPanel, mapPanel]) el.removeAttribute('hidden');
   boot.classList.add('gone');
@@ -1035,6 +1105,16 @@ async function main() {
       }
       touched = true;
     }
+    // Photo mode: the race stands still and the car is drawn by the other
+    // renderer. Nothing is stepped and nothing is uploaded — a photograph of
+    // a car mid-corner is a photograph of a car falling over.
+    if (photo.stage !== 'off') {
+      photo.render(() => ctx.context.getCurrentTexture().createView(), photoTurning);
+      photoTurning = false;
+      if ((photoNoteIn -= dt) <= 0) { photoNoteIn = 0.25; writePhotoNote(); }
+      return;
+    }
+
     // the sky follows the clock and the clock follows the truck, every frame
     applySky();
     followShip(dt);
