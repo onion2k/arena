@@ -35,13 +35,18 @@ import { ARENA_X, ARENA_Y, COLUMNS, MESHES, arenaMatrices } from './scene';
 import { placeOnSlope, placeVehicleFacing, placeVehiclePart, placeVehicleWheel, project } from './matrix';
 import { EFFECT_CAPACITY, LIGHT_CAPACITY, effectsFor, lightsFor, setProjectionScale, shadowedLamps } from './lighting';
 import { useTrack as buildCircuit } from './circuit';
+// after `./circuit`: `raceline` reads the track, and the modules have a
+// cycle in them — track -> biomes -> props -> scene -> track — which only
+// evaluates cleanly when it is entered from the circuit's side. Imported
+// above it, the line's own module body had not run when this one's did.
+import { LINE_CAPACITY, lineMesh, lineQuads, raceLine } from './raceline';
 import { SIZE, SIZES, labelOf, sizeOf, type SizeKey } from './world';
 
 const FOV = 40;
 /** Where the dynamic groups sit, in the order they are handed over. */
-const CHASSIS = 0, CAB = 1, WHEELS_GROUP = 2, LAMPS = 3, START_LAMPS = 4, SKIDS = 5;
+const CHASSIS = 0, CAB = 1, WHEELS_GROUP = 2, LAMPS = 3, START_LAMPS = 4, SKIDS = 5, RACE_LINE = 6;
 /** The Concours groups: filigree, stones, and the plinth's rim and velvet. */
-const ORNAMENT = 6, GEMS = 7, PLINTH = 8, VELVET = 9;
+const ORNAMENT = 7, GEMS = 8, PLINTH = 9, VELVET = 10;
 /** The Concours d'Élégance's gold. */
 const CONCOURS_GOLD: [number, number, number] = [1.0, 0.70, 0.22];
 /** The most stones a car can wear. */
@@ -294,6 +299,28 @@ async function main() {
   const startBulbGroup: GameGroup = { mesh: mesh.lamp, matrices: startBulbsM, count: 2 * START_BULBS, albedo: [0.2, 0.04, 0.03], roughness: 0.12 };
   // the skid marks: a ring of dark quads on the road, laid by sliding tyres
   const skidGroup: GameGroup = { mesh: markMesh(), matrices: skids.matrices, count: 0, albedo: [0.028, 0.028, 0.032], roughness: 0.92 };
+  /*
+   * The racing line: a painted ribbon along the line a point mass would
+   * take, green where the car is flat, amber where it is off the throttle,
+   * red where it is braking. One quad a step with a colour of its own, which
+   * is what `materials` is for — the alternative is a mesh a colour, and the
+   * colours here change with the car.
+   *
+   * Rebuilt when the circuit or the class changes and never per frame: the
+   * relaxation that finds the line is two milliseconds, which is nothing
+   * once and everything sixty times a second.
+   */
+  const lineM = new Float32Array(LINE_CAPACITY * 16);
+  const lineMat = new Float32Array(LINE_CAPACITY * 4);
+  const lineGroup: GameGroup = { mesh: lineMesh(), matrices: lineM, count: 0, materials: lineMat, albedo: [1, 1, 1], roughness: 0.5 };
+  function rebuildLine() {
+    if (!SETTINGS.line) { lineGroup.count = 0; renderer.move(RACE_LINE, lineM, 0); return; }
+    const spec = arena.truck.spec;
+    const line = raceLine(spec.engine.topSpeed * SETTINGS.pace, spec.rating);
+    lineGroup.count = lineQuads(line, lineM, lineMat);
+    renderer.move(RACE_LINE, lineM, lineGroup.count);
+    renderer.tint(RACE_LINE, lineMat);
+  }
   /** The Concours groups for a class: its filigree, the stones, and a plinth
    *  made to its size. Drawn with nothing in them when the mode is off. */
   function jewelGroups(spec: VehicleSpec): GameGroup[] {
@@ -310,7 +337,7 @@ async function main() {
       { mesh: scaled(plinthVelvet()), matrices: plinthM, count: 0, albedo: [0.30, 0.02, 0.07], roughness: 0.95 },
     ];
   }
-  const dynamicGroups = (spec: VehicleSpec) => [...vehicleGroups(spec), startBulbGroup, skidGroup, ...jewelGroups(spec)];
+  const dynamicGroups = (spec: VehicleSpec) => [...vehicleGroups(spec), startBulbGroup, skidGroup, lineGroup, ...jewelGroups(spec)];
   renderer.setDynamic(dynamicGroups(VEHICLES[SETTINGS.vehicle]));
 
   /**
@@ -322,12 +349,18 @@ async function main() {
   function switchVehicle(spec: VehicleSpec) {
     arena.useVehicle(spec);
     renderer.setDynamic(dynamicGroups(spec));
+    // the line is the class's as much as the circuit's: where a prototype
+    // is flat an F1 is braking, and the colours say so
+    rebuildLine();
   }
 
   const arena = new Race();
   // `Race` defaults to the technical; put the vehicle that was actually
   // saved in force before anything is drawn or driven.
   if (SETTINGS.vehicle !== 'technical') arena.useVehicle(VEHICLES[SETTINGS.vehicle]);
+  // and the racing line, which is a car's as much as a circuit's and so
+  // cannot be built with the pool above: there was no car then
+  rebuildLine();
   /**
    * The sun's shadow map, fitted round the whole arena at medium size and
    * smaller: 2048 texels across 14 metres is seven millimetres each, which
@@ -445,6 +478,7 @@ async function main() {
     save();
     useTrack(seed, size, biome, wild, kind);
     buildArena();
+    rebuildLine();
     minimap.redraw();
     skids.clear();
     arena.ghost.clear();
@@ -500,8 +534,8 @@ async function main() {
   }
   // The two modes: switches, kept across sessions, and nothing to do with
   // which circuit is built — so they apply at once rather than on race.
-  const modeButtons: [HTMLButtonElement, 'disco' | 'concours'][] = [];
-  for (const [key, label] of [['disco', 'disco night'], ['concours', "concours d'élégance"]] as const) {
+  const modeButtons: [HTMLButtonElement, 'disco' | 'concours' | 'line'][] = [];
+  for (const [key, label] of [['disco', 'disco night'], ['concours', "concours d'élégance"], ['line', 'racing line']] as const) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.textContent = label;
@@ -511,6 +545,7 @@ async function main() {
       btn.setAttribute('aria-pressed', String(SETTINGS[key]));
       save();
       if (key === 'concours') renderer.setDynamic(dynamicGroups(arena.truck.spec));
+      if (key === 'line') rebuildLine();
       btn.blur();
     });
     pregameModes.appendChild(btn);
@@ -954,8 +989,16 @@ async function main() {
     writePhotoNote();
   }
 
-  // a handle for the console and for a test: the photograph, and what it holds
+  // a handle for the console and for a test: the photograph, the racing
+  // line, and what they hold
   Object.assign(window as unknown as Record<string, unknown>, {
+    line: {
+      on: () => SETTINGS.line,
+      count: () => lineGroup.count,
+      rebuild: () => rebuildLine(),
+      at: (i: number) => Array.from(lineM.slice(i * 16 + 12, i * 16 + 15)),
+      colour: (i: number) => Array.from(lineMat.slice(i * 4, i * 4 + 4)),
+    },
     photo: {
       it: photo,
       shoot: () => photograph(),

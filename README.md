@@ -2119,6 +2119,43 @@ grid the whole time.
 
 ![concours d'élégance](docs/concours.png)
 
+## The racing line
+
+A switch beside **disco night** and **concours d'élégance**: the line the
+circuit would be driven on, painted along the road and coloured by the speed
+a point mass holds on it — green where the car is flat, amber where it is
+off the throttle, red where it is braking.
+
+**Finding it is a relaxation, not an optimiser.** Four hundred samples start
+on the centreline; each is pulled toward the midpoint of its two neighbours,
+put back on its own line across the road and clamped to 82% of the half
+width, and that is run two hundred and forty times. What it minimises is the
+curvature of the path, which is what a racing line minimises, and it settles
+in about two milliseconds. Over four rally seeds at medium the road's
+tightest corner is 714 to 912mm and the line's is 931 to 1378 — a quarter to
+a half more radius, which is the width of the road being used.
+
+It has the fault every curvature-minimising line has: it is the geometric
+line rather than the fast one, so it takes a late apex no better than an
+early one. It is a guide and the README says so.
+
+**It is drawn, not driven.** The pilot that fits par still follows the
+centreline. A line that fed the physics would move every lap time in the
+game and invalidate the par constants fitted against them — so the switch
+changes what you see and nothing else.
+
+**How it is drawn.** One quad a step, four hundred of them, each with a
+colour of its own in the group's `materials` buffer — the same trick the
+skid marks use, and the reason the colours can follow the car without
+rebuilding a mesh. It rides the ground at the road's own lift plus two
+millimetres; at nine, which is what a mark laid on bare ground wants, the
+whole line drew perfectly thirteen millimetres under the tarmac and could
+not be seen from anywhere.
+
+The line is the car's as much as the circuit's — where a prototype is flat
+an F1 is braking — so it is rebuilt when either changes, and never per
+frame.
+
 ## Photo mode
 
 `P` stops the race and hands the car to the library's *other* renderer.

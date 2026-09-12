@@ -84,6 +84,9 @@ export interface Settings {
   /** Concours d'Élégance: the car in gold, filigree and gemstones, turned on
    *  a velvet plinth for the countdown. See `concours.ts`. */
   concours: boolean;
+  /** The racing line painted on the road, coloured by the speed a point mass
+   *  holds along it. A guide, drawn and not driven: see `raceline.ts`. */
+  line: boolean;
 }
 
 export const DEFAULTS: Readonly<Settings> = {
@@ -104,13 +107,14 @@ export const DEFAULTS: Readonly<Settings> = {
   wild: false,
   disco: false,
   concours: false,
+  line: false,
 };
 
 /**
  * A setting a slider can drive: everything except the seed and the size,
  * which are buttons and not ranges — see `SliderKey`.
  */
-export type SliderKey = Exclude<keyof Settings, 'seed' | 'size' | 'kind' | 'vehicle' | 'biome' | 'wild' | 'disco' | 'concours'>;
+export type SliderKey = Exclude<keyof Settings, 'seed' | 'size' | 'kind' | 'vehicle' | 'biome' | 'wild' | 'disco' | 'concours' | 'line'>;
 
 /** One row of the panel: which setting, what to call it, how far it goes. */
 export interface Control {
@@ -186,6 +190,7 @@ function load(): Partial<Settings> {
     if (typeof saved.wild === 'boolean') out.wild = saved.wild;
     if (typeof saved.disco === 'boolean') out.disco = saved.disco;
     if (typeof saved.concours === 'boolean') out.concours = saved.concours;
+    if (typeof saved.line === 'boolean') out.line = saved.line;
     for (const c of CONTROLS) {
       const v = saved[c.key];
       if (typeof v === 'number' && Number.isFinite(v)) {
