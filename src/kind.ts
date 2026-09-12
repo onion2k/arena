@@ -65,6 +65,23 @@ export interface KindSpec {
   maxLength: number;
   /** Whether the wild circuits — straights and hairpins — are offered. */
   wild: boolean;
+  /**
+   * Half the width of the tarmac, in millimetres.
+   *
+   * A rally stage is 380, the width the game shipped with: a lane and a
+   * half, where the line you take is mostly the one the road gives you. A
+   * racing circuit is wider, because the whole of racing on one is choosing
+   * a line — brake on the outside, clip the apex, run out to the far edge —
+   * and on a stage's width there is nowhere to do it. It showed the moment
+   * the racing line was drawn: the line had the road's own shape because
+   * there was no room for another.
+   *
+   * 560 is 1120 across. Against the cars raced on a track, 110 and 130
+   * wide, that is eight and a half to ten car widths; a real circuit runs
+   * six to seven and a half, and this one is drawn from above at a distance
+   * where generous reads as right.
+   */
+  half: number;
 }
 
 export const KINDS: Record<TrackKind, KindSpec> = {
@@ -77,6 +94,7 @@ export const KINDS: Record<TrackKind, KindSpec> = {
     minLength: 24000,
     maxLength: 34000,
     wild: true,
+    half: 380,
   },
   track: {
     key: 'track',
@@ -92,12 +110,13 @@ export const KINDS: Record<TrackKind, KindSpec> = {
     // is a hairpin they brake hard for, the fast end a corner that is
     // barely one.
     curve: 1500,
-    // 900 to 2300: a quarter of tracks have a corner under 1250mm on them
-    // and a quarter have nothing under 1950
-    curveRange: [900, 2300],
+    // 1100 to 2500: the floor is twice the half width and a little, since
+    // a corner tighter than the road is wide folds its own inside edge over
+    curveRange: [1100, 2500],
     minLength: 26000,
     maxLength: 38000,
     wild: false,
+    half: 560,
   },
 };
 

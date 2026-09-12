@@ -899,6 +899,21 @@ The floor of 900mm is well clear of either racing car's turning circle —
 561 and 691mm — so a hairpin is a corner they brake hard for and not one
 they cannot make.
 
+**A track is wider.** Half widths of 380 on a stage, as the game shipped,
+and 560 on a track — 760mm against 1120. Against the cars raced on each
+that is about six technical-widths on a stage and eight and a half to ten
+car-widths on a track; a real circuit runs six to seven and a half, and this
+one is seen from above at a distance where generous reads as right. The
+racing line is what made the case: on a stage it sits hard against its clamp
+on every seed, and on a track it does not.
+
+The width is a live value, as the arena's size is, because everything is
+measured out from it: the road mesh, the kerbs, the lamp posts, the
+barriers, the signs, and how far back the forest starts. The two figures
+that were derived from it at import time — the forest's setback and the
+barrier line — had to become functions, or a wider road would have been
+built with a stage's verges.
+
 Wild circuits stay a rally thing; the button is hidden on a track. Straights
 and hairpins are the rally's idea of interesting and a racing circuit's idea
 of a mistake.
@@ -2126,23 +2141,49 @@ circuit would be driven on, painted along the road and coloured by the speed
 a point mass holds on it — green where the car is flat, amber where it is
 off the throttle, red where it is braking.
 
-**Finding it is a relaxation, not an optimiser.** Four hundred samples start
-on the centreline; each is pulled toward the midpoint of its two neighbours,
-put back on its own line across the road and clamped to 82% of the half
-width, and that is run two hundred and forty times. What it minimises is the
-curvature of the path, which is what a racing line minimises, and it settles
-in about two milliseconds. Over four rally seeds at medium the road's
-tightest corner is 714 to 912mm and the line's is 931 to 1378 — a quarter to
-a half more radius, which is the width of the road being used.
+**Finding it: a taut string, then the kinks taken out.** Four hundred
+samples each keep an offset across the road, clamped to 82% of the half
+width. Two things run over them in turn.
 
-It has the fault every curvature-minimising line has: it is the geometric
-line rather than the fast one, so it takes a late apex no better than an
-early one. It is a guide and the README says so.
+The first pulls each sample toward the midpoint of its neighbours. Left to
+converge that does *not* give a racing line: it gives the shortest loop
+inside the corridor — a taut string that hugs the inside edge and turns in
+kinks where it meets the clamp. Measured, the taut line's slowest point was
+2460 where the finished line's is 3083 on the same circuit. The string is
+shorter and slower, which is the whole difference between a geometric line
+and a quick one. It looked convincing at first only because two hundred and
+forty passes had not converged.
+
+The second minimises the path's own curvature, solved a sample at a time by
+over-relaxed Gauss–Seidel: three of the path's bends involve each sample and
+each is linear in its offset, so the offset that minimises their squares has
+a closed form. That is quick at the wrinkles and slow at the shape — plain
+gradient descent on the same objective moved the line seven millimetres in
+nine thousand passes — which is why it starts from the string, which has the
+shape already. About a tenth of a second together, so the line is built when
+the circuit or the car changes and never per frame.
+
+**What it is worth, measured.** The slowest point of the lap against the
+slowest point of the same lap driven down the middle of the road: **12, 33,
+34 and 41 percent faster** on four rally seeds, and **8, 12, 22 and 23** on
+four tracks, three of which come out flat out. That is the width of the road
+being spent.
+
+It is still not a lap-time optimiser: a real line brakes later and
+sacrifices entry for exit, and this one does not know what exit is. It is a
+guide and the README says so.
 
 **It is drawn, not driven.** The pilot that fits par still follows the
 centreline. A line that fed the physics would move every lap time in the
 game and invalidate the par constants fitted against them — so the switch
 changes what you see and nothing else.
+
+**And it showed the road was too narrow.** On a track the line uses 291 to
+357mm of the 459 it is allowed. On a rally stage it used 312 of 312 — every
+seed, hard against the clamp, which is the road saying it is narrower than
+the line the car would like to take. A stage is meant to be that. A racing
+circuit is not, so the two kinds now have different widths: see
+[Rally and track](#rally-and-track).
 
 **How it is drawn.** One quad a step, four hundred of them, each with a
 colour of its own in the group's `materials` buffer — the same trick the

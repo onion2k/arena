@@ -12,7 +12,7 @@ import { PROPS, replant } from './flora';
 import { BIOME, setBiome, type BiomeKey } from './biomes';
 import { BOLLARDS, rebuildFurniture } from './furniture';
 import { lowestRoad, refloodArena } from './water';
-import { TRACK_LIFT, centreline, circuitFor, setTrack, tangentAt } from './track';
+import { TRACK_LIFT, centreline, circuitFor, setTrack, setTrackHalf, tangentAt } from './track';
 import { height, seedTerrain } from './terrain';
 import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS, resizeArena, restandColumns } from './scene';
 import { CircleGrid } from './spatial';
@@ -102,6 +102,9 @@ export function useTrack(seed: number, size: SizeKey, biome: BiomeKey, wild = fa
   setSize(size);
   setBiome(biome);
   resizeArena();
+  // the width first: the road, the kerbs, the posts, the barriers and the
+  // forest are all measured out from it, and all of them are built below
+  setTrackHalf(kindOf(kind).half);
   setTrack(circuitFor(seed, SIZE, wild, kind));
   // the biome says what the ground is made of and the kind says how much of
   // it there is: a racing circuit keeps the biome's character at a fraction

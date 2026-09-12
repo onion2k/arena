@@ -9,27 +9,46 @@
  * green where you are flat, amber where you are off the throttle, red where
  * you are braking.
  *
- * **How the line is found.** Not an optimiser: a relaxation. Every sample
- * starts on the centreline and is pulled toward the midpoint of its two
- * neighbours — the same smoothing that turns a polygon into a circle — and
- * is then put back on its own line across the road and clamped to the
- * tarmac. What that minimises is the curvature of the path, which is what a
- * racing line minimises, and it settles in a couple of hundred passes over
- * four hundred samples in under two milliseconds. It has the same fault as
- * every curvature-minimising line: it is the geometric line rather than the
- * fast one, so it takes a late apex no better than an early one. It is a
- * guide, and it says so.
+ * **How the line is found.** Gradient descent on the path's own curvature.
+ * Every sample keeps an offset across the road; the thing minimised is the
+ * sum of the squared second differences of the path — its curvature — and
+ * the gradient of that is the fourth difference, so each pass steps every
+ * sample against it and clamps it back onto the tarmac.
+ *
+ * The first version pulled each sample toward the midpoint of its
+ * neighbours instead, which is the smoothing that turns a polygon into a
+ * circle. Left to converge that does not give a racing line at all: it
+ * gives the *shortest* loop inside the corridor, a taut string that hugs
+ * the inside edge and turns in kinks where it meets the clamp. Measured,
+ * the taut line's slowest point was 2460 against the curvature line's
+ * 3083 on the same circuit — the string is shorter and slower, which is
+ * the whole difference between a geometric line and a fast one. It looked
+ * right only because two hundred and forty passes had not converged.
+ *
+ * It is still not a lap-time optimiser: a real line brakes later and
+ * sacrifices entry for exit, and this one does not know what exit is. It
+ * is a guide, and it says so.
  *
  * **It is drawn, not driven.** The pilot that fits par still follows the
  * centreline, and nothing here touches what the car does — a line that fed
  * the physics would move every lap time in the game and invalidate the par
  * constants fitted against them. This is an overlay.
  *
- * **What it is worth, measured.** Over four rally seeds at medium the road's
- * tightest corner is 714 to 912mm and the line's is 931 to 1378: a quarter
- * to a half more radius, which is the width of the road being used. The
- * technical is held below nine tenths of its top speed for 0 to 4% of a lap
- * on those, and an F1 on a track for 0 to 1% of one.
+ * **What it is worth, measured.** The slowest point of the lap, against the
+ * slowest point of the same lap driven down the middle of the road: on four
+ * rally seeds at medium the line is 12, 33, 34 and 41 percent faster there,
+ * and on four tracks 8, 12, 22 and 23 — three of which come out flat out.
+ * That is the width of the road being spent, and it is why the line is
+ * worth drawing.
+ *
+ * It costs about a tenth of a second to find, which is why it is built when
+ * the circuit or the car changes and never per frame.
+ *
+ * **How much road it wants.** On a track the line uses 291 to 357mm of the
+ * 459 it is allowed. On a rally stage it uses 312 of 312 — every seed, hard
+ * against the clamp, which is the road telling you it is too narrow for the
+ * line the car would like to take. A stage is meant to be that; a racing
+ * circuit is not, and that is why the two kinds have different widths.
  */
 
 import type { Mesh } from 'artshape-render/mesh/types';
@@ -67,7 +86,7 @@ export interface RaceLine {
  * its own radial line after each relaxation pass without re-solving where
  * it is.
  */
-export function raceLine(topSpeed: number, rating: CornerRating, samples = 400, passes = 240): RaceLine {
+export function raceLine(topSpeed: number, rating: CornerRating, samples = 400, passes = 4000): RaceLine {
   const theta: number[] = [];
   const centre: [number, number][] = [];
   const radial: [number, number][] = [];
@@ -84,21 +103,71 @@ export function raceLine(topSpeed: number, rating: CornerRating, samples = 400, 
   const off = new Float64Array(samples);
   const limit = perRadial.map((p) => TRACK_HALF * USABLE * p);
 
-  for (let pass = 0; pass < passes; pass++) {
+  const wrap = (i: number) => ((i % samples) + samples) % samples;
+  const at = (i: number): [number, number] => {
+    const k = wrap(i);
+    return [centre[k][0] + radial[k][0] * off[k], centre[k][1] + radial[k][1] * off[k]];
+  };
+  /** The second difference of the path at a sample: its curvature, times a step squared. */
+  const bend = (i: number): [number, number] => {
+    const [ax, ay] = at(i - 1), [bx, by] = at(i), [cx, cy] = at(i + 1);
+    return [ax - 2 * bx + cx, ay - 2 * by + cy];
+  };
+
+  /*
+   * Solved a sample at a time rather than stepped: Gauss-Seidel, over-
+   * relaxed, with the clamp applied as it goes.
+   *
+   * Three of the path's bends involve this sample — its own and its two
+   * neighbours' — and each is linear in the offset, so the offset that
+   * minimises their squares has a closed form. Holding the rest still and
+   * writing the three bends as their parts without this sample, the
+   * derivative is zero at (2b - a - c)·r / 6.
+   *
+   * Plain gradient descent on the same objective was tried first and is
+   * hopeless: the fourth difference is stiff, and the modes that actually
+   * move the line across the road are the slow ones — after nine thousand
+   * passes and 175ms the line had left the centreline by seven
+   * millimetres. This converges in a few hundred sweeps and six.
+   */
+  /*
+   * Started from the taut string rather than from the centreline.
+   *
+   * The curvature solve below is quick at the wrinkles and slow at the
+   * shape: the modes that carry the whole line across the road take
+   * thousands of sweeps, two hundred milliseconds, to arrive. The midpoint
+   * smoothing that was the first attempt has the opposite character — it
+   * pulls the line into the corners in a few hundred cheap passes and then
+   * keeps going until it is a taut string with kinks in it. So: let it, and
+   * then let the curvature solve take the kinks out. Six milliseconds
+   * together for what cost two hundred from a standing start.
+   */
+  for (let pass = 0; pass < 400; pass++) {
     const next = new Float64Array(samples);
     for (let i = 0; i < samples; i++) {
-      const a = (i + samples - 1) % samples, b = (i + 1) % samples;
-      const pa: [number, number] = [centre[a][0] + radial[a][0] * off[a], centre[a][1] + radial[a][1] * off[a]];
-      const pb: [number, number] = [centre[b][0] + radial[b][0] * off[b], centre[b][1] + radial[b][1] * off[b]];
-      // the midpoint of the neighbours, put back on this sample's radius
-      const mx = (pa[0] + pb[0]) / 2 - centre[i][0];
-      const my = (pa[1] + pb[1]) / 2 - centre[i][1];
+      const [ax, ay] = at(i - 1), [bx, by] = at(i + 1);
+      const mx = (ax + bx) / 2 - centre[i][0];
+      const my = (ay + by) / 2 - centre[i][1];
       const want = mx * radial[i][0] + my * radial[i][1];
-      // eased rather than jumped, or the relaxation rings rather than settles
       const to = off[i] + (want - off[i]) * 0.5;
       next[i] = Math.max(-limit[i], Math.min(limit[i], to));
     }
     off.set(next);
+  }
+
+  const OMEGA = 1.7;
+  for (let pass = 0; pass < passes; pass++) {
+    for (let i = 0; i < samples; i++) {
+      const r = radial[i];
+      // each bend, less this sample's own contribution to it
+      const a = bend(i - 1), b = bend(i), c = bend(i + 1);
+      const a0 = (a[0] - r[0] * off[i]) * r[0] + (a[1] - r[1] * off[i]) * r[1];
+      const b0 = (b[0] + 2 * r[0] * off[i]) * r[0] + (b[1] + 2 * r[1] * off[i]) * r[1];
+      const c0 = (c[0] - r[0] * off[i]) * r[0] + (c[1] - r[1] * off[i]) * r[1];
+      const want = (2 * b0 - a0 - c0) / 6;
+      const to = off[i] + (want - off[i]) * OMEGA;
+      off[i] = Math.max(-limit[i], Math.min(limit[i], to));
+    }
   }
 
   const points: [number, number][] = [];

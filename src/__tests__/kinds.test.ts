@@ -9,7 +9,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import { useTrack } from './sim';
-import { centreline, circuitFor, curveRadius, difficultyBand, limitsFor, rateTrack, slowestCorner } from '../track';
+import { TRACK_HALF, centreline, circuitFor, curveRadius, difficultyBand, limitsFor, rateTrack, roadDistance, setTrackHalf, slowestCorner, where } from '../track';
+import { COLUMNS } from '../scene';
+import { BOLLARDS, SIGNS } from '../furniture';
+import { PROPS } from '../flora';
+import { raceLine } from '../raceline';
 import { VEHICLES } from '../vehicles';
 import { height } from '../terrain';
 import { KINDS, allows, defaultVehicle, kindForVehicle } from '../kind';
@@ -123,5 +127,47 @@ describe('what the select screen says about a circuit', () => {
     // the original circuit is the second band, as it has always been
     const r = rateTrack(circuitFor(0, 1, false, 'rally'), VEHICLES.technical.engine.topSpeed, VEHICLES.technical.rating);
     expect(difficultyBand(r.difficulty).name).toBe('open');
+  });
+});
+
+describe('the width of the road', () => {
+  it('is the kind\'s, and everything beside it moves out with it', () => {
+    for (const kind of ['rally', 'track'] as const) {
+      useTrack(3, 'M', 'forest', false, kind);
+      expect(TRACK_HALF, kind).toBe(KINDS[kind].half);
+      // nothing stands on the tarmac or beside it — the posts, barriers,
+      // signs and trees are all measured out from the road's own edge, and
+      // a wider road has to move all of them
+      const clear = (what: string, x: number, y: number, r: number) =>
+        expect(roadDistance(x, y) - r, `${kind} ${what} at ${x.toFixed(0)},${y.toFixed(0)}`).toBeGreaterThan(TRACK_HALF + 40);
+      for (const p of COLUMNS) clear('post', p.x, p.y, 17);
+      for (const b of BOLLARDS) clear(b.kind, b.x, b.y, b.r);
+      for (const s of SIGNS) clear('sign', s.x, s.y, 10);
+      for (const p of PROPS.filter((q) => q.r > 0).slice(0, 400)) clear('tree', p.x, p.y, p.r);
+    }
+  });
+
+  it('gives the racing line more room to move, the wider it is', () => {
+    // The point of the width, isolated: the same circuit, the same car, the
+    // line drawn at two widths. Comparing a track's line with a stage's
+    // would measure how much each circuit bends rather than how much room
+    // the line was given — on seed 3 the stage's line wanders further than
+    // the track's, because the stage has corners that make it.
+    useTrack(3, 'M', 'forest', false, 'track');
+    const spec = VEHICLES.f1;
+    const spread = () => {
+      const line = raceLine(spec.engine.topSpeed, spec.rating);
+      return Math.max(...line.points.map(([x, y]) => Math.abs(where(x, y).offset)));
+    };
+    const wide = spread();
+    setTrackHalf(KINDS.rally.half);
+    const narrow = spread();
+    setTrackHalf(KINDS.track.half);
+    // the wider line wanders further, and — the point of it — the narrow
+    // one is hard against its clamp while the wide one is not: a stage's
+    // road is the thing stopping the line, and a track's is not
+    expect(wide).toBeGreaterThan(narrow);
+    expect(narrow).toBeCloseTo(KINDS.rally.half * 0.82, 0);
+    expect(wide).toBeLessThan(KINDS.track.half * 0.82 * 0.95);
   });
 });

@@ -85,8 +85,24 @@ let shape: Shape = CLASSIC;
 /** The circuit in force. Everything downstream reads it through the functions below. */
 export function trackShape(): Shape { return shape; }
 
-/** Half the width of the tarmac. The truck is 128 across, so about five of it. */
-export const TRACK_HALF = 380;
+/**
+ * Half the width of the tarmac, for the kind of circuit in force.
+ *
+ * A live value rather than a constant, as `SIZE` is: everything that reads
+ * it — the road mesh, the kerbs, where the posts and barriers stand, how far
+ * back the forest starts, the racing line's clamp — is rebuilt by
+ * `useTrack`, and threading a width through all of them would be a parameter
+ * that never varies independently of this one.
+ *
+ * A rally stage stays at 380, which is the width the game shipped with: the
+ * technical is 128 across, so about six of it, and a stage is meant to be
+ * somewhere you cannot choose your line freely. A racing circuit is wider —
+ * see `KindSpec.half`.
+ */
+export let TRACK_HALF = 380;
+
+/** Put a width in force. Everything downstream has to be rebuilt after this. */
+export function setTrackHalf(half: number) { TRACK_HALF = half; }
 
 /** The radius of the centreline at an angle. */
 export function radiusAt(theta: number): number {

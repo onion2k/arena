@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { useTrack } from './sim';
-import { TRACK_HALF, centreline, where } from '../track';
+import { TRACK_HALF, centreline, curveRadius, where } from '../track';
 import { raceLine } from '../raceline';
 import { VEHICLES } from '../vehicles';
 
@@ -59,6 +59,23 @@ describe('the racing line', () => {
     }
   });
 
+  it('is faster through the corners than the middle of the road', () => {
+    // The claim the line exists to make: its slowest point is quicker than
+    // the slowest point of the same lap driven down the middle. Measured at
+    // 12 to 41% on stages and 8 to 23% on tracks.
+    for (const kind of ['rally', 'track'] as const) {
+      const spec = VEHICLES[kind === 'track' ? 'f1' : 'technical'];
+      for (const seed of SEEDS) {
+        useTrack(seed, 'M', 'forest', false, kind);
+        let tightest = Infinity;
+        for (let i = 0; i < 720; i++) tightest = Math.min(tightest, curveRadius(-Math.PI + (i / 720) * Math.PI * 2, 400));
+        const downTheMiddle = Math.min(spec.engine.topSpeed, spec.rating.corner * Math.sqrt(tightest));
+        const line = raceLine(spec.engine.topSpeed, spec.rating);
+        expect(Math.min(...line.speed), `${kind} #${seed}`).toBeGreaterThan(downTheMiddle * 1.05);
+      }
+    }
+  });
+
   it('slows for the corners, and less of the lap on a track than a stage', () => {
     // What the line is slowed to is a fraction of top speed, and the share
     // of the lap spent there is small in both kinds — the line straightens
@@ -78,8 +95,8 @@ describe('the racing line', () => {
     };
     const stage = slowed('rally', 'technical');
     const track = slowed('track', 'f1');
-    // a stage has somewhere the truck is well off top speed
-    expect(stage.slowest).toBeLessThan(0.85);
+    // a stage has somewhere the truck is off top speed, even on the line
+    expect(stage.slowest).toBeLessThan(0.95);
     // and spends more of its lap there than a racing circuit does
     expect(stage.share).toBeGreaterThan(track.share);
   });

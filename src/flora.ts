@@ -23,7 +23,7 @@ import type { Biome, PropKind } from './biomes';
  * touch anything here is about 980 — beyond anything the drivers have
  * managed.
  */
-export const FOREST_FROM = TRACK_HALF + 650;
+export function forestFrom(): number { return TRACK_HALF + 650; }
 /** How far past the arena's bounds the planting runs. */
 const APRON = 380;
 /**
@@ -81,7 +81,7 @@ export function plantFlora(seed: number, biome: Biome): Prop[] {
       const y = gy + (rand() - 0.5) * spacing;
       if (Math.abs(x) > x1 || Math.abs(y) > y1) continue;
       const off = Math.abs(where(x, y).offset);
-      if (off < FOREST_FROM) continue;
+      if (off < forestFrom()) continue;
       // thin, beyond where anything reaches, so the count grows with the
       // lap's length and not the arena's area
       if (off > NEAR && rand() >= 1 / SIZE) continue;

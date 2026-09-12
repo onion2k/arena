@@ -45,7 +45,8 @@ const CORNER = 1900;
 /** The span a corner's radius is measured over, at medium. */
 const CORNER_SPAN = 240;
 /** How far out from the middle of the road the barrier face stands. */
-const BARRIER_OUT = TRACK_HALF + 300;
+/** The road's edge and a little: a function, since the width moves with the kind. */
+const barrierOut = () => TRACK_HALF + 300;
 /** One rail's length. Short enough to follow a bend without a visible kink. */
 const RAIL = 440;
 /** Where the middle of the beam sits above the ground. */
@@ -272,9 +273,9 @@ export function rebuildFurniture(seed = 5) {
     const [tx, ty] = tangentAt(t);
     return { b, left: [-ty, tx] as [number, number], turn, r: curveRadius(t, span), t };
   };
-  /** The road's edge, `BARRIER_OUT` out on the side given. */
+  /** The road’s edge, `barrierOut()` out on the side given. */
   const edge = (s: ReturnType<typeof at>, side: number): [number, number] =>
-    [s.b[0] + s.left[0] * side * BARRIER_OUT, s.b[1] + s.left[1] * side * BARRIER_OUT];
+    [s.b[0] + s.left[0] * side * barrierOut(), s.b[1] + s.left[1] * side * barrierOut()];
 
   // Walk the lap by arc length rather than by angle: the same step of angle
   // covers half again as much road on the outside of the loop as the inside,
@@ -615,4 +616,4 @@ function placeMark(
 }
 
 /** How far off the road the barrier stands, for anything that needs to know. */
-export { BARRIER_OUT, RAIL_DEEP, TRACK_LIFT };
+export { barrierOut, RAIL_DEEP, TRACK_LIFT };
