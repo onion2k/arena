@@ -42,11 +42,25 @@ export interface KindSpec {
    * What the circuit itself must clear. `curve` is the tightest corner
    * allowed, in millimetres of radius: the rally figure is the technical's
    * own turning circle, and the racing one is a corner a prototype can take
-   * without lifting — about what a fast car does at two thirds of its top
-   * speed. The length band moves with it, because a lap of long corners is
-   * a longer lap.
+   * without lifting. The length band moves with it, because a lap of long
+   * corners is a longer lap.
    */
   curve: number;
+  /**
+   * How far the tightest corner allowed may vary from one seed to the next,
+   * as a pair of millimetre figures that `curve` is drawn between.
+   *
+   * Left out, every circuit of the kind is held to the same `curve` — which
+   * is right for a rally stage, where the limit is the car's turning circle
+   * and a tighter corner is undrivable rather than interesting. It is wrong
+   * for a racing track: held to one figure the generator made sixteen
+   * circuits whose slowest corner ran from 83% to 93% of top speed, which
+   * is sixteen versions of the same lap. Real circuits differ in exactly
+   * this — a hairpin at the end of a straight is a different track from a
+   * sequence of fast sweeps — so a track draws its own limit, and some of
+   * them have a slow corner on them.
+   */
+  curveRange?: [number, number];
   minLength: number;
   maxLength: number;
   /** Whether the wild circuits — straights and hairpins — are offered. */
@@ -72,11 +86,15 @@ export const KINDS: Record<TrackKind, KindSpec> = {
     // table, and a crest the car goes light over is worth keeping. The ramps
     // go to a twentieth, which is a texture rather than a jump.
     terrain: [0.34, 0.3, 0.18, 0.14, 0.05],
-    // 1500mm, against a prototype's own turning circle of 561 and an F1's
-    // of 691: every corner here is one either can take without a lift, and
-    // most are a good deal quicker than that. The point is not that the car
-    // fits — it is that the corner is worth carrying speed into.
+    // The average of the range below, for anything that asks without a
+    // seed. Against a prototype's own turning circle of 561 and an F1's of
+    // 691, every corner in the range is one either can take: the slow end
+    // is a hairpin they brake hard for, the fast end a corner that is
+    // barely one.
     curve: 1500,
+    // 900 to 2300: a quarter of tracks have a corner under 1250mm on them
+    // and a quarter have nothing under 1950
+    curveRange: [900, 2300],
     minLength: 26000,
     maxLength: 38000,
     wild: false,

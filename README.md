@@ -791,13 +791,25 @@ nothing, which is what makes it a racing circuit.
 The rally classes are unchanged and were re-run to prove it: the technical
 still fits at 1.103, 1.2% mean.
 
-**The difficulty rating means much less on a track.** Against the pilot's
-lifting it is r = 0.85 for the technical on rally stages, and r = 0.23 for
-the F1 and 0.00 for the prototype on tracks. There is nothing wrong with
-the number — a racing circuit is flat out nearly everywhere, so there is
-almost no lifting for it to correlate with, and the band it drives will read
-*flowing* for most tracks because most tracks are. It is worth knowing that
-the band discriminates between rally stages and barely between tracks.
+**The difficulty rating, and what it took to make it mean something on a
+track.** Against the pilot's lifting it is r = 0.85 for the technical on
+rally stages. On the first version of the tracks it was r = 0.23 for the F1
+and 0.00 for the prototype, and the obvious repair — the same number,
+banded on the tracks' own quintiles — turned out to be the wrong one: driven,
+the number had no relationship with the lap either (r = −0.26 against the
+pilot's own time lost to the corners), and neither did the tightest corner
+(+0.40, and the wrong way round), the share of the lap under full throttle
+(−0.15) or the slowest corner's speed (+0.39, also the wrong way round).
+
+The reason was the circuits, not the rating. Every track was held to the
+same corner limit, so sixteen of them had a slowest corner between 83% and
+93% of top speed: sixteen versions of the same lap, and what varied between
+them was the pilot rather than the road. A track now **draws its own corner
+limit** between 900 and 2300mm — see [Rally and track](#rally-and-track) —
+and with something to grade, the difficulty follows the pilot's lifting at
+**r = 0.95** for the F1 and **0.86** for the prototype, better than the
+stages' 0.85. The bands are per kind: *flowing* to *relentless* on a stage,
+*flat out* to *stop-go* on a track, each on its own distribution.
 
 **The start line is put on a straight.** The grid sits at an angle of -pi
 whatever the circuit does there, and on a random one that is as likely to be
@@ -845,7 +857,7 @@ seeds:
 
 | | rally | track |
 | --- | ---: | ---: |
-| tightest corner | 733–1241 mm | 1525–1866 mm |
+| tightest corner | 733–1241 mm | 1097–2382 mm, drawn per seed |
 | ground under the racing line, step between samples | 1.15–1.62 mm | 0.22–0.38 mm |
 | rise and fall over a lap | 146–210 mm | 39–49 mm |
 
@@ -865,6 +877,27 @@ stirred, because `random` folds zero to one — a track's #0 and #1 came back
 the same circuit — and because a track that was the same shape as the stage
 of the same number, only smoothed, would make the two kinds read as one
 circuit with a switch on it.
+
+**A track draws its own corner limit**, between 900 and 2300mm, rather than
+taking the kind's single figure. Held to one limit the generator made
+sixteen circuits whose slowest corner ran from 83% to 93% of top speed,
+which is one circuit with sixteen names; drawing per seed gives some tracks
+a hairpin and leaves others flat out, and the select screen's rating has
+something to grade. The draw leans toward the tight end — the exponent is
+1.8, swept against the share of tracks landing in each band — so a third of
+tracks are flat out, which is what a set of racing circuits should be, and
+the tail has real corners in it:
+
+| exponent | flat out | fast | balanced | technical | stop-go |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1.0 | 50% | 16% | 17% | 13% | 4% |
+| 1.4 | 41% | 15% | 19% | 18% | 7% |
+| **1.8** | **33%** | **17%** | **19%** | **22%** | **9%** |
+| 2.4 | 27% | 15% | 21% | 26% | 11% |
+
+The floor of 900mm is well clear of either racing car's turning circle —
+561 and 691mm — so a hairpin is a corner they brake hard for and not one
+they cannot make.
 
 Wild circuits stay a rally thing; the button is hidden on a track. Straights
 and hairpins are the rally's idea of interesting and a racing circuit's idea

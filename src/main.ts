@@ -29,7 +29,7 @@ import { wheelEffects } from './particles';
 import { Skids, markMesh } from './skids';
 import { VEHICLES, VEHICLE_KEYS, type VehicleKey } from './vehicles';
 import { bench } from './bench';
-import { START_BULBS, TRACK_HALF, centreline, circuitFor, difficultyBand, drawnLift, gantry, generateTrack, measureShape, radialToAcross, rateTrack, scaleShape, shapePreview, tangentAt, where } from './track';
+import { START_BULBS, TRACK_HALF, centreline, circuitFor, difficultyBand, slowestCorner, drawnLift, gantry, generateTrack, measureShape, radialToAcross, rateTrack, scaleShape, shapePreview, tangentAt, where } from './track';
 import { height as groundAt } from './terrain';
 import { ARENA_X, ARENA_Y, COLUMNS, MESHES, arenaMatrices } from './scene';
 import { placeOnSlope, placeVehicleFacing, placeVehiclePart, placeVehicleWheel, project } from './matrix';
@@ -597,7 +597,7 @@ async function main() {
     // ignored it would be describing somebody else's car.
     const spec = VEHICLES[vehicle];
     const r = rateTrack(shape, spec.engine.topSpeed * SETTINGS.pace, spec.rating);
-    const band = difficultyBand(r.difficulty);
+    const band = difficultyBand(r.difficulty, kind);
     pregameFacts.innerHTML =
       `${seed === 0 && !wild ? 'the original circuit' : `${wild ? 'wild circuit' : 'circuit'} <span>#${seed}</span>`}`
       + ` · <span>${KINDS[kind].label}</span>`
@@ -606,7 +606,12 @@ async function main() {
       + ` · <span>${spec.label}</span>`
       + ` · <span>${(p.length / 1000).toFixed(1)}</span> m`
       + ` · about <span>${r.par.toFixed(1)}</span> s a lap`
-      + ` · tightest corner <span>${Math.round(p.curve)}</span> mm`;
+      + ` · tightest corner <span>${Math.round(p.curve)}</span> mm`
+      // on a track the corner is better said in the car's own terms: the
+      // tightest radius means little until you know what you take it at
+      + (kind === 'track'
+        ? ` · slowest <span>${Math.round(slowestCorner(shape, spec.engine.topSpeed * SETTINGS.pace, spec.rating).share * 100)}</span>% of top speed`
+        : '');
     // A circuit with a corner the chosen car cannot turn is not undrivable —
     // there is the width of the road, and reverse — but it is what the long
     // cars pay for: on circuits like it the F1 laps a median 8% over par and
@@ -618,6 +623,10 @@ async function main() {
       pregameWarn.innerHTML = `tighter than the ${spec.label} can turn: a <span>${Math.round(p.curve)}</span> mm corner, `
         + `and the car's tightest circle is <span>${spec.turnCircle}</span> mm`;
     }
+    // The five-band rating, in the terms of the kind of circuit it is: a
+    // stage is flowing to relentless, a track flat out to stop-go, and each
+    // set of words is banded on its own kind's distribution. Both follow
+    // the pilot's lifting — r = 0.85 on stages, 0.93 on tracks.
     pregameRating.innerHTML =
       `<b>${'\u25cf'.repeat(band.level)}${'\u25cb'.repeat(5 - band.level)}</b> ${band.name}`;
   }

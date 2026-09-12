@@ -94,6 +94,19 @@ export interface Score {
   worst: number;
   /** Correlation between difficulty and the pilot's lifting. */
   liftCorrelation: number;
+  /**
+   * Correlation between difficulty and what the corners actually cost the
+   * pilot: its lap over the flat-out lap, less one.
+   *
+   * Lifting is the right yardstick for a rally stage, where the question is
+   * how often you are off the throttle, and the wrong one for a racing
+   * circuit, where the answer is hardly ever whatever the circuit — the
+   * prototype's lifting correlates at r = 0.00 on tracks, not because the
+   * difficulty is wrong but because there is no lifting to correlate it
+   * with. Time lost to the corners is the same question asked in a way both
+   * kinds can answer.
+   */
+  costCorrelation: number;
 }
 
 /** How a rating's par times and difficulties compare with what was driven. */
@@ -101,11 +114,14 @@ export function score(spec: VehicleSpec, m: Measured, rating: CornerRating): Sco
   const rated = m.circuits.map(({ seed, wild, kind }) => rateTrack(circuitFor(seed, 1, wild, kind), spec.engine.topSpeed, rating));
   const errors = rated.map((r, i) => (Number.isFinite(m.laps[i]) ? r.par / m.laps[i] - 1 : NaN));
   const finite = errors.filter(Number.isFinite);
+  const cost = rated.map((r, i) => m.laps[i] / r.flatOut - 1);
+  const drove = cost.map((c, i) => (Number.isFinite(c) ? i : -1)).filter((i) => i >= 0);
   return {
     errors,
     mean: finite.reduce((s, e) => s + Math.abs(e), 0) / Math.max(1, finite.length),
     worst: Math.max(...finite.map(Math.abs)),
     liftCorrelation: correlation(rated.map((r) => r.difficulty), m.lifts),
+    costCorrelation: correlation(drove.map((i) => rated[i].difficulty), drove.map((i) => cost[i])),
   };
 }
 

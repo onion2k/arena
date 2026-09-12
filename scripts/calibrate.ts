@@ -57,6 +57,6 @@ for (const key of asked.length ? asked : VEHICLE_KEYS) {
   };
   console.log(`  checking circuits, fitted: ${split(checkSet, fitted)}`);
   console.log(`  worst misses ${misses.map(([c, e]) => `${c} ${pct(e)}`).join(', ')}${unfinished.length ? `; never finished ${unfinished.join(', ')}` : ''}`);
-  console.log(`  difficulty against lifting, all circuits: r = ${s.liftCorrelation.toFixed(2)}`);
+  console.log(`  difficulty against lifting r = ${s.liftCorrelation.toFixed(2)}, against time lost to corners r = ${s.costCorrelation.toFixed(2)}`);
   console.log(`  laps ${all.laps.map((t) => t.toFixed(2)).join(' ')}`);
 }

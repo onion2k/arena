@@ -556,9 +556,34 @@ export function measureShape(s: Shape, steps = 1440): {
  * square the radius stays to the road belong to the arena and do not move;
  * the tightest corner and the length of a lap belong to the racing and do.
  */
-export function limitsFor(kind: TrackKind): typeof LIMITS {
+/**
+ * How a track's own corner limit is drawn across its range: one is even,
+ * and above one leans toward the tight end, which makes more circuits with
+ * a slow corner on them. Swept against the share of tracks landing in each
+ * of the five bands, pooled over the two racing classes, three hundred
+ * seeds each:
+ *
+ *     skew  flat out  fast  balanced  technical  stop-go
+ *     1.0        50%   16%       17%        13%       4%
+ *     1.4        41%   15%       19%        18%       7%
+ *     1.8        33%   17%       19%        22%       9%
+ *     2.4        27%   15%       21%        26%      11%
+ *
+ * 1.8: a third of tracks flat out, which is what a set of racing circuits
+ * should be, and a tail with real corners in it rather than four percent.
+ */
+const CURVE_SKEW = 1.8;
+
+export function limitsFor(kind: TrackKind, seed?: number): typeof LIMITS {
   const k = kindOf(kind);
-  return { ...LIMITS, curve: k.curve, minLength: k.minLength, maxLength: k.maxLength };
+  let curve = k.curve;
+  if (k.curveRange && seed !== undefined) {
+    // one draw a seed, deterministic and even across the range: the circuit
+    // for a seed is the circuit for that seed, whoever asks and whenever
+    const [lo, hi] = k.curveRange;
+    curve = lo + (hi - lo) * Math.pow(random(((seed + 1) * 0x9e3779b9) >>> 0)(), CURVE_SKEW);
+  }
+  return { ...LIMITS, curve, minLength: k.minLength, maxLength: k.maxLength };
 }
 
 function passes(m: ReturnType<typeof measureShape>, lim: typeof LIMITS): boolean {
@@ -655,7 +680,7 @@ export function generateTrack(seed: number, kind: TrackKind = 'rally'): Shape {
   ];
   if (extra) terms.push([extra, amp(60, 280), rnd() * Math.PI * 2]);
 
-  const lim = limitsFor(kind);
+  const lim = limitsFor(kind, seed);
   let base = r0;
   // A racing track's limits are the harder pair to satisfy — a long corner
   // and a long lap pull against each other — so it is given half as many
@@ -961,21 +986,70 @@ export interface CornerRating {
  * scores 0.024, which is the second band: it is a friendly circuit, and
  * saying otherwise on a screen the player is about to check against their
  * own lap times would not survive the first lap.
+ *
+ * **One table a kind, and the tracks had to earn theirs.** The difficulty
+ * is the share of a lap the corners take, and a racing circuit loses an
+ * order of magnitude less of it than a stage does. Read against the
+ * stages' table every track is *flowing* — true, and useless. The first
+ * attempt at a repair was the tracks' own quintiles, and the measurement
+ * said no: with every track held to the same corner limit the pilot's lap
+ * had no relationship with the number (r = -0.26), because sixteen
+ * circuits whose slowest corner ran from 83% to 93% of top speed are
+ * sixteen versions of the same lap, and what varied between them was the
+ * pilot rather than the road.
+ *
+ * So the generator was changed before the band was: a track draws its own
+ * corner limit (`KindSpec.curveRange`), some have a hairpin on them and
+ * some are flat out, and the difficulty then follows the pilot's lifting
+ * at r = 0.93 — better than the stages' 0.85. The table below is that
+ * distribution banded so the words divide tracks against each other.
  */
-const BANDS: [number, string][] = [
-  [0.019, 'flowing'],
-  [0.031, 'open'],
-  [0.042, 'mixed'],
-  [0.058, 'technical'],
-  [Infinity, 'relentless'],
-];
+const BANDS: Record<TrackKind, [number, string][]> = {
+  rally: [
+    [0.019, 'flowing'],
+    [0.031, 'open'],
+    [0.042, 'mixed'],
+    [0.058, 'technical'],
+    [Infinity, 'relentless'],
+  ],
+  // A racing circuit's words, and thresholds rather than quintiles: the
+  // distribution is skewed — a third of tracks cost the corners nothing at
+  // all — so equal fifths would put two band edges inside the noise at
+  // zero. These are the shares in the sweep beside `CURVE_SKEW`.
+  track: [
+    [0.002, 'flat out'],
+    [0.01, 'fast'],
+    [0.03, 'balanced'],
+    [0.07, 'technical'],
+    [Infinity, 'stop-go'],
+  ],
+};
 
-/** A difficulty as a level of one to five and the word for it. */
-export function difficultyBand(d: number): { level: number; name: string } {
-  for (let i = 0; i < BANDS.length; i++) {
-    if (d < BANDS[i][0]) return { level: i + 1, name: BANDS[i][1] };
+/** A difficulty as a level of one to five and the word for it, in its kind's own terms. */
+export function difficultyBand(d: number, kind: TrackKind = 'rally'): { level: number; name: string } {
+  const bands = BANDS[kind] ?? BANDS.rally;
+  for (let i = 0; i < bands.length; i++) {
+    if (d < bands[i][0]) return { level: i + 1, name: bands[i][1] };
   }
-  return { level: 5, name: BANDS[4][1] };
+  return { level: 5, name: bands[4][1] };
+}
+
+/**
+ * The slowest the ideal line ever goes, as a fraction of the car's top
+ * speed and in the game's own units — what a track is quoted instead of a
+ * difficulty.
+ *
+ * It is a fact rather than a verdict: this is the corner you will be
+ * slowest in, and on a racing circuit that is the thing worth knowing
+ * before you commit to a lap. It varies where the band does not — over the
+ * first sixteen tracks the F1's slowest corner runs from 62% of top speed
+ * to flat out — and it makes no claim about how hard the lap is.
+ */
+export function slowestCorner(s: Shape, topSpeed: number, rating: CornerRating, steps = 720): { speed: number; share: number } {
+  const { v } = speedPlan(s, topSpeed, rating, true, steps);
+  let slowest = topSpeed;
+  for (let i = 0; i < v.length; i++) slowest = Math.min(slowest, v[i]);
+  return { speed: slowest, share: slowest / topSpeed };
 }
 
 /**

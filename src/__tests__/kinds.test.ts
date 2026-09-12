@@ -9,7 +9,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { useTrack } from './sim';
-import { centreline, curveRadius } from '../track';
+import { centreline, circuitFor, curveRadius, difficultyBand, limitsFor, rateTrack, slowestCorner } from '../track';
+import { VEHICLES } from '../vehicles';
 import { height } from '../terrain';
 import { KINDS, allows, defaultVehicle, kindForVehicle } from '../kind';
 import { VEHICLE_KEYS } from '../vehicles';
@@ -50,15 +51,25 @@ function ground() {
 }
 
 describe('the two kinds of circuit', () => {
-  it('gives a racing track longer corners than a rally stage, on every seed', () => {
+  it('holds every circuit to its own limit, and a track to a corner its cars fit', () => {
+    const corners: number[] = [];
     for (const seed of SEEDS) {
       useTrack(seed, 'M', 'forest', false, 'rally');
-      const rally = lap();
+      expect(lap().curve, `rally #${seed}`).toBeGreaterThanOrEqual(KINDS.rally.curve * 0.98);
+
       useTrack(seed, 'M', 'forest', false, 'track');
       const track = lap();
-      expect(rally.curve, `rally #${seed}`).toBeGreaterThanOrEqual(KINDS.rally.curve * 0.98);
-      expect(track.curve, `track #${seed}`).toBeGreaterThanOrEqual(KINDS.track.curve * 0.98);
+      corners.push(track.curve);
+      // a track's limit is drawn per seed, so each is held to its own
+      expect(track.curve, `track #${seed}`).toBeGreaterThanOrEqual(limitsFor('track', seed).curve * 0.98);
+      // and never below the range's floor, which is well clear of the
+      // turning circle of either car offered on a track
+      expect(track.curve, `track #${seed} floor`).toBeGreaterThan(KINDS.track.curveRange![0] * 0.98);
+      expect(track.curve, `track #${seed} against the F1's circle`).toBeGreaterThan(VEHICLES.f1.turnCircle);
     }
+    // and they differ from one another: a set of tracks that were all the
+    // same corner would be one track with ten names
+    expect(Math.max(...corners) - Math.min(...corners)).toBeGreaterThan(600);
   });
 
   it('rolls the ground flat for a racing track and leaves it alone for a stage', () => {
@@ -88,5 +99,29 @@ describe('the two kinds of circuit', () => {
     }
     expect(defaultVehicle('rally')).toBe('technical');
     expect(defaultVehicle('track')).toBe('lmp');
+  });
+});
+
+describe('what the select screen says about a circuit', () => {
+  it('quotes a slowest corner that actually varies between tracks', () => {
+    // The band is a rally instrument and a track is given a fact instead —
+    // but a fact that read the same on every circuit would be no better
+    // than the band it replaced. Over sixteen tracks the F1's slowest
+    // corner must cover a real range.
+    const shares = Array.from({ length: 16 }, (_, seed) =>
+      slowestCorner(circuitFor(seed, 1, false, 'track'), VEHICLES.f1.engine.topSpeed, VEHICLES.f1.rating).share);
+    const lo = Math.min(...shares), hi = Math.max(...shares);
+    console.log(`slowest corner over 16 tracks: ${shares.map((v) => Math.round(v * 100)).join(' ')}`);
+    // measured: 83% to flat out over the first sixteen, and the spread is
+    // what makes it worth printing
+    expect(lo).toBeLessThan(0.9);
+    expect(hi - lo).toBeGreaterThan(0.1);
+    for (const v of shares) expect(v).toBeGreaterThan(0.5);
+  });
+
+  it('leaves the rally band alone', () => {
+    // the original circuit is the second band, as it has always been
+    const r = rateTrack(circuitFor(0, 1, false, 'rally'), VEHICLES.technical.engine.topSpeed, VEHICLES.technical.rating);
+    expect(difficultyBand(r.difficulty).name).toBe('open');
   });
 });
