@@ -16,6 +16,7 @@ import { LightPool } from 'artshape-render/game/lights';
 import { COUNTDOWN, PAINT, Race, TRUCKS, type Input } from './game';
 import { STONES, filigree, gemMesh, plinthRadius, plinthRim, plinthVelvet, presentation, type Filigree } from './concours';
 import { Photo, carGroups } from './photo';
+import { KINDS, KIND_KEYS, allows, defaultVehicle, type TrackKind } from './kind';
 import type { Pose } from './ghost';
 import type { VehicleSpec } from './vehicle';
 import { CONTROLS, SETTINGS, restoreDefaults, save, type SliderKey } from './settings';
@@ -51,6 +52,7 @@ const boot = document.getElementById('boot')!;
 const pregame = document.getElementById('pregame')!;
 const pregameMap = document.getElementById('pregameMap')!;
 const pregameBiome = document.getElementById('pregameBiome')!;
+const pregameKind = document.getElementById('pregameKind')!;
 const pregameVehicle = document.getElementById('pregameVehicle')!;
 const pregameSize = document.getElementById('pregameSize')!;
 const pregameModes = document.getElementById('pregameModes')!;
@@ -122,8 +124,8 @@ async function main() {
 
   /** A circuit in force, built on the CPU — see `circuit.ts` — and a warning
    *  if it would ever be more lamps than the light pool holds. */
-  function useTrack(seed: number, size: SizeKey, biome: BiomeKey, wild = SETTINGS.wild) {
-    timings.track = buildCircuit(seed, size, biome, wild);
+  function useTrack(seed: number, size: SizeKey, biome: BiomeKey, wild = SETTINGS.wild, kind = SETTINGS.kind) {
+    timings.track = buildCircuit(seed, size, biome, wild, kind);
     // Every post carries a floodlight, and the ghost-corner and start-line
     // glows are on top of that: both pools have room to spare at any size
     // this game reaches, but silently dropping lights past a fixed capacity
@@ -434,13 +436,14 @@ async function main() {
    * the trees — which is not a bug you would report, it is a bug you would
    * simply stop trusting the ghost over.
    */
-  function newTrack(seed: number, size: SizeKey, biome: BiomeKey, wild = SETTINGS.wild) {
+  function newTrack(seed: number, size: SizeKey, biome: BiomeKey, wild = SETTINGS.wild, kind = SETTINGS.kind) {
     SETTINGS.seed = seed;
     SETTINGS.size = size;
     SETTINGS.biome = biome;
     SETTINGS.wild = wild;
+    SETTINGS.kind = kind;
     save();
-    useTrack(seed, size, biome, wild);
+    useTrack(seed, size, biome, wild, kind);
     buildArena();
     minimap.redraw();
     skids.clear();
@@ -460,7 +463,7 @@ async function main() {
    * race button is pressed, and only if the circuit actually changed.
    */
   const NS = 'http://www.w3.org/2000/svg';
-  let choice = { seed: SETTINGS.seed, size: SETTINGS.size, vehicle: SETTINGS.vehicle, biome: SETTINGS.biome, wild: SETTINGS.wild };
+  let choice = { seed: SETTINGS.seed, size: SETTINGS.size, vehicle: SETTINGS.vehicle, biome: SETTINGS.biome, wild: SETTINGS.wild, kind: SETTINGS.kind };
   /** What the arena is currently built for, so racing the same one is free. */
   let built = { ...choice };
   let racing = false;
@@ -513,7 +516,31 @@ async function main() {
     pregameModes.appendChild(btn);
     modeButtons.push([btn, key]);
   }
-  // The vehicle picker, the same way.
+  /*
+   * The kind of circuit, and the cars it is for.
+   *
+   * A rally stage and a racing track are not two settings that happen to sit
+   * near each other: the kind decides the ground, the corners and which two
+   * cars are offered, so pressing it can change the car under you. It does
+   * that quietly — the nearest car of the right kind, which is the first one
+   * — rather than refusing to be pressed while the wrong car is chosen.
+   */
+  const kindButtons = new Map<TrackKind, HTMLButtonElement>();
+  for (const key of KIND_KEYS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = KINDS[key].label;
+    btn.addEventListener('click', () => {
+      const vehicle = allows(key, choice.vehicle) ? choice.vehicle : defaultVehicle(key);
+      preview(choice.seed, vehicle, choice.size, choice.biome, choice.wild && KINDS[key].wild, key);
+      btn.blur();
+    });
+    pregameKind.appendChild(btn);
+    kindButtons.set(key, btn);
+  }
+  // The vehicle picker, the same way — every class has a button, and the
+  // ones the chosen circuit is not for are hidden rather than disabled: a
+  // greyed button invites a press that will not work.
   const vehicleButtons = new Map<VehicleKey, HTMLButtonElement>();
   for (const key of VEHICLE_KEYS) {
     const btn = document.createElement('button');
@@ -541,13 +568,21 @@ async function main() {
   }
 
   /** Draw a circuit on the select screen without building any of it. */
-  function preview(seed: number, vehicle: VehicleKey, size: SizeKey, biome: BiomeKey, wild = choice.wild) {
-    choice = { seed, vehicle, size, biome, wild };
+  function preview(seed: number, vehicle: VehicleKey, size: SizeKey, biome: BiomeKey, wild = choice.wild, kind = choice.kind) {
+    if (!allows(kind, vehicle)) vehicle = defaultVehicle(kind);
+    if (!KINDS[kind].wild) wild = false;
+    choice = { seed, vehicle, size, biome, wild, kind };
     pregameWild.setAttribute('aria-pressed', String(wild));
+    // the wild circuits are the rally's: a racing track has no wild variant
+    (pregameWild as HTMLButtonElement).hidden = !KINDS[kind].wild;
     for (const [key, btn] of sizeButtons) btn.setAttribute('aria-pressed', String(key === size));
-    for (const [key, btn] of vehicleButtons) btn.setAttribute('aria-pressed', String(key === vehicle));
+    for (const [key, btn] of kindButtons) btn.setAttribute('aria-pressed', String(key === kind));
+    for (const [key, btn] of vehicleButtons) {
+      btn.hidden = !allows(kind, key);
+      btn.setAttribute('aria-pressed', String(key === vehicle));
+    }
     for (const [key, btn] of biomeButtons) btn.setAttribute('aria-pressed', String(key === biome));
-    const shape = circuitFor(seed, sizeOf(size), wild);
+    const shape = circuitFor(seed, sizeOf(size), wild, kind);
     const p = shapePreview(shape);
     pregameMap.setAttribute('viewBox', p.box.join(' '));
     road.setAttribute('stroke', BIOMES[biome].map.road);
@@ -565,6 +600,7 @@ async function main() {
     const band = difficultyBand(r.difficulty);
     pregameFacts.innerHTML =
       `${seed === 0 && !wild ? 'the original circuit' : `${wild ? 'wild circuit' : 'circuit'} <span>#${seed}</span>`}`
+      + ` · <span>${KINDS[kind].label}</span>`
       + ` · <span>${labelOf(size)}</span>`
       + ` · <span>${labelOfBiome(biome)}</span>`
       + ` · <span>${spec.label}</span>`
@@ -588,7 +624,7 @@ async function main() {
 
   function openPregame() {
     racing = false;
-    preview(SETTINGS.seed, SETTINGS.vehicle, SETTINGS.size, SETTINGS.biome, SETTINGS.wild);
+    preview(SETTINGS.seed, SETTINGS.vehicle, SETTINGS.size, SETTINGS.biome, SETTINGS.wild, SETTINGS.kind);
     pregame.removeAttribute('hidden');
   }
 
@@ -599,10 +635,11 @@ async function main() {
     // with it in the same pass, so choosing several at once is not several
     // rebuilds); a different car on the same road is a mesh swap and
     // nothing more.
-    const roadChanged = choice.seed !== built.seed || choice.size !== built.size || choice.biome !== built.biome || choice.wild !== built.wild;
+    const roadChanged = choice.seed !== built.seed || choice.size !== built.size || choice.biome !== built.biome
+      || choice.wild !== built.wild || choice.kind !== built.kind;
     const vehicleChanged = choice.vehicle !== built.vehicle;
     if (roadChanged) {
-      newTrack(choice.seed, choice.size, choice.biome, choice.wild);
+      newTrack(choice.seed, choice.size, choice.biome, choice.wild, choice.kind);
       if (vehicleChanged) { SETTINGS.vehicle = choice.vehicle; save(); switchVehicle(VEHICLES[choice.vehicle]); }
       built = { ...choice };
     } else if (vehicleChanged) {
@@ -623,7 +660,7 @@ async function main() {
   // Wild or smooth: the same seed in the other style is a different circuit
   // entirely, so this redraws the preview like a new seed does.
   pregameWild.addEventListener('click', () => {
-    preview(choice.seed, choice.vehicle, choice.size, choice.biome, !choice.wild);
+    preview(choice.seed, choice.vehicle, choice.size, choice.biome, !choice.wild, choice.kind);
     (pregameWild as HTMLElement).blur();
   });
   pregameAnother.addEventListener('click', () => {

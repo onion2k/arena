@@ -227,6 +227,23 @@ export function lightsFor(pool: LightPool, arena: Race) {
   // So a few degrees of splay each, which is what a real pair has, and a wide
   // cone — a wash over the road rather than a beam at a thing. The narrow
   // beam at a thing is the searchlight, and it is cold where these are warm.
+  /*
+   * How far the beam reaches, and how tight it is, from the car's own top
+   * speed. A fixed 2400mm was a technical's headlight: at 2300 mm/s that is
+   * a second of road, which is enough to drive a rally stage by. An F1 at
+   * 3300 covers it in seven tenths, and the corner it is braking for is
+   * outside the light — so the fast cars get a beam that reaches nearly two
+   * seconds ahead, and a tighter cone to carry that far without simply
+   * spilling wider. It is what a fast car's lamps really do.
+   */
+  const top = arena.truck.spec.engine.topSpeed;
+  const reach = Math.max(2400, Math.min(6200, top * 1.85));
+  const spread = 2400 / reach;
+  // the same light spread over a longer road: brighter, or the far half of
+  // the beam is a beam only on paper
+  const throwing = 22 * Math.pow(reach / 2400, 1.35);
+  const cone: [number, number] = [10 * (0.55 + 0.45 * spread), 25 * (0.62 + 0.38 * spread)];
+
   playerHeads = [];
   const disco = discoOn();
   const t = discoTime();
@@ -238,16 +255,18 @@ export function lightsFor(pool: LightPool, arena: Race) {
     const splay = side * 0.07 + sweep;
     pool.add({
       position: at(head[0], side * head[1], head[2]),
-      radius: 2400,
+      radius: reach,
       colour: disco ? discoHue(t * 0.35 + (side > 0 ? 0.5 : 0)) : hurt ? [1, 0.45, 0.4] : [1, 0.87, 0.62],
       // A lamp 84mm above the floor sees it almost edge-on: at 900mm out the
       // cosine between the floor's normal and the way back to the lamp is
       // 0.09, so nine tenths of the beam is thrown away by the geometry
       // before intensity is even considered. That is true of a real headlight
       // too, and a real headlight answers it by being very bright.
-      intensity: 22 * on,
-      direction: facing(Math.cos(splay), Math.sin(splay), -0.20),
-      cone: [10, 25],
+      intensity: throwing * on,
+      // dipped less the further it throws: a beam aimed for a car's own
+      // length ahead is a beam that lights the road it has already passed
+      direction: facing(Math.cos(splay), Math.sin(splay), -0.20 * spread),
+      cone,
     });
   }
 

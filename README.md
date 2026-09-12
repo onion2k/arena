@@ -809,6 +809,48 @@ on, and replaying one over a different road would put a truck through the
 trees — which is not a bug anyone would report, it is a bug that quietly
 stops you trusting the ghost. The skid marks go too, and the race restarts.
 
+### Rally and track
+
+Two kinds of circuit, chosen on the select screen, and each takes the two
+cars it is for: **rally** the technical and the rally car, **track** the Le
+Mans prototype and the F1. It is the answer to the table in
+[Cars and sizes](#cars-and-sizes): the long cars lose 7 to 10% on tight
+circuits and the F1 has a corner it cannot turn on three quarters of the
+first forty seeds. That is not a car being bad, it is a car on the wrong
+road. So the road it wants now exists, and the road it does not is no longer
+offered to it.
+
+A rally stage is what the game has always built. A racing track differs in
+exactly two measurable ways, and `kinds.test.ts` holds both against ten
+seeds:
+
+| | rally | track |
+| --- | ---: | ---: |
+| tightest corner | 733–1241 mm | 1525–1866 mm |
+| ground under the racing line, step between samples | 1.15–1.62 mm | 0.22–0.38 mm |
+| rise and fall over a lap | 146–210 mm | 39–49 mm |
+
+The corners come from the generator's own limits — the tightest corner it
+will accept goes from 600 mm to 1500, and the lap band with it, and the
+repair loop that pulls a circuit into its limits gets half as many goes
+again because a long corner and a long lap pull against each other. The
+ground comes from the biome's wave amplitudes, scaled per kind: the long
+swell keeps a third of itself, so a lap still rises and falls, and the ramps
+— which are jumps, and have no business on a racing line — keep a
+twentieth.
+
+Two details worth the words. Seed zero is the circuit the game shipped with,
+which has a 733 mm corner in it: that is the rally's seed zero only, and a
+track's is generated like any other. And a track's seeds are the rally's
+stirred, because `random` folds zero to one — a track's #0 and #1 came back
+the same circuit — and because a track that was the same shape as the stage
+of the same number, only smoothed, would make the two kinds read as one
+circuit with a switch on it.
+
+Wild circuits stay a rally thing; the button is hidden on a track. Straights
+and hairpins are the rally's idea of interesting and a racing circuit's idea
+of a mistake.
+
 ### Wild circuits
 
 A switch beside **another** on the track-select screen: the same seeds, and a
@@ -1032,6 +1074,12 @@ circle, a line under the facts gives both numbers. The circle is measured,
 561 and 691mm — and a test holds each spec's `turnCircle` to within 2% of
 it. It fires on the original circuit at medium for the F1, whose 638mm
 corner it cannot make.
+
+**And then it stopped being the answer.** The warning describes a problem it
+cannot fix: a car on a circuit that was not drawn for it. The circuits now
+come in two kinds and each offers the two cars it suits — see
+[Rally and track](#rally-and-track) — so the warning is still there, and on
+a track it has nothing to say.
 
 ## The circuit
 
@@ -1357,6 +1405,17 @@ through. The two headlights go in first and the fourteen nearest floods
 after, because a headlight wants a map more than any lamp does: a truck
 lighting the mist in front of it should not be lighting the mist behind the
 tree in front of it.
+
+**A headlight is sized to the car it is on.** It was a fixed 2400 mm of
+reach, a 10/25-degree cone and an intensity of 22 — which is a technical's
+lamp: at 2300 mm/s that is a second of road, and a second is enough to drive
+a rally stage by. An F1 covers it in seven tenths and brakes for corners
+that are outside its own light. So the reach is the car's top speed times
+1.85 — a shade under two seconds, from 2400 mm to a capped 6200 — the cone
+tightens as it lengthens rather than spilling wider, the intensity rises
+with the reach to the power 1.35 so the far half of the beam is lit and not
+merely reached, and the dip flattens, because a beam aimed a car's length
+ahead lights road the car has already passed.
 
 What it costs, fenced at 1080p, median of three: **1.3ms at night** — the
 sun's map, eight spot maps at 512, and the lookups, on a 2.8ms frame — and

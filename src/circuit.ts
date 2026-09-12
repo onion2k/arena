@@ -17,6 +17,7 @@ import { height, seedTerrain } from './terrain';
 import { ARENA_X, ARENA_Y, COLUMN_RADIUS, COLUMNS, resizeArena, restandColumns } from './scene';
 import { CircleGrid } from './spatial';
 import { SIZE, setSize, type SizeKey } from './world';
+import { kindOf, type TrackKind } from './kind';
 
 /**
  * Every lamp post, tree and bollard, in a grid the truck can be checked
@@ -96,13 +97,16 @@ function floodForBiome() {
  * this backwards plants a forest in last circuit's lake, or hands the
  * truck a grid with nothing in it.
  */
-export function useTrack(seed: number, size: SizeKey, biome: BiomeKey, wild = false): number {
+export function useTrack(seed: number, size: SizeKey, biome: BiomeKey, wild = false, kind: TrackKind = 'rally'): number {
   const t0 = performance.now();
   setSize(size);
   setBiome(biome);
   resizeArena();
-  setTrack(circuitFor(seed, SIZE, wild));
-  seedTerrain(seed, BIOME.terrain.ampScale);
+  setTrack(circuitFor(seed, SIZE, wild, kind));
+  // the biome says what the ground is made of and the kind says how much of
+  // it there is: a racing circuit keeps the biome's character at a fraction
+  // of its amplitude, so a desert track is still a desert and still flat
+  seedTerrain(seed, BIOME.terrain.ampScale.map((a, i) => a * (kindOf(kind).terrain[i] ?? 1)));
   floodForBiome();
   restandColumns();
   // always 7, not the circuit's own seed: the jitter pattern is fixed, so

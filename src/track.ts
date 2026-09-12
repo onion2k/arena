@@ -1,6 +1,7 @@
 import type { Mesh } from 'artshape-render/mesh/types';
 import { height, normal as groundNormal } from './terrain';
 import { BIOME } from './biomes';
+import { kindOf, type TrackKind } from './kind';
 
 /** How far the tarmac sits above the ground it follows: see `scene`. */
 export const TRACK_LIFT = 22;
@@ -550,11 +551,21 @@ export function measureShape(s: Shape, steps = 1440): {
   return { minRadius, maxRadius, curve, across, length };
 }
 
-function passes(m: ReturnType<typeof measureShape>): boolean {
-  return m.curve >= LIMITS.curve
-    && m.minRadius >= LIMITS.minRadius && m.maxRadius <= LIMITS.maxRadius
-    && m.across >= LIMITS.across
-    && m.length >= LIMITS.minLength && m.length <= LIMITS.maxLength;
+/**
+ * What this kind of circuit has to clear. The arena's own bounds and how
+ * square the radius stays to the road belong to the arena and do not move;
+ * the tightest corner and the length of a lap belong to the racing and do.
+ */
+export function limitsFor(kind: TrackKind): typeof LIMITS {
+  const k = kindOf(kind);
+  return { ...LIMITS, curve: k.curve, minLength: k.minLength, maxLength: k.maxLength };
+}
+
+function passes(m: ReturnType<typeof measureShape>, lim: typeof LIMITS): boolean {
+  return m.curve >= lim.curve
+    && m.minRadius >= lim.minRadius && m.maxRadius <= lim.maxRadius
+    && m.across >= lim.across
+    && m.length >= lim.minLength && m.length <= lim.maxLength;
 }
 
 /** A small deterministic generator, so a seed always gives the same circuit. */
@@ -610,9 +621,17 @@ function turnStartToStraight(s: Shape, steps = 360): Shape {
  * alone. The radius bounds move `r0`, which is what sets them. Only when a
  * fault will not come out any other way does everything come down together.
  */
-export function generateTrack(seed: number): Shape {
-  if (seed === 0) return CLASSIC;
-  const rnd = random(seed);
+export function generateTrack(seed: number, kind: TrackKind = 'rally'): Shape {
+  // Seed zero is the circuit the game shipped with — a rally stage, with a
+  // 733mm corner in it, which is half of what a racing track allows. So it
+  // is seed zero of the rally only: a racing track's seed zero is generated
+  // like every other, and is the fastest circuit the generator draws.
+  if (seed === 0 && kind === 'rally') return CLASSIC;
+  // A racing track's seeds are the rally's, stirred: `random` folds zero to
+  // one, so a track's #0 and #1 came back the same circuit — and a track
+  // that was the same shape as the stage of the same number, only smoothed,
+  // would make the two kinds read as one circuit with a switch on it.
+  const rnd = random(kind === 'track' ? (((seed + 1) * 2654435761) ^ 0x5bd1e995) >>> 0 : seed);
   const pick = <T>(a: T[]): T => a[Math.floor(rnd() * a.length)];
 
   // One low harmonic for the shape of the circuit and two or three above it
@@ -636,31 +655,35 @@ export function generateTrack(seed: number): Shape {
   ];
   if (extra) terms.push([extra, amp(60, 280), rnd() * Math.PI * 2]);
 
+  const lim = limitsFor(kind);
   let base = r0;
-  for (let i = 0; i < 24; i++) {
+  // A racing track's limits are the harder pair to satisfy — a long corner
+  // and a long lap pull against each other — so it is given half as many
+  // goes again before the fallback
+  for (let i = 0, tries = kind === 'track' ? 36 : 24; i < tries; i++) {
     const s = turnStartToStraight({ r0: base, terms });
     const m = measureShape(s);
-    if (passes(m)) return s;
+    if (passes(m, lim)) return s;
 
     // Aim the repair at whatever failed.
-    if (m.minRadius < LIMITS.minRadius || m.maxRadius > LIMITS.maxRadius) {
+    if (m.minRadius < lim.minRadius || m.maxRadius > lim.maxRadius) {
       const span = (m.maxRadius - m.minRadius) / 2;
-      const room = (LIMITS.maxRadius - LIMITS.minRadius) / 2;
+      const room = (lim.maxRadius - lim.minRadius) / 2;
       if (span > room) {
         // the loop is wider than the arena however it is centred
         terms = terms.map(([k, a, p]) => [k, a * 0.9, p]);
       } else {
         // it only needs centring
-        base = (LIMITS.minRadius + LIMITS.maxRadius) / 2 + (base - (m.minRadius + m.maxRadius) / 2);
+        base = (lim.minRadius + lim.maxRadius) / 2 + (base - (m.minRadius + m.maxRadius) / 2);
       }
-    } else if (m.curve < LIMITS.curve) {
+    } else if (m.curve < lim.curve) {
       // take it out of the sharpest term, which is the one bending the road
       let worst = 0;
       for (let j = 1; j < terms.length; j++) {
         if (terms[j][1] * terms[j][0] ** 2 > terms[worst][1] * terms[worst][0] ** 2) worst = j;
       }
       terms[worst] = [terms[worst][0], terms[worst][1] * 0.78, terms[worst][2]];
-    } else if (m.across < LIMITS.across) {
+    } else if (m.across < lim.across) {
       // the radius is running along the road rather than across it, which is
       // a first derivative and so goes as amp * k
       let worst = 0;
@@ -670,11 +693,26 @@ export function generateTrack(seed: number): Shape {
       terms[worst] = [terms[worst][0], terms[worst][1] * 0.82, terms[worst][2]];
     } else {
       // the lap is the wrong length, which is mostly how big the loop is
-      base *= m.length < LIMITS.minLength ? 1.06 : 0.95;
+      base *= m.length < lim.minLength ? 1.06 : 0.95;
     }
   }
-  return CLASSIC;
+  return FALLBACK[kind];
 }
+
+/**
+ * What a seed falls back to when the repair cannot satisfy its limits.
+ *
+ * The rally's is the circuit the game shipped with. A racing track cannot
+ * have that one — it has a 733mm corner in it, half of what this kind
+ * allows — so it has a fallback of its own: a long oval with one kink, which
+ * is dull and is meant to be. A fallback that breaks the rules of the kind
+ * it stands in for is worse than a dull circuit; it is a circuit the cars
+ * offered for it cannot drive.
+ */
+const FALLBACK: Record<TrackKind, Shape> = {
+  rally: CLASSIC,
+  track: { r0: 4250, terms: [[2, 620, 0.4], [3, 210, 2.2]] },
+};
 
 /** Put a circuit in force. Everything downstream has to be rebuilt after this. */
 export function setTrack(s: Shape) { shape = s; }
@@ -699,8 +737,11 @@ export function scaleShape(s: Shape, k: number): Shape {
 }
 
 /** A circuit for a seed, at a size, smooth or wild. Same seed, same shape, any size. */
-export function circuitFor(seed: number, size: number, wild = false): Shape {
-  return scaleShape(wild ? generateWild(seed) : generateTrack(seed), size);
+export function circuitFor(seed: number, size: number, wild = false, kind: TrackKind = 'rally'): Shape {
+  // a racing circuit has no wild variant: straights and hairpins are the
+  // rally's idea of interesting and a racing circuit's idea of a mistake
+  const shape = wild && kindOf(kind).wild ? generateWild(seed) : generateTrack(seed, kind);
+  return scaleShape(shape, size);
 }
 
 /**

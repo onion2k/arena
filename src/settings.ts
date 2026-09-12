@@ -17,6 +17,7 @@ import { clockLabel } from './daylight';
 import { SIZES, type SizeKey } from './world';
 import { VEHICLE_KEYS, type VehicleKey } from './vehicles';
 import { BIOME_KEYS, type BiomeKey } from './biomes';
+import { KIND_KEYS, allows, defaultVehicle, kindForVehicle, type TrackKind } from './kind';
 
 export interface Settings {
   /** How much the environment lights everything, before any lamp does. */
@@ -64,6 +65,12 @@ export interface Settings {
    * chosen on the track-select screen and pressed for, not dragged through.
    */
   size: SizeKey;
+  /**
+   * Which kind of circuit: a rally stage over the ground as the biome makes
+   * it, or a racing track over ground that has been rolled flat. It decides
+   * which cars may be raced as well as what is built — see `kind.ts`.
+   */
+  kind: TrackKind;
   /** Which vehicle class. Kept across sessions the same way as the size. */
   vehicle: VehicleKey;
   /** Which biome. Kept across sessions the same way. */
@@ -91,6 +98,7 @@ export const DEFAULTS: Readonly<Settings> = {
   mist: 1,
   seed: 0,
   size: 'M',
+  kind: 'rally',
   vehicle: 'technical',
   biome: 'forest',
   wild: false,
@@ -102,7 +110,7 @@ export const DEFAULTS: Readonly<Settings> = {
  * A setting a slider can drive: everything except the seed and the size,
  * which are buttons and not ranges — see `SliderKey`.
  */
-export type SliderKey = Exclude<keyof Settings, 'seed' | 'size' | 'vehicle' | 'biome' | 'wild' | 'disco' | 'concours'>;
+export type SliderKey = Exclude<keyof Settings, 'seed' | 'size' | 'kind' | 'vehicle' | 'biome' | 'wild' | 'disco' | 'concours'>;
 
 /** One row of the panel: which setting, what to call it, how far it goes. */
 export interface Control {
@@ -160,6 +168,19 @@ function load(): Partial<Settings> {
     // and the biome, the same way
     if (typeof saved.biome === 'string' && BIOME_KEYS.includes(saved.biome as BiomeKey)) {
       out.biome = saved.biome as BiomeKey;
+    }
+    // and the kind of circuit, likewise a button
+    if (typeof saved.kind === 'string' && KIND_KEYS.includes(saved.kind as TrackKind)) {
+      out.kind = saved.kind as TrackKind;
+    }
+    // A car and a circuit that do not go together can only come from a
+    // saved setting older than the two kinds. Rather than drop one of them,
+    // the car is believed and the circuit follows it: somebody who last
+    // raced an F1 wants a track, and somebody who last raced a technical
+    // wants a stage.
+    if (out.vehicle && !allows(out.kind ?? DEFAULTS.kind, out.vehicle)) {
+      if (saved.kind === undefined) out.kind = kindForVehicle(out.vehicle);
+      else out.vehicle = defaultVehicle(out.kind ?? DEFAULTS.kind);
     }
     // and the two modes, which are switches
     if (typeof saved.wild === 'boolean') out.wild = saved.wild;
